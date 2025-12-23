@@ -15,4 +15,8 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: gpt-4.1-mini
+          temperature: 0.1
     secret-key: ${AI_SECRET_KEY}
