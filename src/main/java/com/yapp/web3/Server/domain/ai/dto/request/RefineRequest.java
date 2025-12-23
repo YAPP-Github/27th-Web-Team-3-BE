@@ -16,7 +16,7 @@ public class RefineRequest {
     private String content;
 
     @NotNull(message = "말투 스타일은 필수입니다.")
-    @Schema(description = "말투 스타일", example = "KIND", allowableValues = {"KIND", "POLITE", "PROFESSIONAL"})
+    @Schema(description = "말투 스타일", example = "KIND", allowableValues = {"KIND", "POLITE"})
     private ToneStyle toneStyle;
 
     public enum ToneStyle {
