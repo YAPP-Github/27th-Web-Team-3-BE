@@ -67,7 +67,7 @@ public class PromptTemplate {
             """;
 
     private static final String POLITE_STYLE_GUIDE = """
-            공손체 스타일:
+            정중체 스타일:
             - 격식을 갖춘 정중한 어조를 유지하세요
             - 어미: ~습니다, ~했습니다, ~입니다
             - 존중하는 표현 사용
@@ -86,11 +86,11 @@ public class PromptTemplate {
             """;
 
     public static final String REFINE_FEW_SHOT_EXAMPLES_POLITE = """
-            # Example 1 (공손체)
+            # Example 1 (정중체)
             User: "오늘 코딩하다가 존나 빡쳤음 ㅋㅋ 근데 결국 해결함"
             Assistant: "오늘 코딩 중 어려움이 있었으나, 최종적으로 문제를 해결했습니다."
             
-            # Example 2 (공손체)
+            # Example 2 (정중체)
             User: "팀원이랑 싸웠는데 나중에 화해했어 ㅎㅎ"
             Assistant: "팀원과 의견 차이가 있었으나, 이후 원만하게 해결했습니다."
             """;
@@ -119,7 +119,7 @@ public class PromptTemplate {
     private static String getStyleName(ToneStyle toneStyle) {
         return switch (toneStyle) {
             case KIND -> "상냥체";
-            case POLITE -> "공손체";
+            case POLITE -> "정중체";
         };
     }
 

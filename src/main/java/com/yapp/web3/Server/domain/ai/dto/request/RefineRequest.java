@@ -25,7 +25,7 @@ public class RefineRequest {
 
     public enum ToneStyle {
         KIND,         // 상냥체
-        POLITE       // 공손체
+        POLITE       // 정중체
     }
 }
 

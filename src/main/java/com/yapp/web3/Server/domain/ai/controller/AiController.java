@@ -27,7 +27,7 @@ public class AiController {
         return BaseResponse.onSuccess(response);
     }
 
-    @Operation(summary = "회고 말투 정제", description = "작성된 회고를 AI가 선택한 말투(상냥체(KIND)/공손체(POLITE))로 정제합니다.")
+    @Operation(summary = "회고 말투 정제", description = "작성된 회고를 AI가 선택한 말투(상냥체(KIND)/정중체(POLITE))로 정제합니다.")
     @PostMapping("/retrospective/refine")
     public BaseResponse<RefineResponse> refineRetrospective(@Valid @RequestBody RefineRequest request) {
         RefineResponse response = aiService.refineRetrospective(request.getContent(), request.getToneStyle(), request.getSecretKey());
