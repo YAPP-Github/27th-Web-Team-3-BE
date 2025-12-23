@@ -70,10 +70,18 @@ public class ExceptionAdvice extends ResponseEntityExceptionHandler {
 
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException e, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ErrorStatus errorStatus = ErrorStatus._BAD_REQUEST;
+        String message = REQUEST_BODY_INVALID.getMessage();
 
-        BaseResponse<Object> body = BaseResponse.onFailure(ErrorStatus._BAD_REQUEST.getCode(), REQUEST_BODY_INVALID.getMessage(), null);
+        // enum 타입 불일치 에러 감지
+        if (e.getMessage() != null && e.getMessage().contains("ToneStyle")) {
+            errorStatus = ErrorStatus.INVALID_TONE_STYLE;
+            message = errorStatus.getMessage();
+        }
 
-        return handleExceptionInternal(e, body, HttpHeaders.EMPTY, ErrorStatus._BAD_REQUEST.getHttpStatus(), request);
+        BaseResponse<Object> body = BaseResponse.onFailure(errorStatus.getCode(), message, null);
+
+        return handleExceptionInternal(e, body, HttpHeaders.EMPTY, errorStatus.getHttpStatus(), request);
     }
 
     private ResponseEntity<Object> handleExceptionInternal(Exception e, ErrorReasonDTO reason,

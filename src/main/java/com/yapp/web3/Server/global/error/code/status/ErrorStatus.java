@@ -22,7 +22,8 @@ public enum ErrorStatus implements BaseErrorCode {
     REQUEST_BODY_INVALID(HttpStatus.BAD_REQUEST, "COMMON_004", "요청 본문을 읽을 수 없습니다. 빈 문자열 또는 null이 있는지 확인해주세요."),
 
     // AI 에러
-    INVALID_SECRET_KEY(HttpStatus.UNAUTHORIZED, "AI_001", "유효하지 않은 비밀 키입니다.")
+    INVALID_SECRET_KEY(HttpStatus.UNAUTHORIZED, "AI_001", "유효하지 않은 비밀 키입니다."),
+    INVALID_TONE_STYLE(HttpStatus.BAD_REQUEST, "AI_002", "유효하지 않은 말투 스타일입니다. KIND 또는 POLITE만 가능합니다.")
     ;
 
     private final HttpStatus httpStatus;
