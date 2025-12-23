@@ -4,6 +4,7 @@ import com.yapp.web3.Server.domain.ai.dto.response.GuideResponse;
 import com.yapp.web3.Server.domain.ai.dto.request.RefineRequest.ToneStyle;
 import com.yapp.web3.Server.domain.ai.dto.response.RefineResponse;
 import com.yapp.web3.Server.domain.ai.prompt.PromptTemplate;
+import com.yapp.web3.Server.domain.ai.validator.SecretKeyValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -21,8 +22,11 @@ import java.util.List;
 public class AiService {
 
     private final ChatModel chatModel;
+    private final SecretKeyValidator secretKeyValidator;
 
-    public GuideResponse provideGuide(String currentContent) {
+    public GuideResponse provideGuide(String currentContent, String secretKey) {
+        // Secret Key 검증
+        secretKeyValidator.validate(secretKey);
 
         List<Message> messages = List.of(
                 new SystemMessage(PromptTemplate.GUIDE_SYSTEM_PROMPT),
@@ -39,7 +43,10 @@ public class AiService {
                 .build();
     }
 
-    public RefineResponse refineRetrospective(String content, ToneStyle toneStyle) {
+    public RefineResponse refineRetrospective(String content, ToneStyle toneStyle, String secretKey) {
+        // Secret Key 검증
+        secretKeyValidator.validate(secretKey);
+
         String systemPrompt = PromptTemplate.getRefineSystemPrompt(toneStyle);
         String fewShotExamples = PromptTemplate.getRefineFewShotExamples(toneStyle);
 

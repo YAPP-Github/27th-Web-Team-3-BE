@@ -19,6 +19,10 @@ public class RefineRequest {
     @Schema(description = "말투 스타일", example = "KIND", allowableValues = {"KIND", "POLITE"})
     private ToneStyle toneStyle;
 
+    @NotNull(message = "비밀 키는 필수입니다.")
+    @Schema(description = "비밀 키", example = "mySecretKey123")
+    private String secretKey;
+
     public enum ToneStyle {
         KIND,         // 상냥체
         POLITE       // 공손체
