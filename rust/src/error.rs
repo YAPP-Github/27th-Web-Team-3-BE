@@ -17,6 +17,8 @@ pub enum AppError {
     InvalidSecretKey,
     InvalidToneStyle(String),
     BadRequest(String),
+    Conflict(String),
+    RateLimitExceeded(String),
     InternalServerError(String),
     InternalError(String),
     ExternalApiError(String),
@@ -30,6 +32,8 @@ impl fmt::Display for AppError {
                 write!(f, "유효하지 않은 말투 스타일입니다. KIND 또는 POLITE만 가능합니다. 입력값: {}", style)
             }
             AppError::BadRequest(msg) => write!(f, "잘못된 요청입니다: {}", msg),
+            AppError::Conflict(msg) => write!(f, "중복된 데이터: {}", msg),
+            AppError::RateLimitExceeded(msg) => write!(f, "{}", msg),
             AppError::InternalServerError(msg) => write!(f, "서버 에러, 관리자에게 문의 바랍니다: {}", msg),
             AppError::InternalError(msg) => write!(f, "내부 에러: {}", msg),
             AppError::ExternalApiError(msg) => write!(f, "외부 API 에러: {}", msg),
@@ -54,6 +58,16 @@ impl ResponseError for AppError {
                 "COMMON400".to_string(),
                 "잘못된 요청입니다.".to_string(),
                 actix_web::http::StatusCode::BAD_REQUEST,
+            ),
+            AppError::Conflict(msg) => (
+                "COMMON409".to_string(),
+                msg.clone(),
+                actix_web::http::StatusCode::CONFLICT,
+            ),
+            AppError::RateLimitExceeded(msg) => (
+                "COMMON429".to_string(),
+                msg.clone(),
+                actix_web::http::StatusCode::TOO_MANY_REQUESTS,
             ),
             AppError::InternalServerError(_) => (
                 "COMMON500".to_string(),

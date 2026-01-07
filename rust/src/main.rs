@@ -9,30 +9,44 @@ mod config;
 mod domain;
 mod error;
 mod models;
+mod rate_limiter;
 
 use config::AppConfig;
 use domain::ai::controller;
+use domain::auth::controller as auth_controller;
+use domain::test::controller as test_controller;
+use rate_limiter::RateLimiter;
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         controller::provide_guide,
         controller::refine_retrospective,
+        auth_controller::sign_up,
+        test_controller::test_rate_limit,
     ),
     components(
         schemas(
             models::request::GuideRequest,
             models::request::RefineRequest,
             models::request::ToneStyle,
+            models::request::SignUpRequest,
             models::response::GuideResponse,
             models::response::RefineResponse,
+            models::response::SignUpResponse,
             models::response::BaseResponse<models::response::GuideResponse>,
             models::response::BaseResponse<models::response::RefineResponse>,
+            models::response::BaseResponse<models::response::SignUpResponse>,
+            domain::test::controller::TestRequest,
+            domain::test::controller::TestResponse,
+            models::response::BaseResponse<domain::test::controller::TestResponse>,
             error::ErrorResponse,
         )
     ),
     tags(
-        (name = "AI", description = "AI 질문 API")
+        (name = "AI", description = "AI 질문 API"),
+        (name = "Auth", description = "인증 API"),
+        (name = "Test", description = "테스트 API")
     )
 )]
 struct ApiDoc;
@@ -54,6 +68,9 @@ async fn main() -> std::io::Result<()> {
 
     let openapi = ApiDoc::openapi();
 
+    // RateLimiter 초기화 (10 requests per 60 seconds)
+    let rate_limiter = web::Data::new(RateLimiter::new(10, 60));
+
     HttpServer::new(move || {
         let cors = Cors::permissive();
 
@@ -61,9 +78,18 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .wrap(actix_web::middleware::Logger::default())
             .app_data(web::Data::new(config.clone()))
+            .app_data(rate_limiter.clone())
             .service(
                 web::scope("/api/ai")
                     .configure(controller::configure)
+            )
+            .service(
+                web::scope("/api/auth")
+                    .configure(auth_controller::configure)
+            )
+            .service(
+                web::scope("/api/test")
+                    .configure(test_controller::configure)
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

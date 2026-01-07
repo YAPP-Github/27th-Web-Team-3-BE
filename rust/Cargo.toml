@@ -19,3 +19,5 @@ thiserror = "1.0"
 validator = { version = "0.18", features = ["derive"] }
 utoipa = { version = "4.2", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "6.0", features = ["actix-web"] }
+lazy_static = "1.4"
+chrono = "0.4"

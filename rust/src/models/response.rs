@@ -47,3 +47,18 @@ pub struct RefineResponse {
     pub tone_style: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct SignUpResponse {
+    #[serde(rename = "userId")]
+    pub user_id: u64,
+
+    #[schema(example = "user@example.com")]
+    pub email: String,
+
+    #[schema(example = "홍길동")]
+    pub username: String,
+
+    #[schema(example = "2024-01-08T12:34:56Z")]
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}

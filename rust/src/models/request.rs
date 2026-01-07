@@ -55,3 +55,22 @@ pub struct RefineRequest {
     pub secret_key: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Validate, ToSchema)]
+pub struct SignUpRequest {
+    #[validate(email(message = "올바른 이메일 형식이 아닙니다."))]
+    #[schema(example = "user@example.com")]
+    pub email: String,
+
+    #[validate(length(min = 2, max = 50, message = "사용자 이름은 2-50자 사이여야 합니다."))]
+    #[schema(example = "홍길동")]
+    pub username: String,
+
+    #[validate(length(min = 8, message = "비밀번호는 최소 8자 이상이어야 합니다."))]
+    #[schema(example = "password123!")]
+    pub password: String,
+
+    #[validate(must_match(other = "password", message = "비밀번호가 일치하지 않습니다."))]
+    #[schema(example = "password123!")]
+    #[serde(rename = "passwordConfirm")]
+    pub password_confirm: String,
+}
