@@ -13,6 +13,7 @@ mod rate_limiter;
 
 use config::AppConfig;
 use domain::ai::controller;
+use domain::ai::service::AiService;
 use domain::auth::controller as auth_controller;
 use domain::test::controller as test_controller;
 use rate_limiter::RateLimiter;
@@ -71,6 +72,11 @@ async fn main() -> std::io::Result<()> {
     // RateLimiter 초기화 (10 requests per 60 seconds)
     let rate_limiter = web::Data::new(RateLimiter::new(10, 60));
 
+    // AiService 초기화
+    let ai_service = web::Data::new(
+        AiService::new().expect("Failed to initialize AiService")
+    );
+
     HttpServer::new(move || {
         let cors = Cors::permissive();
 
@@ -79,6 +85,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(actix_web::middleware::Logger::default())
             .app_data(web::Data::new(config.clone()))
             .app_data(rate_limiter.clone())
+            .app_data(ai_service.clone())
             .service(
                 web::scope("/api/ai")
                     .configure(controller::configure)
