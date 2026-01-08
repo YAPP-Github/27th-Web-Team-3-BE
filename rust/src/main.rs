@@ -21,6 +21,7 @@ use rate_limiter::RateLimiter;
 #[openapi(
     paths(
         controller::provide_guide,
+        controller::provide_retrospective_guide,
         controller::refine_retrospective,
         auth_controller::sign_up,
         test_controller::test_rate_limit,
@@ -28,13 +29,16 @@ use rate_limiter::RateLimiter;
     components(
         schemas(
             models::request::GuideRequest,
+            models::request::RetrospectiveGuideRequest,
             models::request::RefineRequest,
             models::request::ToneStyle,
             models::request::SignUpRequest,
             models::response::GuideResponse,
+            models::response::RetrospectiveGuideResponse,
             models::response::RefineResponse,
             models::response::SignUpResponse,
             models::response::BaseResponse<models::response::GuideResponse>,
+            models::response::BaseResponse<models::response::RetrospectiveGuideResponse>,
             models::response::BaseResponse<models::response::RefineResponse>,
             models::response::BaseResponse<models::response::SignUpResponse>,
             domain::test::controller::TestRequest,

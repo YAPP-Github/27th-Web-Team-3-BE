@@ -33,6 +33,13 @@ pub struct GuideResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RetrospectiveGuideResponse {
+    #[schema(example = "좋은 시작이에요! 구체적으로 어떤 어려움이 있었는지, 그리고 무엇을 배웠는지 더 자세히 작성해보면 좋을 것 같아요.")]
+    #[serde(rename = "guideMessage")]
+    pub guide_message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RefineResponse {
     #[schema(example = "오늘 일 존나 힘들었음 ㅋㅋ 근데 배운게 많았어")]
     #[serde(rename = "originalContent")]
