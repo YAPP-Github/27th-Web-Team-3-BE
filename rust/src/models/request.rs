@@ -15,6 +15,18 @@ pub struct GuideRequest {
     pub secret_key: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Validate, ToSchema)]
+pub struct RetrospectiveGuideRequest {
+    #[validate(length(min = 1, message = "회고 내용은 필수입니다."))]
+    #[schema(example = "오늘 프로젝트를 진행하면서 많은 것을 배웠다.")]
+    pub content: String,
+
+    #[validate(length(min = 1, message = "비밀 키는 필수입니다."))]
+    #[schema(example = "mySecretKey123")]
+    #[serde(rename = "secretKey")]
+    pub secret_key: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ToneStyle {
