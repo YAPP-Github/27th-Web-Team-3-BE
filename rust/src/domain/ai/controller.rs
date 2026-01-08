@@ -5,83 +5,87 @@ use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::models::request::{GuideRequest, RefineRequest};
 use crate::models::response::{BaseResponse, GuideResponse, RefineResponse};
+use crate::domain::ai::{service, validator as ai_validator};
 
-use crate::domain::ai::{service, validator::SecretKeyValidator};
-
+/// Provides a writing guide for retrospective content
 #[utoipa::path(
     post,
-    path = "/api/ai/guide",
+    path = "/api/ai/retrospective/guide",
     request_body = GuideRequest,
     responses(
-        (status = 200, description = "Success", body = BaseResponse<GuideResponse>),
-        (status = 400, description = "Bad Request"),
-        (status = 401, description = "Unauthorized")
+        (status = 200, description = "성공", body = BaseResponse<GuideResponse>),
+        (status = 400, description = "잘못된 요청", body = crate::error::ErrorResponse),
+        (status = 401, description = "유효하지 않은 비밀 키", body = crate::error::ErrorResponse),
+        (status = 500, description = "서버 에러", body = crate::error::ErrorResponse)
     ),
     tag = "AI"
 )]
 pub async fn provide_guide(
-    config: web::Data<AppConfig>,
     req: web::Json<GuideRequest>,
+    config: web::Data<AppConfig>,
 ) -> Result<HttpResponse, AppError> {
-    // validate
+    // Validate request
     req.validate()
-        .map_err(|e| AppError::BadRequest(format!("Validation error: {}", e)))?;
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
-    // validate secret key
-    SecretKeyValidator::validate(&config, &req.secret_key)?;
+    // Validate secret key
+    ai_validator::validate_secret_key(&req.secret_key, &config)?;
 
-    // call service - now returns Result
-    let guide = service::generate_guide(&req.current_content).await?;
+    // Call AI service
+    let guide_message = service::provide_writing_guide(&req.current_content, &config).await?;
 
-    let resp = GuideResponse {
+    let response = BaseResponse::success(GuideResponse {
         current_content: req.current_content.clone(),
-        guide_message: guide,
-    };
+        guide_message,
+    });
 
-    Ok(HttpResponse::Ok().json(BaseResponse::success(resp)))
+    Ok(HttpResponse::Ok().json(response))
 }
 
+/// Refines retrospective content with selected tone style
 #[utoipa::path(
     post,
-    path = "/api/ai/refine",
+    path = "/api/ai/retrospective/refine",
     request_body = RefineRequest,
     responses(
-        (status = 200, description = "Success", body = BaseResponse<RefineResponse>),
-        (status = 400, description = "Bad Request"),
-        (status = 401, description = "Unauthorized")
+        (status = 200, description = "성공", body = BaseResponse<RefineResponse>),
+        (status = 400, description = "잘못된 요청", body = crate::error::ErrorResponse),
+        (status = 401, description = "유효하지 않은 비밀 키", body = crate::error::ErrorResponse),
+        (status = 500, description = "서버 에러", body = crate::error::ErrorResponse)
     ),
     tag = "AI"
 )]
 pub async fn refine_retrospective(
-    config: web::Data<AppConfig>,
     req: web::Json<RefineRequest>,
+    config: web::Data<AppConfig>,
 ) -> Result<HttpResponse, AppError> {
-    // validate
+    // Validate request
     req.validate()
-        .map_err(|e| AppError::BadRequest(format!("Validation error: {}", e)))?;
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
-    // validate secret key
-    SecretKeyValidator::validate(&config, &req.secret_key)?;
+    // Validate secret key
+    ai_validator::validate_secret_key(&req.secret_key, &config)?;
 
-    // call service - now returns Result
-    let (refined, tone) = service::refine_content(&req.content, &req.tone_style).await?;
+    // Call AI service
+    let refined_content = service::refine_content(&req.content, &req.tone_style, &config).await?;
 
-    let resp = RefineResponse {
+    let response = BaseResponse::success(RefineResponse {
         original_content: req.content.clone(),
-        refined_content: refined,
-        tone_style: tone,
-    };
+        refined_content,
+        tone_style: req.tone_style.to_korean().to_string(),
+    });
 
-    Ok(HttpResponse::Ok().json(BaseResponse::success(resp)))
+    Ok(HttpResponse::Ok().json(response))
 }
 
+/// Configure AI routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::resource("/guide")
+        web::resource("/retrospective/guide")
             .route(web::post().to(provide_guide))
     )
     .service(
-        web::resource("/refine")
+        web::resource("/retrospective/refine")
             .route(web::post().to(refine_retrospective))
     );
 }
