@@ -1,19 +1,17 @@
-# Web-3 Backend
+# Web-3 Backend Project
 
-### ⚙️ 기술 스택
-- Java 17
-- Spring Boot 3.5.x
+This repository contains the backend implementation for the Web-3 project, transitioning from a JVM-based architecture to Rust.
 
-### 📋 Commit Message Convention
-|   Gitmoji   |    Tag     | Description |
-|:-----------:|:----------:| --- |
-|      ✨      |   `feat`   | 새로운 기능 추가 |
-|     🐛      |   `fix`    | 버그 수정 |
-|     📝      |   `docs`   | 문서 추가, 수정, 삭제 |
-|      ✅      |   `test`   | 테스트 코드 추가, 수정, 삭제 |
-|     💄      |  `style`   | 코드 형식 변경 |
-|     ♻️      | `refactor` | 코드 리팩토링 |
-|     ⚡️      |   `perf`   | 성능 개선 |
-|     💚      |    `ci`    | CI 관련 설정 수정 |
-|     🚀      |  `chore`   | 기타 변경사항 |
-|      🔥️      |  `remove`   | 코드 및 파일 제거 |
+## Project Structure
+
+### `jvm/`
+The current production backend implemented in **Java 17** and **Spring Boot 3.5**.
+- See [jvm/README.md](jvm/README.md) for details.
+
+### `rust/`
+The future backend implementation using **Rust** and **Axum**.
+- Currently under construction.
+- See [docs/rust-migration-plan.md](docs/rust-migration-plan.md) for the migration strategy.
+
+### `docs/`
+Project documentation, architectural overviews, and migration plans.
