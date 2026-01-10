@@ -1,0 +1,89 @@
+groups:
+  - name: web3-server-alerts
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ printf \"%.2f\" $value | mul 100 }}% for more than 5 minutes"
+
+      # High Latency Alert
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "P95 latency is {{ printf \"%.2f\" $value }}s for more than 5 minutes"
+
+      # Critical Latency Alert
+      - alert: CriticalLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical latency detected"
+          description: "P99 latency is {{ printf \"%.2f\" $value }}s for more than 3 minutes"
+
+      # OpenAI API Unhealthy
+      - alert: OpenAIUnhealthy
+        expr: openai_health_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenAI API is unhealthy"
+          description: "OpenAI API has been unhealthy for more than 2 minutes"
+
+      # OpenAI API Degraded
+      - alert: OpenAIDegraded
+        expr: openai_health_status == 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenAI API is degraded"
+          description: "OpenAI API response time is slow for more than 5 minutes"
+
+      # Server Down
+      - alert: ServerDown
+        expr: up{job="web3-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Web3 Server is down"
+          description: "Server has been unreachable for more than 1 minute"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          process_resident_memory_bytes / 1024 / 1024 > 512
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ printf \"%.0f\" $value }}MB for more than 10 minutes"
+
+      # Low Request Rate (possible issue)
+      - alert: LowRequestRate
+        expr: |
+          sum(rate(http_requests_total[5m])) < 0.001
+          and sum(rate(http_requests_total[1h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually low request rate"
+          description: "Request rate has dropped significantly for more than 15 minutes"
