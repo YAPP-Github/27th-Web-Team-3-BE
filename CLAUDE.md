@@ -36,6 +36,10 @@
 │       │   ├── config.rs       # 환경 설정
 │       │   ├── error.rs        # 에러 타입
 │       │   ├── response.rs     # 공통 응답
+│       │   ├── utils/          # 공통 유틸리티
+│       │   │   ├── mod.rs
+│       │   │   ├── error.rs    # AppError 정의
+│       │   │   └── response.rs # API 응답 구조체
 │       │   ├── domain/
 │       │   │   └── ai/
 │       │   │       ├── handler.rs   # API 핸들러
@@ -47,6 +51,7 @@
 │       └── tests/              # 통합 테스트
 ├── docs/                       # 문서
 │   ├── api-specs/              # API 명세서
+│   ├── reviews/                # API 구현 리뷰 문서
 │   ├── implementations/        # 구현 설명서
 │   ├── meetings/               # 회의록
 │   ├── requirements/           # 요구사항
@@ -229,13 +234,24 @@ cargo clippy -- -D warnings
 [커밋 전 체크리스트 확인]
 ```
 
-## 새 기능 추가 절차
+## 작업 순서
 
-1. `dto.rs`에 Request/Response 구조체 정의
-2. `service.rs`에 비즈니스 로직 구현 (테스트 먼저)
-3. `handler.rs`에 API 핸들러 추가
-4. 라우터에 엔드포인트 등록
-5. `/test` 실행하여 검증
+1. 공통 유틸리티 확인 (`src/utils`)
+2. 전체 API 테스트 및 green 테스트 작성
+3. 구현
+4. 전체 테스트 실행 및 검증 (서버 실행 후 `/health` 체크가 되면 그 다음 진행)
+5. `docs/reviews/{api_name}.md` 문서 작성
+6. 코드 리뷰 체크리스트 확인
+
+## 코드 리뷰 체크리스트
+
+- [ ] TDD 원칙을 따라 테스트 코드가 먼저 작성되었는가?
+- [ ] 모든 테스트가 통과하는가?
+- [ ] API 문서가 `docs/reviews/` 디렉토리에 작성되었는가?
+- [ ] 공통 유틸리티를 재사용했는가?
+- [ ] 에러 처리가 적절하게 되어 있는가?
+- [ ] 코드가 Rust 컨벤션을 따르는가?
+- [ ] 불필요한 의존성이 추가되지 않았는가?
 
 ## 참고 자료
 
