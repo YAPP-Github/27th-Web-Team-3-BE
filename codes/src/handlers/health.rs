@@ -1,7 +1,7 @@
 use axum::Json;
 use serde::Serialize;
 
-use crate::response::ApiResponse;
+use crate::util::ApiResponse;
 
 /// 루트 핸들러
 pub async fn root() -> Json<ApiResponse<ServiceInfo>> {

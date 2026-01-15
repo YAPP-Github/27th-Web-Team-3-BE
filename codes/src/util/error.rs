@@ -6,7 +6,7 @@ use axum::{
 };
 use tracing::error;
 
-use crate::response::ApiErrorResponse;
+use super::response::ApiErrorResponse;
 
 /// 애플리케이션 전역 에러 타입
 #[derive(Debug)]

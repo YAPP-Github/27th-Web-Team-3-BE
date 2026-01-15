@@ -6,8 +6,7 @@ use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-mod error;
-mod response;
+mod util;
 mod handlers;
 
 use handlers::{root, health_check, echo};

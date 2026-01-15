@@ -1,8 +1,7 @@
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::error::AppError;
-use crate::response::ApiResponse;
+use crate::util::{AppError, ApiResponse};
 
 /// Echo 요청 DTO
 #[derive(Deserialize)]
