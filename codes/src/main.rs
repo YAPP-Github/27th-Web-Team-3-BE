@@ -9,7 +9,7 @@ use tracing::info;
 mod util;
 mod handlers;
 
-use handlers::{root, health_check, echo};
+use handlers::{root, health_check, echo, get_user_info};
 
 #[tokio::main]
 async fn main() {
@@ -24,6 +24,7 @@ async fn main() {
         .route("/", get(root))
         .route("/health", get(health_check))
         .route("/api/echo", post(echo))
+        .route("/api/user/:id", get(get_user_info))
         .layer(CorsLayer::permissive());
 
     // Run the server
