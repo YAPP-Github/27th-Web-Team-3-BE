@@ -1,13 +1,16 @@
 use axum::{
     routing::{get, post},
-    http::StatusCode,
-    Json, Router,
-    response::IntoResponse,
+    Router,
 };
-use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tracing::info;
+
+mod error;
+mod response;
+mod handlers;
+
+use handlers::{root, health_check, echo};
 
 #[tokio::main]
 async fn main() {
@@ -30,35 +33,5 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
-}
-
-// Root handler
-async fn root() -> &'static str {
-    "Welcome to Rust Server!"
-}
-
-// Health check endpoint
-async fn health_check() -> impl IntoResponse {
-    (StatusCode::OK, Json(serde_json::json!({
-        "status": "healthy",
-        "timestamp": chrono::Utc::now().to_rfc3339()
-    })))
-}
-
-// Echo endpoint
-#[derive(Deserialize, Serialize)]
-struct EchoRequest {
-    message: String,
-}
-
-#[derive(Serialize)]
-struct EchoResponse {
-    echo: String,
-}
-
-async fn echo(Json(payload): Json<EchoRequest>) -> Json<EchoResponse> {
-    Json(EchoResponse {
-        echo: payload.message,
-    })
 }
 
