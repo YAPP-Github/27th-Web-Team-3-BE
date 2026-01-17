@@ -35,3 +35,8 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### build file ###
+.gemini
+target
+Cargo.lock
