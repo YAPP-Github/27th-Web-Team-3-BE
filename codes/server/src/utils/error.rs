@@ -1,19 +1,22 @@
 use axum::{
+    extract::rejection::JsonRejection,
     http::StatusCode,
     response::{IntoResponse, Response},
-    extract::rejection::JsonRejection,
     Json,
 };
 use tracing::error;
 
-use super::response::ApiErrorResponse;
+use super::response::ErrorResponse;
 
 /// 애플리케이션 전역 에러 타입
 #[derive(Debug)]
 pub enum AppError {
+    #[allow(dead_code)]
     BadRequest(String),
+    #[allow(dead_code)]
     NotFound(String),
     Unauthorized(String),
+    #[allow(dead_code)]
     Forbidden(String),
     InternalError(String),
     ValidationError(String),
@@ -22,29 +25,30 @@ pub enum AppError {
 
 impl AppError {
     /// 에러 메시지 반환
-    pub fn message(&self) -> &str {
+    pub fn message(&self) -> String {
         match self {
-            AppError::BadRequest(msg) => msg,
-            AppError::NotFound(msg) => msg,
-            AppError::Unauthorized(msg) => msg,
-            AppError::Forbidden(msg) => msg,
-            AppError::InternalError(msg) => msg,
-            AppError::ValidationError(msg) => msg,
-            AppError::JsonParseFailed(msg) => msg,
+            AppError::BadRequest(msg) => msg.clone(),
+            AppError::NotFound(msg) => msg.clone(),
+            AppError::Unauthorized(msg) => msg.clone(),
+            AppError::Forbidden(msg) => msg.clone(),
+            AppError::InternalError(msg) => msg.clone(),
+            AppError::ValidationError(msg) => msg.clone(),
+            AppError::JsonParseFailed(msg) => format!("잘못된 요청 형식입니다: {}", msg),
         }
     }
 
     /// 에러 코드 반환
-    pub fn error_code(&self) -> &str {
+    pub fn error_code(&self) -> String {
         match self {
-            AppError::BadRequest(_) => "BAD_REQUEST",
-            AppError::NotFound(_) => "NOT_FOUND",
-            AppError::Unauthorized(_) => "UNAUTHORIZED",
-            AppError::Forbidden(_) => "FORBIDDEN",
-            AppError::InternalError(_) => "INTERNAL_SERVER_ERROR",
-            AppError::ValidationError(_) => "VALIDATION_ERROR",
-            AppError::JsonParseFailed(_) => "JSON_PARSE_ERROR",
+            AppError::BadRequest(_) => "COMMON400",
+            AppError::NotFound(_) => "COMMON404",
+            AppError::Unauthorized(_) => "AI_001",
+            AppError::Forbidden(_) => "COMMON403",
+            AppError::InternalError(_) => "COMMON500",
+            AppError::ValidationError(_) => "COMMON400",
+            AppError::JsonParseFailed(_) => "COMMON400",
         }
+        .to_string()
     }
 
     /// HTTP 상태 코드 반환
@@ -64,8 +68,8 @@ impl AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = self.status_code();
-        let error_code = self.error_code().to_string();
-        let message = self.message().to_string();
+        let error_code = self.error_code();
+        let message = self.message();
 
         // 에러 로깅
         match &self {
@@ -77,7 +81,7 @@ impl IntoResponse for AppError {
             }
         }
 
-        let error_response = ApiErrorResponse::new(error_code, message, None);
+        let error_response = ErrorResponse::new(error_code, message);
 
         (status, Json(error_response)).into_response()
     }
@@ -92,10 +96,12 @@ impl From<JsonRejection> for AppError {
 
 /// 편의 함수들
 impl AppError {
+    #[allow(dead_code)]
     pub fn bad_request(msg: impl Into<String>) -> Self {
         AppError::BadRequest(msg.into())
     }
 
+    #[allow(dead_code)]
     pub fn not_found(msg: impl Into<String>) -> Self {
         AppError::NotFound(msg.into())
     }
@@ -104,6 +110,7 @@ impl AppError {
         AppError::Unauthorized(msg.into())
     }
 
+    #[allow(dead_code)]
     pub fn forbidden(msg: impl Into<String>) -> Self {
         AppError::Forbidden(msg.into())
     }
@@ -116,4 +123,3 @@ impl AppError {
         AppError::ValidationError(msg.into())
     }
 }
-
