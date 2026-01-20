@@ -5,4 +5,3 @@ pub use error::AppError;
 pub use response::BaseResponse;
 #[allow(unused_imports)]
 pub use response::ErrorResponse;
-

@@ -12,13 +12,16 @@ pub enum ToneStyle {
     Polite,
 }
 
-
 /// 회고 정제 요청 DTO
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RefineRequest {
     /// 정제할 회고 내용 (1 ~ 5000자)
-    #[validate(length(min = 1, max = 5000, message = "내용은 1자 이상 5000자 이하여야 합니다"))]
+    #[validate(length(
+        min = 1,
+        max = 5000,
+        message = "내용은 1자 이상 5000자 이하여야 합니다"
+    ))]
     pub content: String,
 
     /// 말투 스타일 (KIND 또는 POLITE)

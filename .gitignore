@@ -35,3 +35,12 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Environment ###
+.env
+.env.local
+!.env.example
+
+### Rust ###
+target/
+Cargo.lock

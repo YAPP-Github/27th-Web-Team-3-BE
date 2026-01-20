@@ -43,7 +43,10 @@ impl AiService {
 
     /// 회고 내용 정제
     #[instrument(skip(self, request), fields(tone_style = ?request.tone_style))]
-    pub async fn refine_content(&self, request: &RefineRequest) -> Result<RefineResponse, AppError> {
+    pub async fn refine_content(
+        &self,
+        request: &RefineRequest,
+    ) -> Result<RefineResponse, AppError> {
         // 비밀 키 검증
         self.validate_secret_key(&request.secret_key)?;
 
@@ -54,9 +57,7 @@ impl AiService {
         let user_prompt = RefinePrompt::user_prompt(&request.content);
 
         // OpenAI API 호출
-        let refined_content = self
-            .call_openai(&system_prompt, &user_prompt)
-            .await?;
+        let refined_content = self.call_openai(&system_prompt, &user_prompt).await?;
 
         Ok(RefineResponse::new(
             request.content.clone(),
@@ -92,23 +93,18 @@ impl AiService {
             .build()
             .map_err(|e| AppError::AiGeneralError(e.to_string()))?;
 
-        let response = self
-            .client
-            .chat()
-            .create(request)
-            .await
-            .map_err(|e| {
-                let error_msg = e.to_string();
-                if error_msg.contains("401") || error_msg.contains("Unauthorized") {
-                    AppError::AiConnectionFailed("API 키가 유효하지 않습니다".to_string())
-                } else if error_msg.contains("429") || error_msg.contains("rate limit") {
-                    AppError::AiServiceUnavailable("요청 한도 초과".to_string())
-                } else if error_msg.contains("503") || error_msg.contains("unavailable") {
-                    AppError::AiServiceUnavailable(error_msg)
-                } else {
-                    AppError::AiGeneralError(error_msg)
-                }
-            })?;
+        let response = self.client.chat().create(request).await.map_err(|e| {
+            let error_msg = e.to_string();
+            if error_msg.contains("401") || error_msg.contains("Unauthorized") {
+                AppError::AiConnectionFailed("API 키가 유효하지 않습니다".to_string())
+            } else if error_msg.contains("429") || error_msg.contains("rate limit") {
+                AppError::AiServiceUnavailable("요청 한도 초과".to_string())
+            } else if error_msg.contains("503") || error_msg.contains("unavailable") {
+                AppError::AiServiceUnavailable(error_msg)
+            } else {
+                AppError::AiGeneralError(error_msg)
+            }
+        })?;
 
         let content = response
             .choices
@@ -124,8 +120,8 @@ impl AiService {
 /// 테스트용 Mock Service
 #[cfg(test)]
 pub mod mock {
-    use super::*;
     use super::super::dto::ToneStyle;
+    use super::*;
 
     pub struct MockAiService {
         secret_key: String,
@@ -145,13 +141,26 @@ pub mod mock {
             Ok(())
         }
 
-        pub async fn refine_content(&self, request: &RefineRequest) -> Result<RefineResponse, AppError> {
+        pub async fn refine_content(
+            &self,
+            request: &RefineRequest,
+        ) -> Result<RefineResponse, AppError> {
             self.validate_secret_key(&request.secret_key)?;
 
             // Mock: 간단한 변환 로직
             let refined = match request.tone_style {
-                ToneStyle::Kind => format!("{}요~", request.content.trim_end_matches(|c: char| c == '.' || c == '요')),
-                ToneStyle::Polite => format!("{}습니다.", request.content.trim_end_matches(|c: char| c == '.' || c == '요' || c == '음')),
+                ToneStyle::Kind => format!(
+                    "{}요~",
+                    request
+                        .content
+                        .trim_end_matches(|c: char| c == '.' || c == '요')
+                ),
+                ToneStyle::Polite => format!(
+                    "{}습니다.",
+                    request
+                        .content
+                        .trim_end_matches(|c: char| c == '.' || c == '요' || c == '음')
+                ),
             };
 
             Ok(RefineResponse::new(
@@ -165,9 +174,9 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
+    use super::super::dto::ToneStyle;
     use super::mock::MockAiService;
     use super::*;
-    use super::super::dto::ToneStyle;
 
     #[test]
     fn should_validate_correct_secret_key() {

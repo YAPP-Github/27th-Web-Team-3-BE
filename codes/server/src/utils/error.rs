@@ -1,7 +1,7 @@
 use axum::{
+    extract::rejection::JsonRejection,
     http::StatusCode,
     response::{IntoResponse, Response},
-    extract::rejection::JsonRejection,
     Json,
 };
 use tracing::error;
@@ -162,4 +162,3 @@ impl AppError {
         AppError::ValidationError(msg.into())
     }
 }
-

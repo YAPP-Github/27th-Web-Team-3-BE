@@ -10,10 +10,41 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AppConfig;
+use crate::domain::ai::dto::{RefineRequest, RefineResponse, ToneStyle};
 use crate::domain::ai::{refine_retrospective, AiService, AppState};
-use crate::utils::BaseResponse;
+use crate::utils::{BaseResponse, ErrorResponse};
+
+/// OpenAPI 문서 정의
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::domain::ai::handler::refine_retrospective
+    ),
+    components(
+        schemas(
+            RefineRequest,
+            RefineResponse,
+            ToneStyle,
+            BaseResponse<RefineResponse>,
+            ErrorResponse,
+            HealthResponse
+        )
+    ),
+    tags(
+        (name = "AI", description = "AI 기반 회고 서비스 API"),
+        (name = "Health", description = "헬스 체크 API")
+    ),
+    info(
+        title = "회고록 AI 서비스 API",
+        version = "1.0.0",
+        description = "회고록 작성을 도와주는 AI 서비스의 API 문서입니다."
+    )
+)]
+struct ApiDoc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/api/ai/retrospective/refine", post(refine_retrospective))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);
@@ -66,7 +98,9 @@ async fn health_check() -> axum::Json<BaseResponse<HealthResponse>> {
     }))
 }
 
-#[derive(serde::Serialize)]
+/// 헬스 체크 응답 DTO
+#[derive(serde::Serialize, utoipa::ToSchema)]
 struct HealthResponse {
+    /// 서버 상태
     status: String,
 }
