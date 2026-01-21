@@ -21,7 +21,7 @@ pub struct AppState {
     path = "/api/ai/retrospective/refine",
     request_body = RefineRequest,
     responses(
-        (status = 200, description = "성공", body = BaseResponse<RefineResponse>),
+        (status = 200, description = "성공", body = RefineSuccessResponse),
         (status = 400, description = "잘못된 요청 (유효성 검증 실패)", body = ErrorResponse),
         (status = 401, description = "인증 실패 (유효하지 않은 비밀 키)", body = ErrorResponse),
         (status = 500, description = "서버 에러", body = ErrorResponse)

@@ -14,7 +14,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AppConfig;
-use crate::domain::ai::dto::{RefineRequest, RefineResponse, ToneStyle};
+use crate::domain::ai::dto::{RefineRequest, RefineResponse, RefineSuccessResponse, ToneStyle};
 use crate::domain::ai::{refine_retrospective, AiService, AppState};
 use crate::utils::{BaseResponse, ErrorResponse};
 
@@ -29,7 +29,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
             RefineRequest,
             RefineResponse,
             ToneStyle,
-            BaseResponse<RefineResponse>,
+            RefineSuccessResponse,
             ErrorResponse,
             HealthResponse
         )

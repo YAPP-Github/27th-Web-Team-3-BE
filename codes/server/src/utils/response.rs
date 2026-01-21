@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 ///   "result": { ... }
 /// }
 /// ```
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BaseResponse<T: Serialize> {
     pub is_success: bool,

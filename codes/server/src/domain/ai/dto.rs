@@ -56,6 +56,26 @@ impl RefineResponse {
     }
 }
 
+/// 회고 정제 성공 응답 (OpenAPI 스키마용)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RefineSuccessResponse {
+    /// 성공 여부
+    #[schema(example = true)]
+    pub is_success: bool,
+
+    /// 응답 코드
+    #[schema(example = "COMMON200")]
+    pub code: String,
+
+    /// 응답 메시지
+    #[schema(example = "성공입니다.")]
+    pub message: String,
+
+    /// 정제 결과
+    pub result: RefineResponse,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
