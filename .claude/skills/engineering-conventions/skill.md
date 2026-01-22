@@ -272,7 +272,6 @@ impl Config {
 ## Docker 설정
 
 ```dockerfile
-# Dockerfile
 # Build stage
 FROM rust:1.75-alpine AS builder
 
