@@ -1,6 +1,7 @@
 mod config;
 mod domain;
 mod utils;
+mod state;
 
 use axum::{
     routing::{get, post},
@@ -15,8 +16,9 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AppConfig;
 use crate::domain::ai::dto::{RefineRequest, RefineResponse, RefineSuccessResponse, ToneStyle};
-use crate::domain::ai::{refine_retrospective, AiService, AppState};
+use crate::domain::ai::{refine_retrospective, AiService};
 use crate::utils::{BaseResponse, ErrorResponse};
+use crate::state::AppState;
 
 /// OpenAPI 문서 정의
 #[derive(OpenApi)]
@@ -63,9 +65,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfig::from_env()?;
     let port = config.server_port;
 
+    // DB 연결 및 테이블 생성 (Auto-Schema)
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db = crate::config::establish_connection(&database_url).await?;
+
     // 애플리케이션 상태 생성
     let ai_service = AiService::new(&config);
-    let app_state = AppState { ai_service };
+    let app_state = AppState { 
+        ai_service,
+        db,
+    };
 
     // CORS 설정
     let cors = CorsLayer::new()

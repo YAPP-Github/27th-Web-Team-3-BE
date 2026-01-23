@@ -3,15 +3,9 @@ use tracing::info;
 use validator::Validate;
 
 use crate::utils::{AppError, BaseResponse};
+use crate::state::AppState;
 
 use super::dto::{RefineRequest, RefineResponse};
-use super::service::AiService;
-
-/// 애플리케이션 상태
-#[derive(Clone)]
-pub struct AppState {
-    pub ai_service: AiService,
-}
 
 /// POST /api/ai/retrospective/refine
 ///
