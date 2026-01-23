@@ -1,4 +1,6 @@
+pub mod auth;
 pub mod error;
+pub mod jwt;
 pub mod response;
 
 pub use response::BaseResponse;

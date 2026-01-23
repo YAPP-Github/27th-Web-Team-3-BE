@@ -25,6 +25,12 @@ pub enum AppError {
 
     /// JSON 파싱 실패 (400)
     JsonParseFailed(String),
+
+    /// COMMON401: 인증 실패 (401)
+    Unauthorized(String),
+
+    /// COMMON403: 권한 없음 (403)
+    Forbidden(String),
 }
 
 impl AppError {
@@ -35,6 +41,8 @@ impl AppError {
             AppError::ValidationError(msg) => format!("잘못된 요청입니다: {}", msg),
             AppError::InternalError(_) => "서버 에러, 관리자에게 문의 바랍니다.".to_string(),
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
+            AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
+            AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
         }
     }
 
@@ -45,6 +53,8 @@ impl AppError {
             AppError::ValidationError(_) => "COMMON400",
             AppError::InternalError(_) => "COMMON500",
             AppError::JsonParseFailed(_) => "COMMON400",
+            AppError::Unauthorized(_) => "COMMON401",
+            AppError::Forbidden(_) => "COMMON403",
         }
     }
 
@@ -55,6 +65,8 @@ impl AppError {
             AppError::ValidationError(_) => StatusCode::BAD_REQUEST,
             AppError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            AppError::Forbidden(_) => StatusCode::FORBIDDEN,
         }
     }
 }

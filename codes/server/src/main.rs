@@ -13,25 +13,38 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+use utoipa::openapi::security::{SecurityScheme, HttpAuthScheme, Http};
 
 use crate::config::AppConfig;
 use crate::utils::{BaseResponse, ErrorResponse};
 use crate::state::AppState;
+use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, SuccessLoginResponse};
 
 /// OpenAPI 문서 정의
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        health_check,
+        domain::auth::handler::login,
+        domain::auth::handler::login_by_email,
+        domain::auth::handler::auth_test
     ),
     components(
         schemas(
             ErrorResponse,
-            HealthResponse
+            HealthResponse,
+            SuccessHealthResponse,
+            LoginRequest,
+            LoginResponse,
+            EmailLoginRequest,
+            SuccessLoginResponse
         )
     ),
     tags(
-        (name = "Health", description = "헬스 체크 API")
+        (name = "Health", description = "헬스 체크 API"),
+        (name = "Auth", description = "인증 API")
     ),
+    modifiers(&SecurityAddon),
     info(
         title = "회고록 서비스 API",
         version = "1.0.0",
@@ -39,6 +52,21 @@ use crate::state::AppState;
     )
 )]
 struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                SecurityScheme::Http(
+                    Http::new(HttpAuthScheme::Bearer)
+                ),
+            )
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -64,6 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 애플리케이션 상태 생성
     let app_state = AppState { 
         db,
+        config: config.clone(),
     };
 
     // CORS 설정
@@ -75,6 +104,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 라우터 구성
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/api/auth/login", axum::routing::post(domain::auth::handler::login))
+        .route("/api/auth/login/email", axum::routing::post(domain::auth::handler::login_by_email))
+        .route("/api/auth/test", axum::routing::get(domain::auth::handler::auth_test))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -90,6 +122,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// 헬스 체크 엔드포인트
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "서버 상태 정상", body = SuccessHealthResponse)
+    ),
+    tag = "Health"
+)]
 async fn health_check() -> axum::Json<BaseResponse<HealthResponse>> {
     axum::Json(BaseResponse::success(HealthResponse {
         status: "healthy".to_string(),
@@ -101,4 +141,13 @@ async fn health_check() -> axum::Json<BaseResponse<HealthResponse>> {
 struct HealthResponse {
     /// 서버 상태
     status: String,
+}
+
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct SuccessHealthResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: HealthResponse,
 }
