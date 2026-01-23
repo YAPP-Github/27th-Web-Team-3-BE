@@ -14,21 +14,6 @@ use super::response::ErrorResponse;
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum AppError {
-    /// AI_001: 유효하지 않은 비밀 키 (401)
-    InvalidSecretKey,
-
-    /// AI_002: 유효하지 않은 말투 스타일 (400)
-    InvalidToneStyle,
-
-    /// AI_003: AI 서비스 연결 실패 (500)
-    AiConnectionFailed(String),
-
-    /// AI_005: AI 서비스 일시적 오류 (503)
-    AiServiceUnavailable(String),
-
-    /// AI_006: AI 서비스 일반 오류 (500)
-    AiGeneralError(String),
-
     /// COMMON400: 잘못된 요청 (400)
     BadRequest(String),
 
@@ -46,17 +31,6 @@ impl AppError {
     /// 에러 메시지 반환
     pub fn message(&self) -> String {
         match self {
-            AppError::InvalidSecretKey => "유효하지 않은 비밀 키입니다.".to_string(),
-            AppError::InvalidToneStyle => {
-                "유효하지 않은 말투 스타일입니다. KIND 또는 POLITE만 가능합니다.".to_string()
-            }
-            AppError::AiConnectionFailed(msg) => {
-                format!("AI 서비스 연결에 실패했습니다: {}", msg)
-            }
-            AppError::AiServiceUnavailable(_) => {
-                "AI 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요.".to_string()
-            }
-            AppError::AiGeneralError(msg) => format!("AI 서비스 오류: {}", msg),
             AppError::BadRequest(msg) => format!("잘못된 요청입니다: {}", msg),
             AppError::ValidationError(msg) => format!("잘못된 요청입니다: {}", msg),
             AppError::InternalError(_) => "서버 에러, 관리자에게 문의 바랍니다.".to_string(),
@@ -67,11 +41,6 @@ impl AppError {
     /// 에러 코드 반환
     pub fn error_code(&self) -> &str {
         match self {
-            AppError::InvalidSecretKey => "AI_001",
-            AppError::InvalidToneStyle => "AI_002",
-            AppError::AiConnectionFailed(_) => "AI_003",
-            AppError::AiServiceUnavailable(_) => "AI_005",
-            AppError::AiGeneralError(_) => "AI_006",
             AppError::BadRequest(_) => "COMMON400",
             AppError::ValidationError(_) => "COMMON400",
             AppError::InternalError(_) => "COMMON500",
@@ -82,11 +51,6 @@ impl AppError {
     /// HTTP 상태 코드 반환
     pub fn status_code(&self) -> StatusCode {
         match self {
-            AppError::InvalidSecretKey => StatusCode::UNAUTHORIZED,
-            AppError::InvalidToneStyle => StatusCode::BAD_REQUEST,
-            AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-            AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::ValidationError(_) => StatusCode::BAD_REQUEST,
             AppError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -105,9 +69,6 @@ impl IntoResponse for AppError {
         match &self {
             AppError::InternalError(msg) => {
                 error!("Internal Server Error: {}", msg);
-            }
-            AppError::AiConnectionFailed(msg) | AppError::AiGeneralError(msg) => {
-                error!("AI Error [{}]: {}", error_code, msg);
             }
             _ => {
                 error!("Error [{}]: {}", error_code, message);
