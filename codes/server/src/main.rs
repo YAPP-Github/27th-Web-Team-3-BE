@@ -64,6 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 애플리케이션 상태 생성
     let app_state = AppState { 
         db,
+        config: config.clone(),
     };
 
     // CORS 설정
