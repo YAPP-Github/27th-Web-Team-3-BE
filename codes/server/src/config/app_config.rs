@@ -6,6 +6,12 @@ pub struct AppConfig {
     pub server_port: u16,
     pub jwt_secret: String,
     pub jwt_expiration: i64,
+    
+    // Social Login
+    pub google_client_id: String,
+    pub google_redirect_uri: String,
+    pub kakao_client_id: String,
+    pub kakao_redirect_uri: String,
 }
 
 impl AppConfig {
@@ -24,10 +30,19 @@ impl AppConfig {
             .parse()
             .map_err(|_| ConfigError::InvalidExpiration)?;
 
+        let google_client_id = env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
+        let google_redirect_uri = env::var("GOOGLE_REDIRECT_URI").unwrap_or_default();
+        let kakao_client_id = env::var("KAKAO_CLIENT_ID").unwrap_or_default();
+        let kakao_redirect_uri = env::var("KAKAO_REDIRECT_URI").unwrap_or_default();
+
         Ok(Self {
             server_port,
             jwt_secret,
             jwt_expiration,
+            google_client_id,
+            google_redirect_uri,
+            kakao_client_id,
+            kakao_redirect_uri,
         })
     }
 }

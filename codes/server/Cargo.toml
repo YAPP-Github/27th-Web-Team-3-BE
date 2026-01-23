@@ -38,6 +38,7 @@ utoipa-swagger-ui = { version = "7", features = ["axum"] }
 thiserror = "1.0"
 sea-orm = { version = "1.1.19", features = ["sqlx-mysql", "runtime-tokio-native-tls", "macros"] }
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+reqwest = { version = "0.13.1", features = ["json"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
