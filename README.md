@@ -1,8 +1,12 @@
 # Web-3 Backend
 
 ### ⚙️ 기술 스택
-- Java 17
-- Spring Boot 3.5.x
+- Language: Rust (2021 edition)
+- Framework: Axum 0.7
+- Runtime: Tokio 1.0
+- ORM: SeaORM 1.1 (MySQL)
+- Docs: Utoipa (Swagger UI)
+
 
 ### 📋 Commit Message Convention
 |   Gitmoji   |    Tag     | Description |
