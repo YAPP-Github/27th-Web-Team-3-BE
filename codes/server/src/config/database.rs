@@ -1,4 +1,4 @@
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, DbErr, Schema, Statement};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr, Schema, Statement};
 use tracing::info;
 use std::env;
 use crate::domain::{
