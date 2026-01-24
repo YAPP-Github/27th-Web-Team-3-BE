@@ -139,13 +139,15 @@ cargo clippy -- -D warnings
 
 ## 작업 순서
 
-1. 공통 유틸리티 확인 (`src/utils`), .env.example 확인
-2. 전체 API 테스트 및 green 테스트 작성
-3. 구현 코드 작성 (스웨거 작성은 아직 하지 않음)
-4. 같은 dto 에 스웨거용 전체 dto 만들고 핸들러에 스웨거 작성 
-5. 전체 테스트 실행 및 검증 (서버 실행 후 `/health` 체크가 되면 그 다음 진행)
-6. `docs/reviews/{api_name}.md` 문서 작성
-7. 코드 리뷰 체크리스트 확인
+1. **요구사항 분석**: `docs/api-specs/{api_name}.md`를 정독하여 기능 요구사항과 입출력 스펙을 파악합니다. (문서가 없을 경우 작성을 요청하거나 선행해야 합니다)
+2. **컨벤션 확인**: `docs/ai-conventions/`를 참고하여 아키텍처 및 코딩 스타일을 확인합니다.
+3. 공통 유틸리티 확인 (`src/utils`), .env.example 확인
+4. 전체 API 테스트 및 green 테스트 작성 (TDD: Red)
+5. 구현 코드 작성 (TDD: Green -> Refactor)
+6. 같은 dto 에 스웨거용 전체 dto 만들고 핸들러에 스웨거 작성 
+7. 전체 테스트 실행 및 검증 (서버 실행 후 `/health` 체크가 되면 그 다음 진행)
+8. `docs/reviews/{api_name}.md` 문서 작성
+9. 코드 리뷰 체크리스트 확인
 
 ## 코드 리뷰 체크리스트
 
