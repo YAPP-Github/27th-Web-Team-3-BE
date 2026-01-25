@@ -3,6 +3,7 @@
 //! 이 테스트 모듈은 회고 관련 엔드포인트에 대한 HTTP 통합 테스트를 포함합니다.
 //! - API-011: POST /api/v1/retrospects (회고 생성)
 //! - API-010: GET /api/v1/teams/{teamId}/retrospects (팀 회고 목록 조회)
+//! - API-014: POST /api/v1/retrospects/{retrospectId}/participants (회고 참석자 등록)
 //! Mock 기반 테스트로 실제 DB 연결 없이 핸들러 동작을 검증합니다.
 
 use axum::{
@@ -225,6 +226,123 @@ mod test_helpers {
         Router::new().route("/api/v1/teams/:team_id/retrospects", get(test_handler))
     }
 
+    /// API-014 테스트용 라우터 생성 (회고 참석자 등록)
+    pub fn create_participant_test_router() -> Router {
+        async fn test_handler(
+            headers: axum::http::HeaderMap,
+            axum::extract::Path(retrospect_id): axum::extract::Path<i64>,
+        ) -> Result<axum::Json<Value>, (StatusCode, axum::Json<Value>)> {
+            // Authorization 헤더 검증
+            let auth = headers.get(header::AUTHORIZATION);
+            if auth.is_none() {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "AUTH4001",
+                        "message": "인증 정보가 유효하지 않습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            let auth_str = auth.and_then(|v| v.to_str().ok()).unwrap_or("");
+            if !auth_str.starts_with("Bearer ") {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "AUTH4001",
+                        "message": "인증 정보가 유효하지 않습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // retrospectId 검증
+            if retrospect_id < 1 {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "COMMON400",
+                        "message": "retrospectId는 1 이상의 양수여야 합니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // Mock: 존재하지 않는 회고 (999)
+            if retrospect_id == 999 {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "RETRO4041",
+                        "message": "존재하지 않는 회고입니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // Mock: 팀 멤버가 아님 (888)
+            if retrospect_id == 888 {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "TEAM4031",
+                        "message": "해당 회고가 속한 팀의 멤버가 아닙니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // Mock: 이미 참석 등록됨 (777)
+            if retrospect_id == 777 {
+                return Err((
+                    StatusCode::CONFLICT,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "RETRO4091",
+                        "message": "이미 참석자로 등록되어 있습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // Mock: 과거 회고 (666)
+            if retrospect_id == 666 {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "RETRO4002",
+                        "message": "이미 시작되었거나 종료된 회고에는 참석할 수 없습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // 성공 응답
+            Ok(axum::Json(json!({
+                "isSuccess": true,
+                "code": "COMMON200",
+                "message": "회고 참석자로 성공적으로 등록되었습니다.",
+                "result": {
+                    "participantId": 5001,
+                    "memberId": 123,
+                    "nickname": "제이슨"
+                }
+            })))
+        }
+
+        Router::new().route(
+            "/api/v1/retrospects/:retrospect_id/participants",
+            post(test_handler),
+        )
+    }
+
     /// 빈 결과 반환용 테스트 라우터 (회고가 없는 팀)
     pub fn create_empty_team_retrospects_test_router() -> Router {
         async fn test_handler(
@@ -278,6 +396,7 @@ async fn should_return_401_when_authorization_header_missing() {
         "teamId": 1,
         "projectName": "테스트 프로젝트",
         "retrospectDate": "2025-01-25",
+        "retrospectTime": "14:00",
         "retrospectMethod": "KPT",
         "referenceUrls": []
     });
@@ -314,6 +433,7 @@ async fn should_return_401_when_authorization_header_format_invalid() {
         "teamId": 1,
         "projectName": "테스트 프로젝트",
         "retrospectDate": "2025-01-25",
+        "retrospectTime": "14:00",
         "retrospectMethod": "KPT",
         "referenceUrls": []
     });
@@ -405,6 +525,7 @@ async fn should_return_400_when_project_name_exceeds_max_length() {
         "teamId": 1,
         "projectName": long_project_name,
         "retrospectDate": "2025-01-25",
+        "retrospectTime": "14:00",
         "retrospectMethod": "KPT",
         "referenceUrls": []
     });
@@ -438,6 +559,7 @@ async fn should_return_400_when_project_name_is_empty() {
         "teamId": 1,
         "projectName": "",
         "retrospectDate": "2025-01-25",
+        "retrospectTime": "14:00",
         "retrospectMethod": "KPT",
         "referenceUrls": []
     });
@@ -470,6 +592,7 @@ async fn should_return_400_when_team_id_is_invalid() {
         "teamId": 0, // 0은 유효하지 않음
         "projectName": "테스트 프로젝트",
         "retrospectDate": "2025-01-25",
+        "retrospectTime": "14:00",
         "retrospectMethod": "KPT",
         "referenceUrls": []
     });
@@ -505,6 +628,7 @@ async fn should_return_200_when_request_is_valid() {
         "teamId": 1,
         "projectName": "Test Project",
         "retrospectDate": "2025-01-25",
+        "retrospectTime": "14:00",
         "retrospectMethod": "KPT",
         "referenceUrls": ["https://example.com"]
     });
@@ -784,4 +908,238 @@ async fn api010_should_return_400_when_team_id_is_zero() {
     let body = test_helpers::parse_response_body(response.into_body()).await;
     assert_eq!(body["isSuccess"], false);
     assert_eq!(body["code"], "COMMON400");
+}
+
+// ============================================
+// API-014: 회고 참석자 등록 통합 테스트
+// ============================================
+
+/// [API-014] 인증 헤더 없이 요청 시 401 반환 테스트
+#[tokio::test]
+async fn api014_should_return_401_when_authorization_header_missing() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/1/participants")
+        // Authorization 헤더 없음
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "AUTH4001");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("인증 정보가 유효하지 않습니다"));
+}
+
+/// [API-014] 유효하지 않은 retrospectId (0) 요청 시 400 반환 테스트
+#[tokio::test]
+async fn api014_should_return_400_when_retrospect_id_is_zero() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/0/participants")
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "COMMON400");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("retrospectId는 1 이상의 양수여야 합니다"));
+}
+
+/// [API-014] 유효하지 않은 retrospectId (음수) 요청 시 400 반환 테스트
+#[tokio::test]
+async fn api014_should_return_400_when_retrospect_id_is_negative() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/-1/participants")
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "COMMON400");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("retrospectId는 1 이상의 양수여야 합니다"));
+}
+
+/// [API-014] 존재하지 않는 회고 요청 시 404 반환 테스트
+#[tokio::test]
+async fn api014_should_return_404_when_retrospect_not_found() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/999/participants") // 999는 존재하지 않는 회고
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "RETRO4041");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("존재하지 않는 회고"));
+}
+
+/// [API-014] 팀 멤버가 아닌 경우 403 반환 테스트
+#[tokio::test]
+async fn api014_should_return_403_when_not_team_member() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/888/participants") // 888은 팀 멤버가 아닌 케이스
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "TEAM4031");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("팀의 멤버가 아닙니다"));
+}
+
+/// [API-014] 이미 참석자로 등록된 경우 409 반환 테스트
+#[tokio::test]
+async fn api014_should_return_409_when_already_participant() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/777/participants") // 777은 이미 참석 등록된 케이스
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "RETRO4091");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("이미 참석자로 등록"));
+}
+
+/// [API-014] 과거 회고에 참석 시도 시 400 반환 테스트
+#[tokio::test]
+async fn api014_should_return_400_when_retrospect_already_started() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/666/participants") // 666은 과거 회고 케이스
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "RETRO4002");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("이미 시작되었거나 종료된 회고"));
+}
+
+/// [API-014] 유효한 요청 시 참석자 등록 성공 테스트
+#[tokio::test]
+async fn api014_should_return_200_when_valid_request() {
+    // Arrange
+    let app = test_helpers::create_participant_test_router();
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/retrospects/1/participants")
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], true);
+    assert_eq!(body["code"], "COMMON200");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("성공적으로 등록"));
+
+    // result 검증
+    let result = &body["result"];
+    assert_eq!(result["participantId"], 5001);
+    assert_eq!(result["memberId"], 123);
+    assert_eq!(result["nickname"], "제이슨");
 }

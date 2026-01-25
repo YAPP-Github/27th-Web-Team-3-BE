@@ -46,6 +46,15 @@ pub enum AppError {
 
     /// TEAM4041: 존재하지 않는 팀 (404)
     TeamNotFound(String),
+
+    /// RETRO4041: 존재하지 않는 회고 (404)
+    RetrospectNotFound(String),
+
+    /// RETRO4091: 중복 참석 (409)
+    ParticipantDuplicate(String),
+
+    /// RETRO4002: 과거 회고 참석 불가 (400)
+    RetrospectAlreadyStarted(String),
 }
 
 impl AppError {
@@ -63,6 +72,9 @@ impl AppError {
             AppError::RetroUrlInvalid(msg) => msg.clone(),
             AppError::TeamAccessDenied(msg) => msg.clone(),
             AppError::TeamNotFound(msg) => msg.clone(),
+            AppError::RetrospectNotFound(msg) => msg.clone(),
+            AppError::ParticipantDuplicate(msg) => msg.clone(),
+            AppError::RetrospectAlreadyStarted(msg) => msg.clone(),
         }
     }
 
@@ -80,6 +92,9 @@ impl AppError {
             AppError::RetroUrlInvalid(_) => "RETRO4006",
             AppError::TeamAccessDenied(_) => "TEAM4031",
             AppError::TeamNotFound(_) => "TEAM4041",
+            AppError::RetrospectNotFound(_) => "RETRO4041",
+            AppError::ParticipantDuplicate(_) => "RETRO4091",
+            AppError::RetrospectAlreadyStarted(_) => "RETRO4002",
         }
     }
 
@@ -97,6 +112,9 @@ impl AppError {
             AppError::RetroUrlInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
             AppError::TeamNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
+            AppError::RetrospectAlreadyStarted(_) => StatusCode::BAD_REQUEST,
         }
     }
 }

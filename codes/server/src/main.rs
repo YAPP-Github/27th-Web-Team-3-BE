@@ -17,7 +17,8 @@ use crate::domain::auth::dto::{
     EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse,
 };
 use crate::domain::retrospect::dto::{
-    CreateRetrospectRequest, CreateRetrospectResponse, SuccessCreateRetrospectResponse,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
     SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
@@ -33,7 +34,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
         domain::retrospect::handler::create_retrospect,
-        domain::retrospect::handler::list_team_retrospects
+        domain::retrospect::handler::list_team_retrospects,
+        domain::retrospect::handler::create_participant
     ),
     components(
         schemas(
@@ -49,7 +51,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
             SuccessCreateRetrospectResponse,
             TeamRetrospectListItem,
             SuccessTeamRetrospectListResponse,
-            RetrospectMethod
+            RetrospectMethod,
+            CreateParticipantResponse,
+            SuccessCreateParticipantResponse
         )
     ),
     tags(
@@ -134,6 +138,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/teams/:team_id/retrospects",
             axum::routing::get(domain::retrospect::handler::list_team_retrospects),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/participants",
+            axum::routing::post(domain::retrospect::handler::create_participant),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)

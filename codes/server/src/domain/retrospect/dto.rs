@@ -28,6 +28,14 @@ pub struct CreateRetrospectRequest {
     ))]
     pub retrospect_date: String,
 
+    /// 회고 시간 (HH:mm 형식, 한국 시간 기준)
+    #[validate(length(
+        min = 5,
+        max = 5,
+        message = "시간 형식이 올바르지 않습니다. (HH:mm 형식 필요)"
+    ))]
+    pub retrospect_time: String,
+
     /// 회고 방식
     pub retrospect_method: RetrospectMethod,
 
@@ -101,6 +109,32 @@ pub struct SuccessTeamRetrospectListResponse {
     pub result: Vec<TeamRetrospectListItem>,
 }
 
+// ============================================
+// API-014: 회고 참석자 등록 DTO
+// ============================================
+
+/// 회고 참석 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateParticipantResponse {
+    /// 참석자 등록 고유 식별자
+    pub participant_id: i64,
+    /// 참석한 유저의 고유 ID
+    pub member_id: i64,
+    /// 참석한 유저의 닉네임
+    pub nickname: String,
+}
+
+/// Swagger용 회고 참석 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessCreateParticipantResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: CreateParticipantResponse,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +145,7 @@ mod tests {
             team_id: 1,
             project_name: "테스트 프로젝트".to_string(),
             retrospect_date: "2025-01-25".to_string(),
+            retrospect_time: "14:00".to_string(),
             retrospect_method: RetrospectMethod::Kpt,
             reference_urls: vec![],
         }
@@ -329,6 +364,61 @@ mod tests {
         // Arrange
         let request = CreateRetrospectRequest {
             reference_urls: vec![],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    // ========================================
+    // retrospect_time 검증 테스트
+    // ========================================
+
+    #[test]
+    fn should_fail_validation_when_retrospect_time_is_too_short() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            retrospect_time: "9:00".to_string(), // 4자 (형식 오류)
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("retrospect_time"));
+    }
+
+    #[test]
+    fn should_fail_validation_when_retrospect_time_is_too_long() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            retrospect_time: "14:00:00".to_string(), // 8자 (형식 오류)
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("retrospect_time"));
+    }
+
+    #[test]
+    fn should_pass_validation_when_retrospect_time_has_correct_format() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            retrospect_time: "14:30".to_string(), // 정확히 5자
             ..create_valid_request()
         };
 
