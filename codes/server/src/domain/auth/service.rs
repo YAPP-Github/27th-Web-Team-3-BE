@@ -1,12 +1,14 @@
-use sea_orm::*;
-use reqwest::Client;
 use chrono::Utc;
+use reqwest::Client;
+use sea_orm::*;
 
+use super::dto::{EmailLoginRequest, LoginRequest, LoginResponse};
+use crate::domain::member::entity::member::{
+    self, Entity as Member, Model as MemberModel, SocialType,
+};
 use crate::state::AppState;
 use crate::utils::error::AppError;
 use crate::utils::jwt::encode_token;
-use crate::domain::member::entity::member::{self, Entity as Member, Model as MemberModel, SocialType};
-use super::dto::{LoginRequest, LoginResponse, EmailLoginRequest};
 
 pub struct AuthService;
 
@@ -28,9 +30,8 @@ impl AuthService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let member = member.ok_or_else(|| {
-            AppError::Unauthorized("존재하지 않는 사용자입니다.".into())
-        })?;
+        let member =
+            member.ok_or_else(|| AppError::Unauthorized("존재하지 않는 사용자입니다.".into()))?;
 
         // JWT 발급
         let token = encode_token(
@@ -46,10 +47,7 @@ impl AuthService {
         })
     }
 
-    pub async fn login(
-        state: AppState,
-        req: LoginRequest,
-    ) -> Result<LoginResponse, AppError> {
+    pub async fn login(state: AppState, req: LoginRequest) -> Result<LoginResponse, AppError> {
         // 1. 소셜 제공자로부터 유저 정보 가져오기
         let social_info = match req.social_type {
             SocialType::Kakao => Self::fetch_kakao_user_info(&req.token).await?,
@@ -154,8 +152,9 @@ impl AuthService {
             ..Default::default()
         };
 
-        active_model.insert(db).await.map_err(|e| {
-            AppError::InternalError(format!("회원가입 실패: {}", e))
-        })
+        active_model
+            .insert(db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("회원가입 실패: {}", e)))
     }
 }

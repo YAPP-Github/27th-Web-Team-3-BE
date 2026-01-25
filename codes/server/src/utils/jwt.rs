@@ -16,7 +16,11 @@ pub struct Claims {
 }
 
 /// JWT 토큰 생성
-pub fn encode_token(sub: String, secret: &str, expiration_seconds: i64) -> Result<String, AppError> {
+pub fn encode_token(
+    sub: String,
+    secret: &str,
+    expiration_seconds: i64,
+) -> Result<String, AppError> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::seconds(expiration_seconds))
         .expect("valid timestamp")

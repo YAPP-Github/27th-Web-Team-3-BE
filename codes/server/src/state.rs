@@ -1,5 +1,5 @@
-use sea_orm::DatabaseConnection;
 use crate::config::AppConfig;
+use sea_orm::DatabaseConnection;
 
 #[derive(Clone)]
 pub struct AppState {

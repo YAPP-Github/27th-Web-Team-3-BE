@@ -31,6 +31,21 @@ pub enum AppError {
 
     /// COMMON403: 권한 없음 (403)
     Forbidden(String),
+
+    /// RETRO4001: 프로젝트 이름 길이 유효성 검사 실패 (400)
+    RetroProjectNameInvalid(String),
+
+    /// RETRO4005: 유효하지 않은 회고 방식 (400)
+    RetroMethodInvalid(String),
+
+    /// RETRO4006: 유효하지 않은 URL 형식 (400)
+    RetroUrlInvalid(String),
+
+    /// TEAM4031: 팀 접근 권한 없음 (403)
+    TeamAccessDenied(String),
+
+    /// TEAM4041: 존재하지 않는 팀 (404)
+    TeamNotFound(String),
 }
 
 impl AppError {
@@ -43,6 +58,11 @@ impl AppError {
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
             AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
+            AppError::RetroProjectNameInvalid(msg) => msg.clone(),
+            AppError::RetroMethodInvalid(msg) => msg.clone(),
+            AppError::RetroUrlInvalid(msg) => msg.clone(),
+            AppError::TeamAccessDenied(msg) => msg.clone(),
+            AppError::TeamNotFound(msg) => msg.clone(),
         }
     }
 
@@ -55,6 +75,11 @@ impl AppError {
             AppError::JsonParseFailed(_) => "COMMON400",
             AppError::Unauthorized(_) => "COMMON401",
             AppError::Forbidden(_) => "COMMON403",
+            AppError::RetroProjectNameInvalid(_) => "RETRO4001",
+            AppError::RetroMethodInvalid(_) => "RETRO4005",
+            AppError::RetroUrlInvalid(_) => "RETRO4006",
+            AppError::TeamAccessDenied(_) => "TEAM4031",
+            AppError::TeamNotFound(_) => "TEAM4041",
         }
     }
 
@@ -67,6 +92,11 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::RetroProjectNameInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroMethodInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroUrlInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
+            AppError::TeamNotFound(_) => StatusCode::NOT_FOUND,
         }
     }
 }
