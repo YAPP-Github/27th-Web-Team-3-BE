@@ -13,4 +13,5 @@
 !.env.example
 
 ### Rust ###
-target/
+codes/server/.env
+codes/server/target/
