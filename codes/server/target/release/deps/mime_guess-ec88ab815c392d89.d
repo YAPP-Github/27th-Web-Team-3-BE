@@ -1,0 +1,12 @@
+/Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/deps/mime_guess-ec88ab815c392d89.d: /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/lib.rs /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/impl_bin_search.rs /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/mime_types.rs /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/build/mime_guess-c039be467967dfaf/out/mime_types_generated.rs
+
+/Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/deps/libmime_guess-ec88ab815c392d89.rlib: /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/lib.rs /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/impl_bin_search.rs /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/mime_types.rs /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/build/mime_guess-c039be467967dfaf/out/mime_types_generated.rs
+
+/Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/deps/libmime_guess-ec88ab815c392d89.rmeta: /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/lib.rs /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/impl_bin_search.rs /Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/mime_types.rs /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/build/mime_guess-c039be467967dfaf/out/mime_types_generated.rs
+
+/Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/lib.rs:
+/Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/impl_bin_search.rs:
+/Users/harperkwon/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mime_guess-2.0.5/src/mime_types.rs:
+/Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/build/mime_guess-c039be467967dfaf/out/mime_types_generated.rs:
+
+# env-dep:MIME_TYPES_GENERATED_PATH=/Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server/target/release/build/mime_guess-c039be467967dfaf/out/mime_types_generated.rs

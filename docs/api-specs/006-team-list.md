@@ -1,0 +1,123 @@
+# [API-006] GET /api/teams
+
+참여 팀 목록 조회 API
+
+## 개요
+
+현재 로그인한 사용자가 참여 중인 모든 팀 목록을 조회합니다.
+
+- 사용자가 설정한 정렬 순서(`orderIndex`)가 반영되어 반환됩니다.
+- 참여 중인 팀이 없는 경우 `result`는 빈 배열(`[]`)로 반환됩니다.
+
+## 버전
+
+| 버전 | 날짜 | 변경 내용 |
+|------|------|----------|
+| 1.0.0 | 2025-01-25 | 최초 작성 |
+
+## 엔드포인트
+
+```
+GET /api/teams
+```
+
+## 인증
+
+- `Authorization` 헤더를 통한 Bearer 토큰 인증
+
+## Request
+
+### Headers
+
+| Header | Value | Required |
+|--------|-------|----------|
+| Authorization | Bearer {accessToken} | Yes |
+
+### Body
+
+없음 (GET 요청)
+
+## Response
+
+### 성공 (200 OK)
+
+```json
+{
+  "isSuccess": true,
+  "code": "COMMON200",
+  "message": "참여 중인 팀 목록 조회를 성공했습니다.",
+  "result": [
+    {
+      "teamId": 789,
+      "teamName": "가장 먼저 만든 팀",
+      "orderIndex": 1
+    },
+    {
+      "teamId": 456,
+      "teamName": "두 번째로 만든 팀",
+      "orderIndex": 2
+    }
+  ]
+}
+```
+
+### 응답 필드
+
+| Field | Type | Description |
+|-------|------|-------------|
+| teamId | long | 팀 고유 식별자 |
+| teamName | string | 팀 이름 |
+| orderIndex | integer | 정렬 순서 (1부터 시작, 낮을수록 상단에 노출) |
+
+> **정렬 순서**: 응답 배열은 `orderIndex` 기준 **오름차순**으로 정렬되어 반환됩니다.
+
+### 빈 결과 응답
+
+```json
+{
+  "isSuccess": true,
+  "code": "COMMON200",
+  "message": "참여 중인 팀 목록 조회를 성공했습니다.",
+  "result": []
+}
+```
+
+## 에러 응답
+
+### 401 Unauthorized - 인증 실패
+
+```json
+{
+  "isSuccess": false,
+  "code": "AUTH4001",
+  "message": "인증 정보가 유효하지 않습니다.",
+  "result": null
+}
+```
+
+### 500 Internal Server Error - 서버 에러
+
+```json
+{
+  "isSuccess": false,
+  "code": "COMMON500",
+  "message": "서버 내부 오류입니다.",
+  "result": null
+}
+```
+
+## 에러 코드 요약
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| AUTH4001 | 401 | 토큰 누락, 만료 또는 유효하지 않은 JWT |
+| COMMON500 | 500 | 데이터 조회 중 DB 에러 등 서버 내부 문제 |
+
+## 사용 예시
+
+### cURL
+
+```bash
+curl -X GET https://api.example.com/api/teams \
+  -H "Authorization: Bearer {accessToken}"
+```
