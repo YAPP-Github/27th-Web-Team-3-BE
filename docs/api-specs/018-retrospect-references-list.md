@@ -1,4 +1,4 @@
-# [API-018] GET /api/retrospects/{retrospectId}/references
+# [API-018] GET /api/v1/retrospects/{retrospectId}/references
 
 회고 참고자료 목록 조회 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-GET /api/retrospects/{retrospectId}/references
+GET /api/v1/retrospects/{retrospectId}/references
 ```
 
 ## 인증
@@ -162,6 +162,6 @@ GET /api/retrospects/{retrospectId}/references
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/retrospects/100/references \
+curl -X GET https://api.example.com/api/v1/retrospects/100/references \
   -H "Authorization: Bearer {accessToken}"
 ```

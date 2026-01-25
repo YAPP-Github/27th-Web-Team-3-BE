@@ -1,4 +1,4 @@
-# [API-023] GET /api/retrospects/search
+# [API-023] GET /api/v1/retrospects/search
 
 보관함 회고 검색 API
 
@@ -19,7 +19,7 @@
 ## 엔드포인트
 
 ```
-GET /api/retrospects/search
+GET /api/v1/retrospects/search
 ```
 
 ## 인증
@@ -81,17 +81,15 @@ GET /api/retrospects/search
 | retrospectDate | string | 회고 날짜 (yyyy-MM-dd) |
 | retrospectTime | string | 회고 시간 (HH:mm) |
 
-### Enum 상세 설명
+### retrospectMethod Enum 설명
 
-#### retrospectMethod
-
-| 값 | 설명 |
-|-----|------|
-| KPT | Keep-Problem-Try (계속할 것-문제점-시도할 것) |
-| FOUR_L | 4L (Liked-Learned-Lacked-Longed For) |
-| FIVE_F | 5F (Felt-Found-Focused-Feedback-Fast) |
-| PMI | Plus-Minus-Interesting (좋은 점-나쁜 점-흥미로운 점) |
-| FREE | 자유 형식 회고 |
+| Value | 한글명 | Description |
+|-------|--------|-------------|
+| KPT | Keep-Problem-Try | 유지할 점, 문제점, 시도할 점 정리 방식 |
+| FOUR_L | 4L | Liked-Learned-Lacked-Longed for 방식 |
+| FIVE_F | 5F | Facts-Feelings-Findings-Future-Feedback 방식 |
+| PMI | Plus-Minus-Interesting | 긍정-부정-흥미로운 점 분류 방식 |
+| FREE | 자유 형식 | 형식 제약 없이 자유롭게 작성 |
 
 ### 배열 정렬 순서
 
@@ -163,7 +161,7 @@ GET /api/retrospects/search
 ### cURL
 
 ```bash
-curl -X GET "https://api.example.com/api/retrospects/search?keyword=AI" \
+curl -X GET "https://api.example.com/api/v1/retrospects/search?keyword=AI" \
   -H "Authorization: Bearer {accessToken}"
 ```
 

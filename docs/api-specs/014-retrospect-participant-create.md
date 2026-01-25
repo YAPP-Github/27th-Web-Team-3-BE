@@ -1,4 +1,4 @@
-# [API-014] POST /api/retrospects/{retrospectId}/participants
+# [API-014] POST /api/v1/retrospects/{retrospectId}/participants
 
 회고 참석 API
 
@@ -19,7 +19,7 @@
 ## 엔드포인트
 
 ```
-POST /api/retrospects/{retrospectId}/participants
+POST /api/v1/retrospects/{retrospectId}/participants
 ```
 
 ## 인증
@@ -153,6 +153,6 @@ Request Body 없음 (JWT에서 유저 정보 추출)
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/retrospects/100/participants \
+curl -X POST https://api.example.com/api/v1/retrospects/100/participants \
   -H "Authorization: Bearer {accessToken}"
 ```

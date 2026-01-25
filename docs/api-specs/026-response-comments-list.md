@@ -1,4 +1,4 @@
-# [API-026] GET /api/responses/{responseId}/comments
+# [API-026] GET /api/v1/responses/{responseId}/comments
 
 회고 답변 댓글 조회 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-GET /api/responses/{responseId}/comments
+GET /api/v1/responses/{responseId}/comments
 ```
 
 ## 인증
@@ -36,15 +36,9 @@ GET /api/responses/{responseId}/comments
 
 ### Path Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| responseId | long | Yes | 댓글을 조회할 회고 답변의 고유 식별자 |
-
-### Path Parameter Validation
-
-| Parameter | Validation Rule | Example |
-|-----------|-----------------|---------|
-| responseId | 양의 정수 (1 이상) | `/api/responses/123/comments` |
+| Parameter | Type | Required | Description | Validation |
+|-----------|------|----------|-------------|------------|
+| responseId | long | Yes | 댓글을 조회할 회고 답변의 고유 식별자 | 1 이상의 양수 |
 
 ## Response
 
@@ -165,7 +159,7 @@ GET /api/responses/{responseId}/comments
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/responses/456/comments \
+curl -X GET https://api.example.com/api/v1/responses/456/comments \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

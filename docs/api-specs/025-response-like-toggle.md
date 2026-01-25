@@ -1,4 +1,4 @@
-# [API-025] POST /api/responses/{responseId}/likes
+# [API-025] POST /api/v1/responses/{responseId}/likes
 
 회고 답변 좋아요 토글 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-POST /api/responses/{responseId}/likes
+POST /api/v1/responses/{responseId}/likes
 ```
 
 ## 인증
@@ -36,18 +36,9 @@ POST /api/responses/{responseId}/likes
 
 ### Path Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| responseId | long | Yes | 좋아요를 처리할 대상 답변의 고유 ID |
-
-#### Path Parameter Validation (responseId)
-
-| 조건 | 검증 방식 | 에러 코드 |
-|------|---------|---------|
-| 숫자 형식 | 경로 파라미터 타입 강제 | 400 (자동 처리) |
-| 양수 | 1 이상의 값 | RES4041 |
-| 존재 여부 | DB 조회 | RES4041 |
-| 팀 접근 권한 | 해당 응답의 회고가 속한 팀 확인 | TEAM4031 |
+| Parameter | Type | Required | Description | Validation |
+|-----------|------|----------|-------------|------------|
+| responseId | long | Yes | 좋아요를 처리할 대상 답변의 고유 ID | 1 이상의 양수 |
 
 ### Body
 
@@ -142,7 +133,7 @@ POST /api/responses/{responseId}/likes
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/responses/456/likes \
+curl -X POST https://api.example.com/api/v1/responses/456/likes \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

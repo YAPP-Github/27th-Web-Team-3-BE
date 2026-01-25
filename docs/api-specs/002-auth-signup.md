@@ -1,4 +1,4 @@
-# [API-002] POST /api/auth/signup
+# [API-002] POST /api/v1/auth/signup
 
 회원가입 API (닉네임 등록)
 
@@ -17,7 +17,7 @@
 ## 엔드포인트
 
 ```
-POST /api/auth/signup
+POST /api/v1/auth/signup
 ```
 
 ## 인증
@@ -135,20 +135,20 @@ POST /api/auth/signup
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| COMMON400 | 400 | 입력값 유효성 검증 실패 (닉네임 길이 등) |
-| AUTH4001 | 401 | 토큰 누락 또는 유효하지 않음 |
-| MEMBER4041 | 404 | 소셜 로그인 미완료 (API-001에서 신규 회원으로 확인된 상태가 아님) |
-| MEMBER4091 | 409 | 중복된 닉네임으로 가입 시도 |
-| COMMON500 | 500 | 서버 로직 처리 중 예외 발생 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|-----------|
+| COMMON400 | 400 | 유효성 검증 실패 | 닉네임이 1~20자 범위를 벗어나거나 특수문자 포함 시 |
+| AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
+| MEMBER4041 | 404 | 유효하지 않은 회원가입 정보 | API-001에서 신규 회원으로 확인된 상태가 아닌 경우 |
+| MEMBER4091 | 409 | 닉네임 중복 | 이미 사용 중인 닉네임으로 가입 시도 |
+| COMMON500 | 500 | 서버 내부 에러 | 서버 로직 처리 중 예외 발생 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/auth/signup \
+curl -X POST https://api.example.com/api/v1/auth/signup \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

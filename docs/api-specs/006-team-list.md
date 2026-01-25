@@ -1,4 +1,4 @@
-# [API-006] GET /api/teams
+# [API-006] GET /api/v1/teams
 
 참여 팀 목록 조회 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-GET /api/teams
+GET /api/v1/teams
 ```
 
 ## 인증
@@ -108,16 +108,16 @@ GET /api/teams
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| AUTH4001 | 401 | 토큰 누락, 만료 또는 유효하지 않은 JWT |
-| COMMON500 | 500 | 데이터 조회 중 DB 에러 등 서버 내부 문제 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|----------|
+| AUTH4001 | 401 | 토큰 누락, 만료 또는 유효하지 않은 JWT | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
+| COMMON500 | 500 | 데이터 조회 중 DB 에러 등 서버 내부 문제 | 데이터베이스 연결 실패, 쿼리 실행 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/teams \
+curl -X GET https://api.example.com/api/v1/teams \
   -H "Authorization: Bearer {accessToken}"
 ```

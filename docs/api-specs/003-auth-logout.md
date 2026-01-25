@@ -1,4 +1,4 @@
-# [API-003] POST /api/auth/logout
+# [API-003] POST /api/v1/auth/logout
 
 로그아웃 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-POST /api/auth/logout
+POST /api/v1/auth/logout
 ```
 
 ## 인증
@@ -106,18 +106,18 @@ POST /api/auth/logout
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| AUTH4003 | 400 | 이미 무효화되었거나 존재하지 않는 토큰 |
-| AUTH4001 | 401 | accessToken 누락 또는 만료 |
-| COMMON500 | 500 | 토큰 삭제 처리 중 DB 연결 오류 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|-----------|
+| AUTH4003 | 400 | 유효하지 않은 토큰 | 이미 로그아웃되었거나 존재하지 않는 refreshToken |
+| AUTH4001 | 401 | 인증 정보가 유효하지 않음 | accessToken 누락, 만료 또는 잘못된 Bearer 토큰 |
+| COMMON500 | 500 | 서버 내부 에러 | 토큰 삭제 처리 중 DB 연결 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/auth/logout \
+curl -X POST https://api.example.com/api/v1/auth/logout \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

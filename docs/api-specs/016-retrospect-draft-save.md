@@ -1,4 +1,4 @@
-# [API-016] PUT /api/retrospects/{retrospectId}/drafts
+# [API-016] PUT /api/v1/retrospects/{retrospectId}/drafts
 
 회고 답변 임시 저장 API
 
@@ -20,7 +20,7 @@
 ## 엔드포인트
 
 ```
-PUT /api/retrospects/{retrospectId}/drafts
+PUT /api/v1/retrospects/{retrospectId}/drafts
 ```
 
 ## 인증
@@ -206,7 +206,7 @@ PUT /api/retrospects/{retrospectId}/drafts
 ### cURL
 
 ```bash
-curl -X PUT https://api.example.com/api/retrospects/101/drafts \
+curl -X PUT https://api.example.com/api/v1/retrospects/101/drafts \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

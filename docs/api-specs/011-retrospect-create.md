@@ -1,4 +1,4 @@
-# [API-011] POST /api/retrospects
+# [API-011] POST /api/v1/retrospects
 
 회고 생성 API
 
@@ -16,7 +16,7 @@
 ## 엔드포인트
 
 ```
-POST /api/retrospects
+POST /api/v1/retrospects
 ```
 
 ## 인증
@@ -86,6 +86,16 @@ POST /api/retrospects
 |-------|------|-------------|
 | retrospectId | long | 생성된 회고 고유 ID |
 | projectName | string | 저장된 프로젝트 이름 |
+
+### retrospectMethod Enum 설명
+
+| Value | 한글명 | Description | 사용 시나리오 |
+|-------|--------|-------------|---------------|
+| KPT | Keep-Problem-Try | 유지할 점, 문제점, 시도할 점을 정리하는 방식 | 팀 프로젝트 후 빠른 피드백이 필요할 때 |
+| FOUR_L | 4L | Liked-Learned-Lacked-Longed for 방식 | 개인 성장과 감정 회고에 적합 |
+| FIVE_F | 5F | Facts-Feelings-Findings-Future-Feedback 방식 | 종합적인 프로젝트 분석이 필요할 때 |
+| PMI | Plus-Minus-Interesting | 긍정-부정-흥미로운 점을 분류하는 방식 | 빠른 의사결정 후 검토에 적합 |
+| FREE | 자유 형식 | 형식 제약 없이 자유롭게 작성 | 유연한 회고가 필요할 때 |
 
 ## 에러 응답
 
@@ -171,7 +181,7 @@ POST /api/retrospects
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/retrospects \
+curl -X POST https://api.example.com/api/v1/retrospects \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
@@ -185,12 +195,3 @@ curl -X POST https://api.example.com/api/retrospects \
   }'
 ```
 
-## 회고 방식 (Enum)
-
-| Value | 한글명 | Description | 사용 시나리오 |
-|-------|--------|-------------|---------------|
-| KPT | Keep-Problem-Try | 유지할 점, 문제점, 시도할 점을 정리하는 방식 | 팀 프로젝트 후 빠른 피드백이 필요할 때 |
-| FOUR_L | 4L | Liked-Learned-Lacked-Longed for 방식 | 개인 성장과 감정 회고에 적합 |
-| FIVE_F | 5F | Facts-Feelings-Findings-Future-Feedback 방식 | 종합적인 프로젝트 분석이 필요할 때 |
-| PMI | Plus-Minus-Interesting | 긍정-부정-흥미로운 점을 분류하는 방식 | 빠른 의사결정 후 검토에 적합 |
-| FREE | 자유 형식 | 형식 제약 없이 자유롭게 작성 | 유연한 회고가 필요할 때 |

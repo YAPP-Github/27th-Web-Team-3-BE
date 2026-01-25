@@ -1,4 +1,4 @@
-# [API-009] DELETE /api/teams/{teamId}
+# [API-009] DELETE /api/v1/teams/{teamId}
 
 팀 삭제 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-DELETE /api/teams/{teamId}
+DELETE /api/v1/teams/{teamId}
 ```
 
 ## 인증
@@ -111,19 +111,19 @@ DELETE /api/teams/{teamId}
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 |
-| TEAM4031 | 403 | 관리자(Owner)가 아닌 일반 멤버가 삭제 시도 |
-| TEAM4041 | 404 | 유효하지 않은 teamId이거나 이미 삭제된 경우 |
-| COMMON500 | 500 | 연관 데이터 삭제 트랜잭션 처리 중 오류 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|----------|
+| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
+| TEAM4031 | 403 | 관리자(Owner)가 아닌 일반 멤버가 삭제 시도 | 팀 관리자(Owner) 권한이 없는 사용자가 삭제 요청 |
+| TEAM4041 | 404 | 유효하지 않은 teamId이거나 이미 삭제된 경우 | 존재하지 않거나 이미 삭제된 팀의 teamId로 요청 |
+| COMMON500 | 500 | 연관 데이터 삭제 트랜잭션 처리 중 오류 | 데이터베이스 연결 실패, 연관 데이터 삭제 중 트랜잭션 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X DELETE https://api.example.com/api/teams/123 \
+curl -X DELETE https://api.example.com/api/v1/teams/123 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

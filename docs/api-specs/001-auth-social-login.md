@@ -1,4 +1,4 @@
-# [API-001] POST /api/auth/social-login
+# [API-001] POST /api/v1/auth/social-login
 
 소셜 로그인 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-POST /api/auth/social-login
+POST /api/v1/auth/social-login
 ```
 
 ## 인증
@@ -132,12 +132,12 @@ POST /api/auth/social-login
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| AUTH2001 | 200 | 신규 회원 - 가입 절차 필요 (에러가 아닌 정상 분기 응답) |
-| COMMON400 | 400 | provider 또는 accessToken 누락 |
-| AUTH4002 | 401 | 구글/카카오 측에서 거부된 토큰 |
-| COMMON500 | 500 | 소셜 API 통신 중 서버 에러 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|-----------|
+| AUTH2001 | 200 | 신규 회원 - 가입 절차 필요 (에러가 아닌 정상 분기 응답) | 소셜 계정 이메일로 등록된 기존 회원이 없는 경우 |
+| COMMON400 | 400 | 필수 파라미터 누락 | provider 또는 accessToken 필드가 누락된 경우 |
+| AUTH4002 | 401 | 유효하지 않은 소셜 토큰 | 구글/카카오 측에서 거부된 토큰 (만료, 변조 등) |
+| COMMON500 | 500 | 서버 내부 에러 | 소셜 API 통신 중 서버 오류 발생 |
 
 > **참고**: `AUTH2001`은 에러가 아닌 "추가 정보 입력 필요" 상태를 나타내는 정상 응답입니다. 클라이언트는 이 코드를 받으면 회원가입 화면으로 이동해야 합니다.
 
@@ -146,7 +146,7 @@ POST /api/auth/social-login
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/auth/social-login \
+curl -X POST https://api.example.com/api/v1/auth/social-login \
   -H "Content-Type: application/json" \
   -d '{
     "provider": "KAKAO",

@@ -1,4 +1,4 @@
-# [API-007] PATCH /api/teams/order
+# [API-007] PATCH /api/v1/teams/order
 
 팀 순서 변경 API (드래그 앤 드롭)
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-PATCH /api/teams/order
+PATCH /api/v1/teams/order
 ```
 
 ## 인증
@@ -136,20 +136,20 @@ PATCH /api/teams/order
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| TEAM4003 | 400 | 중복된 orderIndex 또는 유효하지 않은 형식 |
-| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 |
-| TEAM4031 | 403 | 참여하지 않은 팀의 ID 포함 |
-| TEAM4041 | 404 | DB에 존재하지 않는 teamId |
-| COMMON500 | 500 | 순서 변경 트랜잭션 처리 중 서버 에러 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|----------|
+| TEAM4003 | 400 | 중복된 orderIndex 또는 유효하지 않은 형식 | teamOrders 배열 내 orderIndex 중복, 0 이하의 orderIndex 값 |
+| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
+| TEAM4031 | 403 | 참여하지 않은 팀의 ID 포함 | 요청자가 멤버로 참여하지 않은 팀의 teamId를 포함하여 요청 |
+| TEAM4041 | 404 | DB에 존재하지 않는 teamId | 존재하지 않거나 삭제된 팀의 teamId를 포함하여 요청 |
+| COMMON500 | 500 | 순서 변경 트랜잭션 처리 중 서버 에러 | 데이터베이스 연결 실패, 트랜잭션 커밋 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X PATCH https://api.example.com/api/teams/order \
+curl -X PATCH https://api.example.com/api/v1/teams/order \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

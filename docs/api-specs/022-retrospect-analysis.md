@@ -1,4 +1,4 @@
-# [API-022] POST /api/retrospects/{retrospectId}/analysis
+# [API-022] POST /api/v1/retrospects/{retrospectId}/analysis
 
 회고 종합 분석 API (AI 인사이트)
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-POST /api/retrospects/{retrospectId}/analysis
+POST /api/v1/retrospects/{retrospectId}/analysis
 ```
 
 ## 인증
@@ -44,7 +44,7 @@ POST /api/retrospects/{retrospectId}/analysis
 
 | Parameter | Rule | Example |
 |-----------|------|---------|
-| retrospectId | 양의 정수, 1 이상 | `POST /api/retrospects/100/analysis` |
+| retrospectId | 양의 정수, 1 이상 | `POST /api/v1/retrospects/100/analysis` |
 | | 존재하는 회고 세션 ID | ID가 없으면 404 RETRO4041 반환 |
 
 ### Body
@@ -189,7 +189,7 @@ Request Body 없음
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/retrospects/100/analysis \
+curl -X POST https://api.example.com/api/v1/retrospects/100/analysis \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

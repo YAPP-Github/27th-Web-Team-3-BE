@@ -1,4 +1,4 @@
-# [API-019] GET /api/retrospects/storage
+# [API-019] GET /api/v1/retrospects/storage
 
 보관함 회고 리스트 조회 API
 
@@ -19,7 +19,7 @@
 ## 엔드포인트
 
 ```
-GET /api/retrospects/storage
+GET /api/v1/retrospects/storage
 ```
 
 ## 인증
@@ -171,10 +171,10 @@ GET /api/retrospects/storage
 
 ```bash
 # 전체 조회
-curl -X GET https://api.example.com/api/retrospects/storage \
+curl -X GET https://api.example.com/api/v1/retrospects/storage \
   -H "Authorization: Bearer {accessToken}"
 
 # 최근 3개월 필터
-curl -X GET "https://api.example.com/api/retrospects/storage?range=3_MONTHS" \
+curl -X GET "https://api.example.com/api/v1/retrospects/storage?range=3_MONTHS" \
   -H "Authorization: Bearer {accessToken}"
 ```

@@ -1,4 +1,4 @@
-# [API-021] GET /api/retrospects/{retrospectId}/export
+# [API-021] GET /api/v1/retrospects/{retrospectId}/export
 
 회고 내보내기 API (PDF 다운로드)
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-GET /api/retrospects/{retrospectId}/export
+GET /api/v1/retrospects/{retrospectId}/export
 ```
 
 ## 인증
@@ -35,16 +35,9 @@ GET /api/retrospects/{retrospectId}/export
 
 ### Path Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| retrospectId | long | Yes | 내보낼 회고의 고유 식별자 |
-
-### Path Parameter Validation
-
-| Parameter | Validation Rule | Error Code |
-|-----------|-----------------|-----------|
-| retrospectId | 양의 정수만 허용 (>= 1) | COMMON400 |
-| retrospectId | 형식 오류 (숫자가 아닌 경우) | COMMON400 |
+| Parameter | Type | Required | Description | Validation |
+|-----------|------|----------|-------------|------------|
+| retrospectId | long | Yes | 내보낼 회고의 고유 식별자 | 1 이상의 양수 |
 
 ## Response
 
@@ -152,7 +145,7 @@ retrospect_report_{retrospectId}_{timestamp}.pdf
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/retrospects/100/export \
+curl -X GET https://api.example.com/api/v1/retrospects/100/export \
   -H "Authorization: Bearer {accessToken}" \
   -o retrospect_report.pdf
 ```
@@ -160,7 +153,7 @@ curl -X GET https://api.example.com/api/retrospects/100/export \
 ### JavaScript (Fetch API)
 
 ```javascript
-const response = await fetch('/api/retrospects/100/export', {
+const response = await fetch('/api/v1/retrospects/100/export', {
   headers: {
     'Authorization': 'Bearer {accessToken}'
   }

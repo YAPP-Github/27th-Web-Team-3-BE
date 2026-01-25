@@ -1,4 +1,4 @@
-# [API-013] DELETE /api/retrospects/{retrospectId}
+# [API-013] DELETE /api/v1/retrospects/{retrospectId}
 
 회고 삭제 API
 
@@ -19,7 +19,7 @@
 ## 엔드포인트
 
 ```
-DELETE /api/retrospects/{retrospectId}
+DELETE /api/v1/retrospects/{retrospectId}
 ```
 
 ## 인증
@@ -146,7 +146,7 @@ DELETE /api/retrospects/{retrospectId}
 ### cURL
 
 ```bash
-curl -X DELETE https://api.example.com/api/retrospects/100 \
+curl -X DELETE https://api.example.com/api/v1/retrospects/100 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

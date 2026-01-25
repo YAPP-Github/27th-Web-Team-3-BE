@@ -1,4 +1,4 @@
-# [API-024] DELETE /api/members/me
+# [API-024] DELETE /api/v1/members/me
 
 서비스 탈퇴 API
 
@@ -13,13 +13,13 @@
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
-| 1.1.0 | 2025-01-25 | withdrawalReason 검증 규칙, 응답 필드 설명, 에러 발생 조건 상세화 |
 | 1.0.0 | 2025-01-25 | 최초 작성 |
+| 1.1.0 | 2025-01-25 | withdrawalReason 검증 규칙, 응답 필드 설명, 에러 발생 조건 상세화 |
 
 ## 엔드포인트
 
 ```
-DELETE /api/members/me
+DELETE /api/v1/members/me
 ```
 
 ## 인증
@@ -133,18 +133,18 @@ DELETE /api/members/me
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 |
-| MEMBER4042 | 404 | 이미 탈퇴 처리가 완료된 계정 |
-| COMMON500 | 500 | 데이터 삭제 및 연관 관계 해제 중 DB 에러 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|----------|
+| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 | Authorization 헤더 누락, 토큰 형식 오류, 토큰 만료/위조 |
+| MEMBER4042 | 404 | 이미 탈퇴 처리가 완료된 계정 | 사용자 미존재, 이미 탈퇴 완료, DB 레코드 손상/삭제 |
+| COMMON500 | 500 | 데이터 삭제 및 연관 관계 해제 중 DB 에러 | DB 삭제 오류, 관계 해제 오류, 익명화 처리 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X DELETE https://api.example.com/api/members/me \
+curl -X DELETE https://api.example.com/api/v1/members/me \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
     "withdrawalReason": "더 이상 회고를 작성할 필요가 없습니다."

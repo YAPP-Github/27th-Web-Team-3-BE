@@ -1,4 +1,4 @@
-# [API-017] POST /api/retrospects/{retrospectId}/submit
+# [API-017] POST /api/v1/retrospects/{retrospectId}/submit
 
 회고 최종 제출 API
 
@@ -19,7 +19,7 @@
 ## 엔드포인트
 
 ```
-POST /api/retrospects/{retrospectId}/submit
+POST /api/v1/retrospects/{retrospectId}/submit
 ```
 
 ## 인증
@@ -194,7 +194,7 @@ POST /api/retrospects/{retrospectId}/submit
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/retrospects/101/submit \
+curl -X POST https://api.example.com/api/v1/retrospects/101/submit \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

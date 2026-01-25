@@ -1,4 +1,4 @@
-# [API-015] GET /api/retrospects/{retrospectId}/participants
+# [API-015] GET /api/v1/retrospects/{retrospectId}/participants
 
 회고 참여자 및 질문 조회 API
 
@@ -16,7 +16,7 @@
 ## 엔드포인트
 
 ```
-GET /api/retrospects/{retrospectId}/participants
+GET /api/v1/retrospects/{retrospectId}/participants
 ```
 
 ## 인증
@@ -161,6 +161,6 @@ GET /api/retrospects/{retrospectId}/participants
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/retrospects/100/participants \
+curl -X GET https://api.example.com/api/v1/retrospects/100/participants \
   -H "Authorization: Bearer {accessToken}"
 ```

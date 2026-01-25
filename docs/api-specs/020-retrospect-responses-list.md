@@ -1,4 +1,4 @@
-# [API-020] GET /api/retrospects/{retrospectId}/responses
+# [API-020] GET /api/v1/retrospects/{retrospectId}/responses
 
 회고 답변 카테고리별 조회 API
 
@@ -21,7 +21,7 @@
 ## 엔드포인트
 
 ```
-GET /api/retrospects/{retrospectId}/responses
+GET /api/v1/retrospects/{retrospectId}/responses
 ```
 
 ## 인증
@@ -235,12 +235,12 @@ GET /api/retrospects/{retrospectId}/responses
 
 ```bash
 # 전체 답변 조회 (첫 페이지)
-curl -X GET "https://api.example.com/api/retrospects/100/responses?category=ALL&size=10" \
+curl -X GET "https://api.example.com/api/v1/retrospects/100/responses?category=ALL&size=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 
 # 질문 1에 대한 답변 조회 (커서 기반 다음 페이지)
-curl -X GET "https://api.example.com/api/retrospects/100/responses?category=QUESTION_1&cursor=455&size=10" \
+curl -X GET "https://api.example.com/api/v1/retrospects/100/responses?category=QUESTION_1&cursor=455&size=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

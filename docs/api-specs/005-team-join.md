@@ -1,4 +1,4 @@
-# [API-005] POST /api/teams/join
+# [API-005] POST /api/v1/teams/join
 
 팀 합류 API (초대 링크)
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-POST /api/teams/join
+POST /api/v1/teams/join
 ```
 
 ## 인증
@@ -136,20 +136,20 @@ POST /api/teams/join
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| TEAM4002 | 400 | URL 형식 오류 또는 만료된 초대 링크 |
-| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 |
-| TEAM4041 | 404 | 링크 내 식별자와 매칭되는 팀 없음 |
-| TEAM4092 | 409 | 이미 가입된 유저가 다시 가입 시도 |
-| COMMON500 | 500 | 팀 합류 처리 중 서버 에러 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|-----------|
+| TEAM4002 | 400 | 유효하지 않은 초대 링크 | URL 형식 오류, 만료된 링크, 또는 inviteCode 추출 실패 |
+| AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
+| TEAM4041 | 404 | 존재하지 않는 팀 | 초대 링크의 inviteCode와 매칭되는 팀이 DB에 없음 |
+| TEAM4092 | 409 | 이미 팀 멤버 | 이미 해당 팀에 가입된 사용자가 다시 가입 시도 |
+| COMMON500 | 500 | 서버 내부 에러 | 팀 합류 처리 중 DB 연결 오류 등 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/teams/join \
+curl -X POST https://api.example.com/api/v1/teams/join \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

@@ -1,4 +1,4 @@
-# [API-012] GET /api/retrospects/{retrospectId}
+# [API-012] GET /api/v1/retrospects/{retrospectId}
 
 회고 상세 정보 조회 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-GET /api/retrospects/{retrospectId}
+GET /api/v1/retrospects/{retrospectId}
 ```
 
 ## 인증
@@ -167,7 +167,7 @@ GET /api/retrospects/{retrospectId}
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/retrospects/100 \
+curl -X GET https://api.example.com/api/v1/retrospects/100 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

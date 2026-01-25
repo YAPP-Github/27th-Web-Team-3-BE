@@ -1,4 +1,4 @@
-# [API-010] GET /api/teams/{teamId}/retrospects
+# [API-010] GET /api/v1/teams/{teamId}/retrospects
 
 팀 내 전체 회고 목록 조회 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-GET /api/teams/{teamId}/retrospects
+GET /api/v1/teams/{teamId}/retrospects
 ```
 
 ## 인증
@@ -35,9 +35,9 @@ GET /api/teams/{teamId}/retrospects
 
 ### Path Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| teamId | long | Yes | 조회를 원하는 팀의 고유 ID |
+| Parameter | Type | Required | Description | Validation |
+|-----------|------|----------|-------------|------------|
+| teamId | long | Yes | 조회를 원하는 팀의 고유 ID | 1 이상의 양수 |
 
 ## Response
 
@@ -150,18 +150,18 @@ GET /api/teams/{teamId}/retrospects
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| AUTH4001 | 401 | 인증 정보가 유효하지 않음 |
-| TEAM4031 | 403 | 해당 팀에 접근 권한 없음 (멤버가 아님) |
-| TEAM4041 | 404 | 존재하지 않는 팀 |
-| COMMON500 | 500 | 회고 목록 조회 중 서버 에러 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|----------|
+| AUTH4001 | 401 | 인증 정보가 유효하지 않음 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
+| TEAM4031 | 403 | 해당 팀에 접근 권한 없음 (멤버가 아님) | 요청자가 해당 팀의 멤버가 아닌 경우 |
+| TEAM4041 | 404 | 존재하지 않는 팀 | 존재하지 않거나 삭제된 팀의 teamId로 요청 |
+| COMMON500 | 500 | 회고 목록 조회 중 서버 에러 | 데이터베이스 연결 실패, 쿼리 실행 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/teams/1/retrospects \
+curl -X GET https://api.example.com/api/v1/teams/1/retrospects \
   -H "Authorization: Bearer {accessToken}"
 ```

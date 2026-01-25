@@ -1,4 +1,4 @@
-# [API-004] POST /api/teams
+# [API-004] POST /api/v1/teams
 
 팀 생성 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-POST /api/teams
+POST /api/v1/teams
 ```
 
 ## 인증
@@ -123,19 +123,19 @@ POST /api/teams
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| TEAM4001 | 400 | teamName 길이 제한 위반 |
-| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 |
-| TEAM4091 | 409 | 중복된 teamName으로 생성 시도 |
-| COMMON500 | 500 | 팀 생성 과정 중 서버 에러 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|-----------|
+| TEAM4001 | 400 | 팀 이름 길이 초과 | teamName이 20자를 초과한 경우 |
+| AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
+| TEAM4091 | 409 | 팀 이름 중복 | 이미 사용 중인 teamName으로 생성 시도 |
+| COMMON500 | 500 | 서버 내부 에러 | 팀 생성 과정 중 DB 연결 오류 등 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/teams \
+curl -X POST https://api.example.com/api/v1/teams \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

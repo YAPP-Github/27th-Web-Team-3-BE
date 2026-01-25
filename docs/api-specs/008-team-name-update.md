@@ -1,4 +1,4 @@
-# [API-008] PATCH /api/teams/{teamId}/name
+# [API-008] PATCH /api/v1/teams/{teamId}/name
 
 팀 이름 변경 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-PATCH /api/teams/{teamId}/name
+PATCH /api/v1/teams/{teamId}/name
 ```
 
 ## 인증
@@ -151,21 +151,21 @@ PATCH /api/teams/{teamId}/name
 
 ## 에러 코드 요약
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| TEAM4001 | 400 | 글자 수 제한 유효성 검사 실패 |
-| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 |
-| TEAM4031 | 403 | 팀 관리자가 아닌 유저가 수정 시도 |
-| TEAM4041 | 404 | 유효하지 않은 teamId |
-| TEAM4091 | 409 | 중복된 팀 이름으로 변경 시도 |
-| COMMON500 | 500 | 이름 변경 처리 중 서버 에러 |
+| Code | HTTP Status | Description | 발생 조건 |
+|------|-------------|-------------|----------|
+| TEAM4001 | 400 | 글자 수 제한 유효성 검사 실패 | 팀 이름이 빈 문자열이거나 20자 초과 |
+| AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
+| TEAM4031 | 403 | 팀 관리자가 아닌 유저가 수정 시도 | 팀 관리자(Owner) 권한이 없는 사용자가 이름 변경 요청 |
+| TEAM4041 | 404 | 유효하지 않은 teamId | 존재하지 않거나 삭제된 팀의 teamId로 요청 |
+| TEAM4091 | 409 | 중복된 팀 이름으로 변경 시도 | 동일한 사용자의 다른 팀에서 이미 사용 중인 이름으로 변경 시도 |
+| COMMON500 | 500 | 이름 변경 처리 중 서버 에러 | 데이터베이스 연결 실패, 업데이트 쿼리 실행 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X PATCH https://api.example.com/api/teams/123/name \
+curl -X PATCH https://api.example.com/api/v1/teams/123/name \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{

@@ -1,4 +1,4 @@
-# [API-027] POST /api/responses/{responseId}/comments
+# [API-027] POST /api/v1/responses/{responseId}/comments
 
 회고 답변 댓글 작성 API
 
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-POST /api/responses/{responseId}/comments
+POST /api/v1/responses/{responseId}/comments
 ```
 
 ## 인증
@@ -36,15 +36,9 @@ POST /api/responses/{responseId}/comments
 
 ### Path Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| responseId | long | Yes | 댓글을 작성할 대상 답변의 고유 ID |
-
-#### Path Parameter Validation
-
-| Parameter | Validation | Error Code |
-|-----------|-----------|-----------|
-| responseId | 양의 정수, 존재하는 답변 ID | RES4041 |
+| Parameter | Type | Required | Description | Validation |
+|-----------|------|----------|-------------|------------|
+| responseId | long | Yes | 댓글을 작성할 대상 답변의 고유 ID | 1 이상의 양수 |
 
 ### Body
 
@@ -179,7 +173,7 @@ POST /api/responses/{responseId}/comments
 ### cURL
 
 ```bash
-curl -X POST https://api.example.com/api/responses/456/comments \
+curl -X POST https://api.example.com/api/v1/responses/456/comments \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
