@@ -73,7 +73,7 @@ impl AppError {
             AppError::ValidationError(_) => "COMMON400",
             AppError::InternalError(_) => "COMMON500",
             AppError::JsonParseFailed(_) => "COMMON400",
-            AppError::Unauthorized(_) => "COMMON401",
+            AppError::Unauthorized(_) => "AUTH4001",
             AppError::Forbidden(_) => "COMMON403",
             AppError::RetroProjectNameInvalid(_) => "RETRO4001",
             AppError::RetroMethodInvalid(_) => "RETRO4005",
@@ -126,15 +126,30 @@ impl IntoResponse for AppError {
 /// JsonRejection을 AppError로 변환
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
-        AppError::JsonParseFailed(rejection.to_string())
+        let message = rejection.to_string();
+
+        // retrospectMethod 필드의 enum 파싱 실패 감지
+        if message.contains("retrospectMethod") || message.contains("unknown variant") {
+            return AppError::RetroMethodInvalid("유효하지 않은 회고 방식입니다.".to_string());
+        }
+
+        AppError::JsonParseFailed(message)
     }
 }
 
 /// ValidationErrors를 AppError로 변환
 impl From<ValidationErrors> for AppError {
     fn from(errors: ValidationErrors) -> Self {
-        let messages: Vec<String> = errors
-            .field_errors()
+        let field_errors = errors.field_errors();
+
+        // project_name 필드 검증 실패 시 RETRO4001 반환
+        if field_errors.contains_key("project_name") {
+            return AppError::RetroProjectNameInvalid(
+                "프로젝트 이름은 1자 이상 20자 이하여야 합니다.".to_string(),
+            );
+        }
+
+        let messages: Vec<String> = field_errors
             .iter()
             .flat_map(|(field, errs)| {
                 errs.iter().map(move |e| {

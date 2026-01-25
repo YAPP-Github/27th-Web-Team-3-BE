@@ -1,9 +1,10 @@
 use chrono::{NaiveDate, Utc};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
 use std::collections::HashSet;
 
 use crate::domain::retrospect::entity::response;
 use crate::domain::retrospect::entity::retro_reference;
+use crate::domain::retrospect::entity::retro_room;
 use crate::domain::retrospect::entity::retrospect;
 use crate::domain::team::entity::member_team;
 use crate::domain::team::entity::team;
@@ -53,8 +54,33 @@ impl RetrospectService {
             ));
         }
 
-        // 5. 회고 생성
+        // 5. 트랜잭션 시작
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 6. 회고방 생성
         let now = Utc::now().naive_utc();
+        let invitation_url = format!("https://retro.example.com/room/{}", uuid::Uuid::new_v4());
+
+        let retro_room_model = retro_room::ActiveModel {
+            title: Set(req.project_name.clone()),
+            invition_url: Set(invitation_url),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        };
+
+        let retro_room_result = retro_room_model
+            .insert(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let retrospect_room_id = retro_room_result.retrospect_room_id;
+
+        // 7. 회고 생성
         let start_time = retrospect_date
             .and_hms_opt(0, 0, 0)
             .ok_or_else(|| AppError::BadRequest("날짜 변환 실패".to_string()))?;
@@ -66,19 +92,19 @@ impl RetrospectService {
             created_at: Set(now),
             updated_at: Set(now),
             start_time: Set(start_time),
-            retrospect_room_id: Set(0), // TODO: RetroRoom 연결 필요
+            retrospect_room_id: Set(retrospect_room_id),
             team_id: Set(req.team_id),
             ..Default::default()
         };
 
         let retrospect_result = retrospect_model
-            .insert(&state.db)
+            .insert(&txn)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         let retrospect_id = retrospect_result.retrospect_id;
 
-        // 6. 회고 방식에 따른 기본 질문 생성
+        // 8. 회고 방식에 따른 기본 질문 생성
         let questions = req.retrospect_method.default_questions();
         for question in questions {
             let response_model = response::ActiveModel {
@@ -91,25 +117,30 @@ impl RetrospectService {
             };
 
             response_model
-                .insert(&state.db)
+                .insert(&txn)
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
 
-        // 7. 참고 URL 저장
+        // 9. 참고 URL 저장
         for url in &req.reference_urls {
             let reference_model = retro_reference::ActiveModel {
-                title: Set(url.clone()), // URL을 title로 사용
+                title: Set(url.clone()),
                 url: Set(url.clone()),
                 retrospect_id: Set(retrospect_id),
                 ..Default::default()
             };
 
             reference_model
-                .insert(&state.db)
+                .insert(&txn)
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
+
+        // 10. 트랜잭션 커밋
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         Ok(CreateRetrospectResponse {
             retrospect_id,

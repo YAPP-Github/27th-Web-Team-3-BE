@@ -48,5 +48,8 @@ pub async fn create_retrospect(
     // 서비스 호출
     let result = RetrospectService::create_retrospect(state, user_id, req).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고가 성공적으로 생성되었습니다.",
+    )))
 }
