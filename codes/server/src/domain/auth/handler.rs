@@ -6,7 +6,7 @@ use crate::state::AppState;
 use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 use crate::utils::auth::AuthUser;
-use super::dto::{LoginRequest, LoginResponse, EmailLoginRequest, SuccessLoginResponse};
+use super::dto::{LoginRequest, LoginResponse, EmailLoginRequest};
 use super::service::AuthService;
 
 /// 인증 테스트 API
@@ -78,5 +78,16 @@ pub async fn login(
     
     let result = AuthService::login(state, req).await?;
     
-    Ok(Json(BaseResponse::success(result)))
+    let (code, message) = if result.is_new_member {
+        ("AUTH2001", "신규 회원입니다. 가입 절차를 진행해 주세요.")
+    } else {
+        ("COMMON200", "로그인에 성공하였습니다.")
+    };
+    
+    Ok(Json(BaseResponse {
+        is_success: true,
+        code: code.to_string(),
+        message: message.to_string(),
+        result: Some(result),
+    }))
 }

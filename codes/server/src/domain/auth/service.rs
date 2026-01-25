@@ -4,7 +4,7 @@ use chrono::Utc;
 
 use crate::state::AppState;
 use crate::utils::error::AppError;
-use crate::utils::jwt::encode_token;
+use crate::utils::jwt::{encode_token, encode_refresh_token, encode_signup_token};
 use crate::domain::member::entity::member::{self, Entity as Member, Model as MemberModel, SocialType};
 use super::dto::{LoginRequest, LoginResponse, EmailLoginRequest};
 
@@ -33,16 +33,24 @@ impl AuthService {
         })?;
 
         // JWT 발급
-        let token = encode_token(
+        let access_token = encode_token(
             member.member_id.to_string(),
             &state.config.jwt_secret,
             state.config.jwt_expiration,
         )?;
 
+        let refresh_token = encode_refresh_token(
+            member.member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
         Ok(LoginResponse {
-            access_token: token,
-            token_type: "Bearer".to_string(),
-            expires_in: state.config.jwt_expiration,
+            is_new_member: false,
+            access_token: Some(access_token),
+            refresh_token: Some(refresh_token),
+            email: None,
+            signup_token: None,
         })
     }
 
@@ -64,26 +72,46 @@ impl AuthService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let member = match member {
-            Some(m) => m,
-            None => {
-                // 3. 없으면 회원가입
-                Self::register(&state.db, social_info.email, req.social_type).await?
+        match member {
+            Some(member) => {
+                // 기존 회원: Access/Refresh Token 발급
+                let access_token = encode_token(
+                    member.member_id.to_string(),
+                    &state.config.jwt_secret,
+                    state.config.jwt_expiration,
+                )?;
+
+                let refresh_token = encode_refresh_token(
+                    member.member_id.to_string(),
+                    &state.config.jwt_secret,
+                    state.config.refresh_token_expiration,
+                )?;
+
+                Ok(LoginResponse {
+                    is_new_member: false,
+                    access_token: Some(access_token),
+                    refresh_token: Some(refresh_token),
+                    email: None,
+                    signup_token: None,
+                })
             }
-        };
+            None => {
+                // 신규 회원: Signup Token 발급
+                let signup_token = encode_signup_token(
+                    social_info.email.clone(),
+                    &state.config.jwt_secret,
+                    state.config.signup_token_expiration,
+                )?;
 
-        // 4. JWT 발급
-        let token = encode_token(
-            member.member_id.to_string(),
-            &state.config.jwt_secret,
-            state.config.jwt_expiration,
-        )?;
-
-        Ok(LoginResponse {
-            access_token: token,
-            token_type: "Bearer".to_string(),
-            expires_in: state.config.jwt_expiration,
-        })
+                Ok(LoginResponse {
+                    is_new_member: true,
+                    access_token: None,
+                    refresh_token: None,
+                    email: Some(social_info.email),
+                    signup_token: Some(signup_token),
+                })
+            }
+        }
     }
 
     async fn fetch_kakao_user_info(token: &str) -> Result<SocialUserInfo, AppError> {

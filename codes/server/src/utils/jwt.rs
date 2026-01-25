@@ -13,9 +13,15 @@ pub struct Claims {
     pub iat: usize,
     /// Expiration
     pub exp: usize,
+    /// Email (for signup token)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    /// Token Type (access, refresh, signup)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_type: Option<String>,
 }
 
-/// JWT 토큰 생성
+/// JWT 토큰 생성 (Access Token)
 pub fn encode_token(sub: String, secret: &str, expiration_seconds: i64) -> Result<String, AppError> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::seconds(expiration_seconds))
@@ -26,6 +32,8 @@ pub fn encode_token(sub: String, secret: &str, expiration_seconds: i64) -> Resul
         sub,
         iat: Utc::now().timestamp() as usize,
         exp: expiration,
+        email: None,
+        token_type: Some("access".to_string()),
     };
 
     encode(
@@ -34,6 +42,52 @@ pub fn encode_token(sub: String, secret: &str, expiration_seconds: i64) -> Resul
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(|e| AppError::InternalError(format!("Token creation failed: {}", e)))
+}
+
+/// Refresh Token 생성
+pub fn encode_refresh_token(sub: String, secret: &str, expiration_seconds: i64) -> Result<String, AppError> {
+    let expiration = Utc::now()
+        .checked_add_signed(Duration::seconds(expiration_seconds))
+        .expect("valid timestamp")
+        .timestamp() as usize;
+
+    let claims = Claims {
+        sub,
+        iat: Utc::now().timestamp() as usize,
+        exp: expiration,
+        email: None,
+        token_type: Some("refresh".to_string()),
+    };
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .map_err(|e| AppError::InternalError(format!("Refresh token creation failed: {}", e)))
+}
+
+/// Signup Token 생성
+pub fn encode_signup_token(email: String, secret: &str, expiration_seconds: i64) -> Result<String, AppError> {
+    let expiration = Utc::now()
+        .checked_add_signed(Duration::seconds(expiration_seconds))
+        .expect("valid timestamp")
+        .timestamp() as usize;
+
+    let claims = Claims {
+        sub: "".to_string(), // No user ID yet
+        iat: Utc::now().timestamp() as usize,
+        exp: expiration,
+        email: Some(email),
+        token_type: Some("signup".to_string()),
+    };
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .map_err(|e| AppError::InternalError(format!("Signup token creation failed: {}", e)))
 }
 
 /// JWT 토큰 검증
