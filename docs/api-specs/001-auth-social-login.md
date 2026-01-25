@@ -12,6 +12,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | 토큰 유효기간(TTL) 정보 추가 |
+| 1.2.0 | 2026-01-25 | 신규 회원 응답에 signupToken 추가 |
 
 - **기존 회원**: 서비스 자체 토큰(`accessToken`, `refreshToken`)을 즉시 발급합니다.
 - **신규 회원**: `isNewMember: true`와 함께 이메일을 반환하여 추가 정보 입력(회원가입) 단계로 유도합니다.
@@ -22,6 +23,7 @@
 |----------|---------|------|
 | accessToken | 30분 | API 요청 시 인증에 사용, 만료 시 refreshToken으로 재발급 필요 |
 | refreshToken | 14일 | accessToken 재발급에 사용, 만료 시 재로그인 필요 |
+| signupToken | 10분 | 신규 회원의 회원가입 API 호출 시 인증에 사용 |
 
 ## 엔드포인트
 
@@ -83,7 +85,8 @@ POST /api/v1/auth/social-login
   "message": "신규 회원입니다. 가입 절차를 진행해 주세요.",
   "result": {
     "isNewMember": true,
-    "email": "user@example.com"
+    "email": "user@example.com",
+    "signupToken": "signup_token_xxx"
   }
 }
 ```
@@ -102,6 +105,7 @@ POST /api/v1/auth/social-login
 |-------|------|-------------|
 | isNewMember | boolean | true (신규 회원) |
 | email | string | 소셜 계정에서 추출한 이메일 |
+| signupToken | string | 회원가입 API 호출 시 사용할 임시 토큰 (유효기간: 10분) |
 
 ## 에러 응답
 

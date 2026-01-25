@@ -84,7 +84,7 @@ PATCH /api/v1/teams/order
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4003",
+  "code": "TEAM4004",
   "message": "잘못된 순서 데이터입니다.",
   "result": null
 }
@@ -138,7 +138,7 @@ PATCH /api/v1/teams/order
 
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|----------|
-| TEAM4003 | 400 | 중복된 orderIndex 또는 유효하지 않은 형식 | teamOrders 배열 내 orderIndex 중복, 0 이하의 orderIndex 값 |
+| TEAM4004 | 400 | 중복된 orderIndex 또는 유효하지 않은 형식 | teamOrders 배열 내 orderIndex 중복, 0 이하의 orderIndex 값 |
 | AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
 | TEAM4031 | 403 | 참여하지 않은 팀의 ID 포함 | 요청자가 멤버로 참여하지 않은 팀의 teamId를 포함하여 요청 |
 | TEAM4041 | 404 | DB에 존재하지 않는 teamId | 존재하지 않거나 삭제된 팀의 teamId를 포함하여 요청 |

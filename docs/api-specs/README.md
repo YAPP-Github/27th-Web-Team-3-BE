@@ -12,57 +12,58 @@
 
 ## API 목록
 
-### 인증 (Auth) - 001~003
+### 인증 (Auth) - 001~004
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-001 | POST | `/api/auth/social-login` | 소셜 로그인 (구글/카카오) | [001-auth-social-login.md](./001-auth-social-login.md) |
-| API-002 | POST | `/api/auth/signup` | 회원가입 (닉네임 등록) | [002-auth-signup.md](./002-auth-signup.md) |
-| API-003 | POST | `/api/auth/logout` | 로그아웃 | [003-auth-logout.md](./003-auth-logout.md) |
+| API-001 | POST | `/api/v1/auth/social-login` | 소셜 로그인 (구글/카카오) | [001-auth-social-login.md](./001-auth-social-login.md) |
+| API-002 | POST | `/api/v1/auth/signup` | 회원가입 (닉네임 등록) | [002-auth-signup.md](./002-auth-signup.md) |
+| API-003 | POST | `/api/v1/auth/token/refresh` | 토큰 리프레시 | [003-auth-token-refresh.md](./003-auth-token-refresh.md) |
+| API-004 | POST | `/api/v1/auth/logout` | 로그아웃 | [004-auth-logout.md](./004-auth-logout.md) |
 
-### 팀 (Team) - 004~010
-
-| API ID | Method | Endpoint | 설명 | 문서 |
-|--------|--------|----------|------|------|
-| API-004 | POST | `/api/teams` | 팀 생성 | [004-team-create.md](./004-team-create.md) |
-| API-005 | POST | `/api/teams/join` | 팀 합류 (초대 링크) | [005-team-join.md](./005-team-join.md) |
-| API-006 | GET | `/api/teams` | 참여 팀 목록 조회 | [006-team-list.md](./006-team-list.md) |
-| API-007 | PATCH | `/api/teams/order` | 팀 순서 변경 | [007-team-order-update.md](./007-team-order-update.md) |
-| API-008 | PATCH | `/api/teams/{teamId}/name` | 팀 이름 변경 | [008-team-name-update.md](./008-team-name-update.md) |
-| API-009 | DELETE | `/api/teams/{teamId}` | 팀 삭제 | [009-team-delete.md](./009-team-delete.md) |
-| API-010 | GET | `/api/teams/{teamId}/retrospects` | 팀 내 회고 목록 조회 | [010-team-retrospects-list.md](./010-team-retrospects-list.md) |
-
-### 회고 (Retrospect) - 011~023
+### 팀 (Team) - 005~011
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-011 | POST | `/api/retrospects` | 회고 생성 | [011-retrospect-create.md](./011-retrospect-create.md) |
-| API-012 | GET | `/api/retrospects/{retrospectId}` | 회고 상세 정보 조회 | [012-retrospect-detail.md](./012-retrospect-detail.md) |
-| API-013 | DELETE | `/api/retrospects/{retrospectId}` | 회고 삭제 | [013-retrospect-delete.md](./013-retrospect-delete.md) |
-| API-014 | POST | `/api/retrospects/{retrospectId}/participants` | 회고 참석 등록 | [014-retrospect-participant-create.md](./014-retrospect-participant-create.md) |
-| API-015 | GET | `/api/retrospects/{retrospectId}/participants` | 회고 참여자 및 질문 조회 | [015-retrospect-participants-list.md](./015-retrospect-participants-list.md) |
-| API-016 | PUT | `/api/retrospects/{retrospectId}/drafts` | 회고 답변 임시 저장 | [016-retrospect-draft-save.md](./016-retrospect-draft-save.md) |
-| API-017 | POST | `/api/retrospects/{retrospectId}/submit` | 회고 최종 제출 | [017-retrospect-submit.md](./017-retrospect-submit.md) |
-| API-018 | GET | `/api/retrospects/{retrospectId}/references` | 회고 참고자료 목록 조회 | [018-retrospect-references-list.md](./018-retrospect-references-list.md) |
-| API-019 | GET | `/api/retrospects/storage` | 보관함 회고 리스트 조회 | [019-retrospect-storage-list.md](./019-retrospect-storage-list.md) |
-| API-020 | GET | `/api/retrospects/{retrospectId}/responses` | 회고 답변 카테고리별 조회 | [020-retrospect-responses-list.md](./020-retrospect-responses-list.md) |
-| API-021 | GET | `/api/retrospects/{retrospectId}/export` | 회고 PDF 내보내기 | [021-retrospect-export.md](./021-retrospect-export.md) |
-| API-022 | POST | `/api/retrospects/{retrospectId}/analysis` | 회고 AI 분석 | [022-retrospect-analysis.md](./022-retrospect-analysis.md) |
-| API-023 | GET | `/api/retrospects/search` | 보관함 회고 검색 | [023-retrospect-search.md](./023-retrospect-search.md) |
+| API-005 | POST | `/api/v1/teams` | 팀 생성 | [004-team-create.md](./004-team-create.md) |
+| API-006 | POST | `/api/v1/teams/join` | 팀 합류 (초대 링크) | [005-team-join.md](./005-team-join.md) |
+| API-007 | GET | `/api/v1/teams` | 참여 팀 목록 조회 | [006-team-list.md](./006-team-list.md) |
+| API-008 | PATCH | `/api/v1/teams/order` | 팀 순서 변경 | [007-team-order-update.md](./007-team-order-update.md) |
+| API-009 | PATCH | `/api/v1/teams/{teamId}/name` | 팀 이름 변경 | [008-team-name-update.md](./008-team-name-update.md) |
+| API-010 | DELETE | `/api/v1/teams/{teamId}` | 팀 삭제 | [009-team-delete.md](./009-team-delete.md) |
+| API-011 | GET | `/api/v1/teams/{teamId}/retrospects` | 팀 내 회고 목록 조회 | [010-team-retrospects-list.md](./010-team-retrospects-list.md) |
 
-### 회원 (Member) - 024
+### 회고 (Retrospect) - 012~024
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-024 | DELETE | `/api/members/me` | 서비스 탈퇴 | [024-member-withdraw.md](./024-member-withdraw.md) |
+| API-012 | POST | `/api/v1/retrospects` | 회고 생성 | [011-retrospect-create.md](./011-retrospect-create.md) |
+| API-013 | GET | `/api/v1/retrospects/{retrospectId}` | 회고 상세 정보 조회 | [012-retrospect-detail.md](./012-retrospect-detail.md) |
+| API-014 | DELETE | `/api/v1/retrospects/{retrospectId}` | 회고 삭제 | [013-retrospect-delete.md](./013-retrospect-delete.md) |
+| API-015 | POST | `/api/v1/retrospects/{retrospectId}/participants` | 회고 참석 등록 | [014-retrospect-participant-create.md](./014-retrospect-participant-create.md) |
+| API-016 | GET | `/api/v1/retrospects/{retrospectId}/participants` | 회고 참여자 및 질문 조회 | [015-retrospect-participants-list.md](./015-retrospect-participants-list.md) |
+| API-017 | PUT | `/api/v1/retrospects/{retrospectId}/drafts` | 회고 답변 임시 저장 | [016-retrospect-draft-save.md](./016-retrospect-draft-save.md) |
+| API-018 | POST | `/api/v1/retrospects/{retrospectId}/submit` | 회고 최종 제출 | [017-retrospect-submit.md](./017-retrospect-submit.md) |
+| API-019 | GET | `/api/v1/retrospects/{retrospectId}/references` | 회고 참고자료 목록 조회 | [018-retrospect-references-list.md](./018-retrospect-references-list.md) |
+| API-020 | GET | `/api/v1/retrospects/storage` | 보관함 회고 리스트 조회 | [019-retrospect-storage-list.md](./019-retrospect-storage-list.md) |
+| API-021 | GET | `/api/v1/retrospects/{retrospectId}/responses` | 회고 답변 카테고리별 조회 | [020-retrospect-responses-list.md](./020-retrospect-responses-list.md) |
+| API-022 | GET | `/api/v1/retrospects/{retrospectId}/export` | 회고 PDF 내보내기 | [021-retrospect-export.md](./021-retrospect-export.md) |
+| API-023 | POST | `/api/v1/retrospects/{retrospectId}/analysis` | 회고 AI 분석 | [022-retrospect-analysis.md](./022-retrospect-analysis.md) |
+| API-024 | GET | `/api/v1/retrospects/search` | 보관함 회고 검색 | [023-retrospect-search.md](./023-retrospect-search.md) |
 
-### 응답/댓글 (Response) - 025~027
+### 회원 (Member) - 025
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-025 | POST | `/api/responses/{responseId}/likes` | 답변 좋아요 토글 | [025-response-like-toggle.md](./025-response-like-toggle.md) |
-| API-026 | GET | `/api/responses/{responseId}/comments` | 답변 댓글 조회 | [026-response-comments-list.md](./026-response-comments-list.md) |
-| API-027 | POST | `/api/responses/{responseId}/comments` | 답변 댓글 작성 | [027-response-comment-create.md](./027-response-comment-create.md) |
+| API-025 | DELETE | `/api/v1/members/me` | 서비스 탈퇴 | [024-member-withdraw.md](./024-member-withdraw.md) |
+
+### 응답/댓글 (Response) - 026~028
+
+| API ID | Method | Endpoint | 설명 | 문서 |
+|--------|--------|----------|------|------|
+| API-026 | POST | `/api/v1/responses/{responseId}/likes` | 답변 좋아요 토글 | [025-response-like-toggle.md](./025-response-like-toggle.md) |
+| API-027 | GET | `/api/v1/responses/{responseId}/comments` | 답변 댓글 조회 | [026-response-comments-list.md](./026-response-comments-list.md) |
+| API-028 | POST | `/api/v1/responses/{responseId}/comments` | 답변 댓글 작성 | [027-response-comment-create.md](./027-response-comment-create.md) |
 
 ---
 

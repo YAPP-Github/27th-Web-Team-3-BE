@@ -12,8 +12,10 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | 토큰 유효기간(TTL) 정보 추가 |
+| 1.2.0 | 2026-01-25 | 인증 토큰을 signupToken으로 변경 |
 
-- 이 API는 **Access Token(JWT)**을 헤더로 전달받아 인증된 상태에서 호출되어야 합니다.
+- 이 API는 **signupToken**을 헤더로 전달받아 인증된 상태에서 호출되어야 합니다.
+- `signupToken`은 소셜 로그인 API(API-001)에서 신규 회원에게 발급됩니다.
 
 ### 토큰 유효기간 (TTL)
 
@@ -30,7 +32,7 @@ POST /api/v1/auth/signup
 
 ## 인증
 
-- `Authorization` 헤더를 통한 Bearer 토큰 인증
+- `Authorization` 헤더를 통한 Bearer 토큰 인증 (소셜 로그인에서 발급받은 `signupToken` 사용)
 
 ## Request
 
@@ -39,7 +41,7 @@ POST /api/v1/auth/signup
 | Header | Value | Required |
 |--------|-------|----------|
 | Content-Type | application/json | Yes |
-| Authorization | Bearer {accessToken} | Yes |
+| Authorization | Bearer {signupToken} | Yes |
 
 ### Body
 
@@ -146,7 +148,7 @@ POST /api/v1/auth/signup
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|-----------|
 | COMMON400 | 400 | 유효성 검증 실패 | 닉네임이 1~20자 범위를 벗어나거나 특수문자 포함 시 |
-| AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
+| AUTH4001 | 401 | 인증 정보가 유효하지 않음 | signupToken 누락, 만료(10분) 또는 잘못된 토큰 |
 | MEMBER4041 | 404 | 유효하지 않은 회원가입 정보 | API-001에서 신규 회원으로 확인된 상태가 아닌 경우 |
 | MEMBER4091 | 409 | 닉네임 중복 | 이미 사용 중인 닉네임으로 가입 시도 |
 | COMMON500 | 500 | 서버 내부 에러 | 서버 로직 처리 중 예외 발생 |
@@ -158,7 +160,7 @@ POST /api/v1/auth/signup
 ```bash
 curl -X POST https://api.example.com/api/v1/auth/signup \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer {accessToken}" \
+  -H "Authorization: Bearer {signupToken}" \
   -d '{
     "email": "user@example.com",
     "nickname": "제이슨"
