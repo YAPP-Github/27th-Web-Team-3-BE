@@ -34,6 +34,7 @@ AI 분석을 수행하기 위한 최소 데이터 요구사항:
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | 최소 데이터 기준 명확화, 월간 한도 기준 상세화 |
+| 1.2.0 | 2025-01-25 | 감정 랭킹 3개 고정, 개인 미션 구조 변경 (사용자당 3개 미션) |
 
 ## 엔드포인트
 
@@ -94,20 +95,50 @@ Request Body 없음
         "label": "뿌듯",
         "description": "목표 달성에 대한 성취감을 느끼는 팀원이 많았습니다.",
         "count": 4
+      },
+      {
+        "rank": 3,
+        "label": "불안",
+        "description": "다음 스프린트에 대한 부담감을 가진 팀원들이 있었습니다.",
+        "count": 2
       }
     ],
     "personalMissions": [
       {
         "userId": 1,
         "userName": "소은",
-        "missionTitle": "감정 표현 적극적으로 하기",
-        "missionDesc": "활발한 협업은 좋았으나 감정 공유를 늘리면 팀 응집력이 더 높아질 것입니다."
+        "missions": [
+          {
+            "missionTitle": "감정 표현 적극적으로 하기",
+            "missionDesc": "활발한 협업은 좋았으나 감정 공유를 늘리면 팀 응집력이 더 높아질 것입니다."
+          },
+          {
+            "missionTitle": "스프린트 분량 조절하기",
+            "missionDesc": "작은 PR 단위로 나누어 업무를 분배하면 효율적인 리뷰가 가능합니다."
+          },
+          {
+            "missionTitle": "피드백 즉각 공유하기",
+            "missionDesc": "즉각적인 응답과 활발한 코드 리뷰로 협업 속도를 높여보세요."
+          }
+        ]
       },
       {
         "userId": 2,
         "userName": "민수",
-        "missionTitle": "작업 분배 개선하기",
-        "missionDesc": "업무 집중도가 높았지만 분산 작업을 통해 번아웃을 예방해보세요."
+        "missions": [
+          {
+            "missionTitle": "작업 분배 개선하기",
+            "missionDesc": "업무 집중도가 높았지만 분산 작업을 통해 번아웃을 예방해보세요."
+          },
+          {
+            "missionTitle": "휴식 시간 확보하기",
+            "missionDesc": "집중 작업 후 충분한 휴식을 취하면 지속적인 성과를 낼 수 있습니다."
+          },
+          {
+            "missionTitle": "팀원과 소통 늘리기",
+            "missionDesc": "정기적인 체크인을 통해 진행 상황을 공유하면 협업이 원활해집니다."
+          }
+        ]
       }
     ]
   }
@@ -119,7 +150,7 @@ Request Body 없음
 | Field | Type | Description | 용도 |
 |-------|------|-------------|------|
 | teamInsight | string | 팀 전체를 위한 AI 분석 메시지 | 팀 레벨의 통찰력 및 개선점 제시 |
-| emotionRank | array[object] | 감정 키워드 순위 리스트 (내림차순 정렬) | 팀원들이 느낀 주요 감정 상태 파악 |
+| emotionRank | array[object] | 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개) | 팀원들이 느낀 주요 감정 상태 파악 |
 | emotionRank[].rank | integer | 순위 (1부터 시작, 감정 빈도 기준 내림차순) | 감정 우선순위 표시 |
 | emotionRank[].label | string | 감정 키워드 (예: "피로", "뿌듯") | 감정 카테고리 식별 |
 | emotionRank[].description | string | 해당 감정에 대한 상세 설명 및 원인 분석 | 감정이 발생한 맥락 설명 |
@@ -127,15 +158,17 @@ Request Body 없음
 | personalMissions | array[object] | 사용자별 개인 맞춤 미션 리스트 (userId 오름차순 정렬) | 팀원별 성장 기회 제시 |
 | personalMissions[].userId | long | 사용자 고유 ID | 미션 대상자 식별 |
 | personalMissions[].userName | string | 사용자 이름 | 미션 대상자 이름 표시 |
-| personalMissions[].missionTitle | string | 개인 미션 제목 (예: "감정 표현 적극적으로 하기") | 미션의 핵심 주제 |
-| personalMissions[].missionDesc | string | 개인 미션 상세 설명 및 인사이트 | 미션 수행 이유 및 기대효과 설명 |
+| personalMissions[].missions | array[object] | 해당 사용자의 개인 미션 리스트 (정확히 3개) | 사용자별 맞춤 미션 제공 |
+| personalMissions[].missions[].missionTitle | string | 개인 미션 제목 (예: "감정 표현 적극적으로 하기") | 미션의 핵심 주제 |
+| personalMissions[].missions[].missionDesc | string | 개인 미션 상세 설명 및 인사이트 | 미션 수행 이유 및 기대효과 설명 |
 
 ### 배열 검증 규칙
 
 | 배열 필드 | 최소 요소 수 | 최대 요소 수 | 정렬 순서 | 설명 |
 |-----------|------------|------------|---------|------|
-| emotionRank | 1 | 제한 없음 | 감정 빈도 내림차순 (count 기준) | 최소 1개 이상의 감정 결과 필수, count가 높을수록 먼저 정렬 |
+| emotionRank | 3 | 3 | 감정 빈도 내림차순 (count 기준) | 정확히 3개의 감정 결과 필수, count가 높을수록 먼저 정렬 |
 | personalMissions | 0 | 제한 없음 | userId 오름차순 | 팀원이 0명인 경우 빈 배열 반환 가능 |
+| personalMissions[].missions | 3 | 3 | 순서 보장 없음 | 사용자당 정확히 3개의 미션 필수 |
 
 ## 에러 응답
 
