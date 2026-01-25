@@ -12,6 +12,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | Enum 상세 설명, 검증 규칙, 에러 조건 추가 |
+| 1.2.0 | 2025-01-25 | teamId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일, 질문 생성 로직 추가 |
 
 ## 엔드포인트
 
@@ -36,8 +37,9 @@ POST /api/v1/retrospects
 
 ```json
 {
+  "teamId": 789,
   "projectName": "나만의 회고 플랫폼",
-  "retrospectDate": "2026-01-24T15:00:00",
+  "retrospectDate": "2026-01-24",
   "retrospectMethod": "KPT",
   "referenceUrls": [
     "https://github.com/jayson/project",
@@ -50,8 +52,9 @@ POST /api/v1/retrospects
 
 | Field | Type | Required | Description | Validation |
 |-------|------|----------|-------------|------------|
+| teamId | long | Yes | 회고가 속한 팀의 고유 ID | 1 이상의 양수 |
 | projectName | string | Yes | 프로젝트 이름 | 최소 1자, 최대 20자 |
-| retrospectDate | string | Yes | 회고 날짜 및 시간 | ISO 8601 형식 (yyyy-MM-ddTHH:mm:ss), 미래 시점만 허용 |
+| retrospectDate | string | Yes | 회고 날짜 | ISO 8601 형식 (YYYY-MM-DD), 미래 날짜만 허용 |
 | retrospectMethod | string (Enum) | Yes | 회고 방식 | KPT, FOUR_L, FIVE_F, PMI, FREE 중 하나 |
 | referenceUrls | array[string] | No | 참고 자료 URL 리스트 | 최대 10개, 각 URL은 유효한 형식이어야 함 (http/https) |
 
@@ -75,6 +78,7 @@ POST /api/v1/retrospects
   "message": "회고가 성공적으로 생성되었습니다.",
   "result": {
     "retrospectId": 12345,
+    "teamId": 789,
     "projectName": "나만의 회고 플랫폼"
   }
 }
@@ -85,6 +89,7 @@ POST /api/v1/retrospects
 | Field | Type | Description |
 |-------|------|-------------|
 | retrospectId | long | 생성된 회고 고유 ID |
+| teamId | long | 회고가 속한 팀의 고유 ID |
 | projectName | string | 저장된 프로젝트 이름 |
 
 ### retrospectMethod Enum 설명
@@ -96,6 +101,60 @@ POST /api/v1/retrospects
 | FIVE_F | 5F | Facts-Feelings-Findings-Future-Feedback 방식 | 종합적인 프로젝트 분석이 필요할 때 |
 | PMI | Plus-Minus-Interesting | 긍정-부정-흥미로운 점을 분류하는 방식 | 빠른 의사결정 후 검토에 적합 |
 | FREE | 자유 형식 | 형식 제약 없이 자유롭게 작성 | 유연한 회고가 필요할 때 |
+
+### 회고 방식별 기본 질문 생성 로직
+
+회고 생성 시 선택한 `retrospectMethod`에 따라 다음과 같은 기본 질문이 자동으로 생성됩니다.
+
+#### KPT (Keep-Problem-Try)
+
+| 질문 순서 | 질문 내용 |
+|----------|----------|
+| 1 | 계속 유지하고 싶은 좋은 점은 무엇인가요? |
+| 2 | 개선이 필요한 문제점은 무엇인가요? |
+| 3 | 다음에 시도해보고 싶은 것은 무엇인가요? |
+| 4 | 전체 프로젝트를 돌아보며 느낀 점을 자유롭게 작성해주세요. |
+| 5 | 추가로 공유하고 싶은 의견이 있나요? |
+
+#### FOUR_L (Liked-Learned-Lacked-Longed for)
+
+| 질문 순서 | 질문 내용 |
+|----------|----------|
+| 1 | 프로젝트에서 좋았던 점은 무엇인가요? |
+| 2 | 새롭게 배운 것은 무엇인가요? |
+| 3 | 부족했던 점은 무엇인가요? |
+| 4 | 앞으로 바라는 것은 무엇인가요? |
+| 5 | 추가로 공유하고 싶은 의견이 있나요? |
+
+#### FIVE_F (Facts-Feelings-Findings-Future-Feedback)
+
+| 질문 순서 | 질문 내용 |
+|----------|----------|
+| 1 | 프로젝트의 객관적 사실은 무엇인가요? |
+| 2 | 프로젝트 진행 중 어떤 감정을 느꼈나요? |
+| 3 | 프로젝트에서 발견한 것은 무엇인가요? |
+| 4 | 앞으로 어떻게 적용할 수 있을까요? |
+| 5 | 팀원에게 전하고 싶은 피드백이 있나요? |
+
+#### PMI (Plus-Minus-Interesting)
+
+| 질문 순서 | 질문 내용 |
+|----------|----------|
+| 1 | 긍정적이었던 점은 무엇인가요? |
+| 2 | 부정적이었던 점은 무엇인가요? |
+| 3 | 흥미로웠던 점은 무엇인가요? |
+| 4 | 전체 프로젝트를 돌아보며 느낀 점을 자유롭게 작성해주세요. |
+| 5 | 추가로 공유하고 싶은 의견이 있나요? |
+
+#### FREE (자유 형식)
+
+| 질문 순서 | 질문 내용 |
+|----------|----------|
+| 1 | 이번 프로젝트에서 가장 기억에 남는 것은 무엇인가요? |
+| 2 | 프로젝트를 진행하며 어떤 생각이 들었나요? |
+| 3 | 다음 프로젝트에서 개선하고 싶은 점은 무엇인가요? |
+| 4 | 팀원들에게 전하고 싶은 말이 있나요? |
+| 5 | 추가로 공유하고 싶은 의견이 있나요? |
 
 ## 에러 응답
 
@@ -116,7 +175,29 @@ POST /api/v1/retrospects
 {
   "isSuccess": false,
   "code": "COMMON400",
-  "message": "날짜 형식이 올바르지 않습니다.",
+  "message": "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD 형식 필요)",
+  "result": null
+}
+```
+
+### 400 Bad Request - 유효하지 않은 팀 ID
+
+```json
+{
+  "isSuccess": false,
+  "code": "TEAM4041",
+  "message": "존재하지 않는 팀입니다.",
+  "result": null
+}
+```
+
+### 403 Forbidden - 팀 접근 권한 없음
+
+```json
+{
+  "isSuccess": false,
+  "code": "TEAM4031",
+  "message": "해당 팀의 멤버가 아닙니다.",
   "result": null
 }
 ```
@@ -172,8 +253,10 @@ POST /api/v1/retrospects
 | RETRO4001 | 400 | 프로젝트 이름 길이 유효성 검사 실패 | projectName이 0자 또는 20자 초과 |
 | RETRO4005 | 400 | 유효하지 않은 회고 방식 | retrospectMethod가 정의된 Enum 외의 값 |
 | RETRO4006 | 400 | 유효하지 않은 URL 형식 | referenceUrls 중 http/https가 아닌 URL 포함 |
-| COMMON400 | 400 | 잘못된 요청 | 날짜 형식 오류, 필수 필드 누락 등 |
+| COMMON400 | 400 | 잘못된 요청 | 날짜 형식 오류(YYYY-MM-DD 아님), 필수 필드 누락 등 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료, 또는 잘못된 형식 |
+| TEAM4031 | 403 | 팀 접근 권한 없음 | 해당 팀의 멤버가 아닌 경우 |
+| TEAM4041 | 404 | 존재하지 않는 팀 | 유효하지 않은 teamId |
 | COMMON500 | 500 | 서버 내부 에러 | DB 연결 실패, 트랜잭션 오류 등 |
 
 ## 사용 예시
@@ -185,8 +268,9 @@ curl -X POST https://api.example.com/api/v1/retrospects \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
+    "teamId": 789,
     "projectName": "나만의 회고 플랫폼",
-    "retrospectDate": "2026-01-24T15:00:00",
+    "retrospectDate": "2026-01-24",
     "retrospectMethod": "KPT",
     "referenceUrls": [
       "https://github.com/jayson/project",

@@ -4,8 +4,9 @@
 
 ## 개요
 
-특정 회고 답변에 작성된 모든 댓글 리스트를 조회합니다.
+특정 회고 답변에 작성된 댓글 리스트를 조회합니다.
 
+- **커서 기반 페이지네이션(Cursor-based Pagination)**을 사용하여 무한 스크롤을 지원합니다.
 - 특정 유저의 답변에 달린 동료들의 피드백이나 의견을 확인할 때 사용합니다.
 - 댓글이 없는 경우 `comments` 리스트는 빈 배열(`[]`)로 반환됩니다.
 
@@ -14,6 +15,7 @@
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
+| 2.0.0 | 2025-01-25 | 커서 기반 페이지네이션 추가 (cursor, size 파라미터) |
 
 ## 엔드포인트
 
@@ -40,6 +42,13 @@ GET /api/v1/responses/{responseId}/comments
 |-----------|------|----------|-------------|------------|
 | responseId | long | Yes | 댓글을 조회할 회고 답변의 고유 식별자 | 1 이상의 양수 |
 
+### Query Parameters
+
+| Parameter | Type | Required | Description | Validation |
+|-----------|------|----------|-------------|------------|
+| cursor | long | No | 마지막으로 조회된 댓글 ID | 1 이상의 양수 (첫 요청 시 생략) |
+| size | integer | No | 페이지당 조회 개수 | 1~100, 기본값: 20 |
+
 ## Response
 
 ### 성공 (200 OK)
@@ -57,8 +66,17 @@ GET /api/v1/responses/{responseId}/comments
         "userName": "김민수",
         "content": "이 의견에 전적으로 동의합니다! 저도 비슷한 생각을 했어요.",
         "createdAt": "2026-01-24T16:30:15"
+      },
+      {
+        "commentId": 788,
+        "memberId": 15,
+        "userName": "이영희",
+        "content": "좋은 의견 감사합니다!",
+        "createdAt": "2026-01-24T16:25:10"
       }
-    ]
+    ],
+    "hasNext": true,
+    "nextCursor": 787
   }
 }
 ```
@@ -67,12 +85,20 @@ GET /api/v1/responses/{responseId}/comments
 
 | Field | Type | Description | 제약 조건 |
 |-------|------|-------------|----------|
-| comments | array[object] | 댓글 리스트 (최신 순서대로 정렬) | 최소 0개, 최대 무제한 |
+| comments | array[object] | 댓글 리스트 (최신 순서대로 정렬) | 최소 0개 |
 | comments[].commentId | long | 댓글 고유 식별자 | 양의 정수 (1 이상) |
 | comments[].memberId | long | 작성자 고유 ID | 양의 정수 (1 이상) |
 | comments[].userName | string | 작성자 이름(닉네임) | 1자 이상 50자 이하 |
 | comments[].content | string | 댓글 내용 | 1자 이상 500자 이하 |
 | comments[].createdAt | string | 작성 일시 (yyyy-MM-ddTHH:mm:ss) | ISO 8601 형식 |
+| hasNext | boolean | 다음 페이지 존재 여부 | true/false |
+| nextCursor | long \| null | 다음 조회를 위한 커서 ID (마지막 페이지면 null) | 양의 정수 또는 null |
+
+### 정렬 순서
+
+| 기준 | 순서 | 설명 |
+|------|------|------|
+| commentId | 내림차순 | 최신 댓글이 상위에 표시 |
 
 ### 빈 결과 응답
 
@@ -82,20 +108,44 @@ GET /api/v1/responses/{responseId}/comments
   "code": "COMMON200",
   "message": "댓글 조회를 성공했습니다.",
   "result": {
-    "comments": []
+    "comments": [],
+    "hasNext": false,
+    "nextCursor": null
   }
 }
 ```
 
 ## 에러 응답
 
-### 400 Bad Request - 잘못된 요청
+### 400 Bad Request - 잘못된 Path Parameter
 
 ```json
 {
   "isSuccess": false,
   "code": "COMMON400",
-  "message": "잘못된 요청입니다.",
+  "message": "responseId는 1 이상의 양수여야 합니다.",
+  "result": null
+}
+```
+
+### 400 Bad Request - 잘못된 페이징 파라미터
+
+```json
+{
+  "isSuccess": false,
+  "code": "COMMON400",
+  "message": "size는 1~100 범위의 정수여야 합니다.",
+  "result": null
+}
+```
+
+### 400 Bad Request - 잘못된 커서 값
+
+```json
+{
+  "isSuccess": false,
+  "code": "COMMON400",
+  "message": "cursor는 1 이상의 양수여야 합니다.",
   "result": null
 }
 ```
@@ -148,7 +198,7 @@ GET /api/v1/responses/{responseId}/comments
 
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|----------|
-| COMMON400 | 400 | 잘못된 요청 | responseId가 유효한 정수가 아님 |
+| COMMON400 | 400 | 잘못된 요청 | responseId/cursor가 0 이하, size가 1~100 범위 벗어남 |
 | AUTH4001 | 401 | 인증 실패 | 토큰 누락, 만료 또는 잘못된 형식 |
 | TEAM4031 | 403 | 접근 권한 없음 | 팀 멤버가 아닌 유저가 댓글 조회 시도 |
 | RES4041 | 404 | 리소스 없음 | 유효하지 않은 responseId 또는 존재하지 않는 회고 답변 |
@@ -159,7 +209,13 @@ GET /api/v1/responses/{responseId}/comments
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/v1/responses/456/comments \
+# 첫 페이지 조회
+curl -X GET "https://api.example.com/api/v1/responses/456/comments?size=20" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {accessToken}"
+
+# 커서 기반 다음 페이지 조회
+curl -X GET "https://api.example.com/api/v1/responses/456/comments?cursor=787&size=20" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}"
 ```

@@ -73,7 +73,7 @@ POST /api/v1/teams
 |-------|------|-------------|
 | teamId | long | 생성된 팀 고유 ID |
 | teamName | string | 생성된 팀 이름 |
-| inviteCode | string | 팀원 초대를 위한 고유 코드 (형식: `INV-XXXX-XXXX`, 8자리 영숫자) |
+| inviteCode | string | 팀원 초대를 위한 고유 코드 (형식: `INV-XXXX-XXXX`, 8자리 영숫자). 생성 후 7일간 유효하며, 만료 후 재발급 가능합니다. |
 
 ## 에러 응답
 

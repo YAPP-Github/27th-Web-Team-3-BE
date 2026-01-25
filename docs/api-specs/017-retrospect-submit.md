@@ -15,6 +15,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | 500 에러 추가, status enum 상세 설명, 응답 필드 설명 보완 |
+| 1.2.0 | 2025-01-25 | 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일 |
 
 ## 엔드포인트
 
@@ -74,7 +75,7 @@ POST /api/v1/retrospects/{retrospectId}/submit
   "message": "회고 제출이 성공적으로 완료되었습니다.",
   "result": {
     "retrospectId": 101,
-    "submittedAt": "2026-01-24T17:00:00",
+    "submittedAt": "2026-01-24",
     "status": "SUBMITTED"
   }
 }
@@ -85,7 +86,7 @@ POST /api/v1/retrospects/{retrospectId}/submit
 | Field | Type | Description |
 |-------|------|-------------|
 | retrospectId | long | 제출된 회고의 고유 ID |
-| submittedAt | string | 최종 제출 일시 (yyyy-MM-ddTHH:mm:ss) |
+| submittedAt | string | 최종 제출 날짜 (YYYY-MM-DD) |
 | status | string (Enum) | 현재 회고 상태 |
 
 ### status Enum 설명

@@ -15,6 +15,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | range enum 검증 규칙, retroCategory enum 설명, 정렬 순서, 에러 조건 상세화 |
+| 1.2.0 | 2025-01-25 | 날짜 포맷을 ISO 8601(YYYY-MM-DD)로 통일 |
 
 ## 엔드포인트
 
@@ -65,7 +66,7 @@ GET /api/v1/retrospects/storage
         "retrospects": [
           {
             "retrospectId": 124,
-            "displayDate": "2026.01.24",
+            "displayDate": "2026-01-24",
             "title": "API 명세 표준화 프로젝트",
             "retroCategory": "KPT",
             "memberCount": 5
@@ -85,7 +86,7 @@ GET /api/v1/retrospects/storage
 | years[].yearLabel | string | 연도 표시 (예: "2026년") |
 | years[].retrospects | array[object] | 해당 연도의 회고 리스트 (최신순 내림차순 정렬) |
 | years[].retrospects[].retrospectId | long | 회고 고유 식별자 |
-| years[].retrospects[].displayDate | string | 화면 표시용 날짜 (예: "2026.01.24") |
+| years[].retrospects[].displayDate | string | 화면 표시용 날짜 (ISO 8601 형식: YYYY-MM-DD, 예: "2026-01-24") |
 | years[].retrospects[].title | string | 회고 제목 (프로젝트명) |
 | years[].retrospects[].retroCategory | string (Enum) | 회고 유형 |
 | years[].retrospects[].memberCount | integer | 참여 인원수 |

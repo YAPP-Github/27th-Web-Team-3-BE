@@ -16,6 +16,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | 500 에러 추가, drafts 배열 검증 규칙 상세화, content null 허용 여부 명시 |
+| 1.2.0 | 2025-01-25 | 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일, 에러 코드 RETRO4031에서 TEAM4031로 변경 |
 
 ## 엔드포인트
 
@@ -88,7 +89,7 @@ PUT /api/v1/retrospects/{retrospectId}/drafts
   "message": "임시 저장이 완료되었습니다.",
   "result": {
     "retrospectId": 101,
-    "updatedAt": "2026-01-24T16:45:00"
+    "updatedAt": "2026-01-24"
   }
 }
 ```
@@ -98,7 +99,7 @@ PUT /api/v1/retrospects/{retrospectId}/drafts
 | Field | Type | Description |
 |-------|------|-------------|
 | retrospectId | long | 해당 회고의 고유 ID |
-| updatedAt | string | 최종 저장 일시 (yyyy-MM-ddTHH:mm:ss) |
+| updatedAt | string | 최종 저장 날짜 (YYYY-MM-DD) |
 
 ## 에러 응답
 
@@ -162,7 +163,7 @@ PUT /api/v1/retrospects/{retrospectId}/drafts
 ```json
 {
   "isSuccess": false,
-  "code": "RETRO4031",
+  "code": "TEAM4031",
   "message": "해당 회고에 작성 권한이 없습니다.",
   "result": null
 }
@@ -197,7 +198,7 @@ PUT /api/v1/retrospects/{retrospectId}/drafts
 | RETRO4003 | 400 | 답변 글자 수 제한 초과 | content가 1,000자 초과 |
 | COMMON400 | 400 | 잘못된 요청 | questionNumber가 1~5 범위 벗어남, 빈 배열, 중복 질문 번호 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
-| RETRO4031 | 403 | 작성 권한 없음 | 해당 회고에 참석자로 등록되지 않은 유저 |
+| TEAM4031 | 403 | 작성 권한 없음 | 해당 회고에 참석자로 등록되지 않은 유저 |
 | RETRO4041 | 404 | 존재하지 않는 회고 | 해당 retrospectId의 회고가 DB에 없음 |
 | COMMON500 | 500 | 서버 내부 에러 | DB 연결 실패, 트랜잭션 오류 등 |
 

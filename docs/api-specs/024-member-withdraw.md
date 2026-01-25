@@ -1,4 +1,4 @@
-# [API-024] DELETE /api/v1/members/me
+# [API-024] POST /api/v1/members/withdraw
 
 서비스 탈퇴 API
 
@@ -15,11 +15,12 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | withdrawalReason 검증 규칙, 응답 필드 설명, 에러 발생 조건 상세화 |
+| 2.0.0 | 2025-01-25 | DELETE → POST 메서드로 변경 (HTTP 표준 준수) |
 
 ## 엔드포인트
 
 ```
-DELETE /api/v1/members/me
+POST /api/v1/members/withdraw
 ```
 
 ## 인증
@@ -32,6 +33,7 @@ DELETE /api/v1/members/me
 
 | Header | Value | Required |
 |--------|-------|----------|
+| Content-Type | application/json | Yes |
 | Authorization | Bearer {accessToken} | Yes |
 
 ### Body
@@ -144,7 +146,8 @@ DELETE /api/v1/members/me
 ### cURL
 
 ```bash
-curl -X DELETE https://api.example.com/api/v1/members/me \
+curl -X POST https://api.example.com/api/v1/members/withdraw \
+  -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
     "withdrawalReason": "더 이상 회고를 작성할 필요가 없습니다."

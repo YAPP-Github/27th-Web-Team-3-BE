@@ -15,6 +15,7 @@
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
+| 1.1.0 | 2025-01-25 | 날짜 포맷을 ISO 8601(YYYY-MM-DD)로 명시 |
 
 ## 엔드포인트
 
@@ -78,7 +79,7 @@ GET /api/v1/retrospects/search
 | projectName | string | 회고 이름 (프로젝트명) |
 | teamName | string | 해당 회고가 속한 팀 이름 |
 | retrospectMethod | string | 회고 방식 |
-| retrospectDate | string | 회고 날짜 (yyyy-MM-dd) |
+| retrospectDate | string | 회고 날짜 (ISO 8601 형식: YYYY-MM-DD) |
 | retrospectTime | string | 회고 시간 (HH:mm) |
 
 ### retrospectMethod Enum 설명

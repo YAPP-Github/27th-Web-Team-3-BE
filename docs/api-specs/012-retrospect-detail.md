@@ -14,6 +14,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | Path Parameter 검증, Enum 설명, 정렬 순서 추가 |
+| 1.2.0 | 2025-01-25 | teamId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일 |
 
 ## 엔드포인트
 
@@ -50,8 +51,9 @@ GET /api/v1/retrospects/{retrospectId}
   "code": "COMMON200",
   "message": "회고 상세 정보 조회를 성공했습니다.",
   "result": {
+    "teamId": 789,
     "title": "3차 스프린트 회고",
-    "startTime": "2026-01-24T20:00:00",
+    "startTime": "2026-01-24",
     "retroCategory": "KPT",
     "members": [
       { "memberId": 1, "userName": "김민철" },
@@ -62,7 +64,15 @@ GET /api/v1/retrospects/{retrospectId}
     "questions": [
       {
         "index": 1,
-        "content": "이번 프로젝트에서 잘했던 점은 무엇인가요?"
+        "content": "계속 유지하고 싶은 좋은 점은 무엇인가요?"
+      },
+      {
+        "index": 2,
+        "content": "개선이 필요한 문제점은 무엇인가요?"
+      },
+      {
+        "index": 3,
+        "content": "다음에 시도해보고 싶은 것은 무엇인가요?"
       }
     ]
   }
@@ -73,8 +83,9 @@ GET /api/v1/retrospects/{retrospectId}
 
 | Field | Type | Description |
 |-------|------|-------------|
+| teamId | long | 회고가 속한 팀의 고유 ID |
 | title | string | 회고 제목 (프로젝트명) |
-| startTime | string | 회고 시작 일시 (yyyy-MM-ddTHH:mm:ss) |
+| startTime | string | 회고 시작 날짜 (YYYY-MM-DD) |
 | retroCategory | string (Enum) | 회고 유형 |
 | members | array[object] | 참여 멤버 리스트 (참석 등록일 기준 오름차순 정렬) |
 | members[].memberId | long | 멤버 고유 식별자 |
@@ -83,7 +94,7 @@ GET /api/v1/retrospects/{retrospectId}
 | totalCommentCount | integer | 회고 전체 댓글 합계 |
 | questions | array[object] | 해당 회고의 질문 리스트 (index 기준 오름차순 정렬, 최대 5개) |
 | questions[].index | integer | 질문 순서 (1~5) |
-| questions[].content | string | 질문 내용 |
+| questions[].content | string | 질문 내용 (회고 생성 시 retrospectMethod에 따라 자동 생성) |
 
 ### retroCategory Enum 설명
 

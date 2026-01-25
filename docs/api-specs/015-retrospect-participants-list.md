@@ -12,6 +12,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | 500 에러 추가, Path Parameter 검증, 배열 정렬 순서, 에러 조건 상세화 |
+| 1.2.0 | 2025-01-25 | 질문 생성 로직 명시 (회고 방식별 기본 질문) |
 
 ## 엔드포인트
 
@@ -56,15 +57,23 @@ GET /api/v1/retrospects/{retrospectId}/participants
     "questions": [
       {
         "questionId": 1,
-        "content": "이번 프로젝트에서 가장 좋았던 점은 무엇인가요? (Keep)"
+        "content": "계속 유지하고 싶은 좋은 점은 무엇인가요?"
       },
       {
         "questionId": 2,
-        "content": "진행 과정에서 겪은 어려움은 무엇이었나요? (Problem)"
+        "content": "개선이 필요한 문제점은 무엇인가요?"
       },
       {
         "questionId": 3,
-        "content": "다음 프로젝트에서 개선하고 싶은 점은? (Try)"
+        "content": "다음에 시도해보고 싶은 것은 무엇인가요?"
+      },
+      {
+        "questionId": 4,
+        "content": "전체 프로젝트를 돌아보며 느낀 점을 자유롭게 작성해주세요."
+      },
+      {
+        "questionId": 5,
+        "content": "추가로 공유하고 싶은 의견이 있나요?"
       }
     ]
   }
@@ -78,9 +87,9 @@ GET /api/v1/retrospects/{retrospectId}/participants
 | totalCount | integer | 총 참여 등록 인원수 |
 | participants | array[object] | 참여자 목록 (참석 등록일 기준 오름차순 정렬) |
 | participants[].nickname | string | 참여자 닉네임 |
-| questions | array[object] | 해당 회고의 질문 리스트 (questionId 기준 오름차순 정렬) |
+| questions | array[object] | 해당 회고의 질문 리스트 (questionId 기준 오름차순 정렬, 정확히 5개) |
 | questions[].questionId | long | 질문 고유 식별자 |
-| questions[].content | string | 질문 내용 |
+| questions[].content | string | 질문 내용 (회고 생성 시 retrospectMethod에 따라 자동 생성, 상세 내용은 API-011 참조) |
 
 ### 정렬 순서
 

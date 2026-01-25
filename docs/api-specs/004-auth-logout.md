@@ -1,4 +1,4 @@
-# [API-003] POST /api/v1/auth/logout
+# [API-004] POST /api/v1/auth/logout
 
 로그아웃 API
 
@@ -11,9 +11,17 @@
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
+| 1.1.0 | 2025-01-25 | API 번호 변경 (003 → 004), 토큰 TTL 정보 추가 |
 
 - 서버에 저장된 **Refresh Token**을 삭제하거나 무효화하여 보안을 유지합니다.
 - 로그아웃 성공 후 해당 Refresh Token을 이용한 Access Token 재발급은 불가능해집니다.
+
+### 토큰 유효기간 (TTL)
+
+| 토큰 타입 | 유효기간 | 설명 |
+|----------|---------|------|
+| accessToken | 30분 | API 요청 시 인증에 사용 |
+| refreshToken | 14일 | accessToken 재발급에 사용, 로그아웃 시 무효화 대상 |
 
 ## 엔드포인트
 
@@ -46,7 +54,7 @@ POST /api/v1/auth/logout
 
 | Field | Type | Required | Description | Validation |
 |-------|------|----------|-------------|------------|
-| refreshToken | string | Yes | 서버에서 무효화 처리할 리프레시 토큰 | - |
+| refreshToken | string | Yes | 서버에서 무효화 처리할 리프레시 토큰 (유효기간: 14일) | - |
 
 > **참고**: `refreshToken`을 요청 Body에 포함하는 이유는 다중 기기 로그인 지원을 위해서입니다. 사용자가 여러 기기에서 로그인한 경우, 특정 기기만 로그아웃할 수 있도록 해당 기기의 Refresh Token을 명시적으로 무효화합니다.
 

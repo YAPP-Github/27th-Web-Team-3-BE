@@ -11,8 +11,16 @@
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
+| 1.1.0 | 2025-01-25 | 토큰 유효기간(TTL) 정보 추가 |
 
 - 이 API는 **Access Token(JWT)**을 헤더로 전달받아 인증된 상태에서 호출되어야 합니다.
+
+### 토큰 유효기간 (TTL)
+
+| 토큰 타입 | 유효기간 | 설명 |
+|----------|---------|------|
+| accessToken | 30분 | API 요청 시 인증에 사용, 만료 시 refreshToken으로 재발급 필요 |
+| refreshToken | 14일 | accessToken 재발급에 사용, 만료 시 재로그인 필요 |
 
 ## 엔드포인트
 
@@ -73,8 +81,8 @@ POST /api/v1/auth/signup
 |-------|------|-------------|
 | memberId | long | 생성된 회원의 고유 식별자 |
 | nickname | string | 설정된 닉네임 |
-| accessToken | string | 서비스 자체 Access Token |
-| refreshToken | string | 서비스 자체 Refresh Token |
+| accessToken | string | 서비스 자체 Access Token (유효기간: 30분) |
+| refreshToken | string | 서비스 자체 Refresh Token (유효기간: 14일) |
 
 ## 에러 응답
 
