@@ -63,7 +63,13 @@ impl RetrospectService {
 
         // 6. 회고방 생성
         let now = Utc::now().naive_utc();
-        let invitation_url = format!("https://retro.example.com/room/{}", uuid::Uuid::new_v4());
+        let base_url = std::env::var("INVITATION_BASE_URL")
+            .unwrap_or_else(|_| "https://retro.example.com".to_string());
+        let invitation_url = format!(
+            "{}/room/{}",
+            base_url.trim_end_matches('/'),
+            uuid::Uuid::new_v4()
+        );
 
         let retro_room_model = retro_room::ActiveModel {
             title: Set(req.project_name.clone()),

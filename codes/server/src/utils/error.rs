@@ -129,7 +129,7 @@ impl From<JsonRejection> for AppError {
         let message = rejection.to_string();
 
         // retrospectMethod 필드의 enum 파싱 실패 감지
-        if message.contains("retrospectMethod") || message.contains("unknown variant") {
+        if message.contains("retrospectMethod") && message.contains("unknown variant") {
             return AppError::RetroMethodInvalid("유효하지 않은 회고 방식입니다.".to_string());
         }
 
