@@ -1,5 +1,7 @@
 use chrono::{NaiveDate, Utc};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
+};
 use std::collections::HashSet;
 
 use crate::domain::retrospect::entity::response;
@@ -11,7 +13,7 @@ use crate::domain::team::entity::team;
 use crate::state::AppState;
 use crate::utils::error::AppError;
 
-use super::dto::{CreateRetrospectRequest, CreateRetrospectResponse};
+use super::dto::{CreateRetrospectRequest, CreateRetrospectResponse, TeamRetrospectListItem};
 
 pub struct RetrospectService;
 
@@ -214,6 +216,53 @@ impl RetrospectService {
         }
 
         Ok(date)
+    }
+
+    /// 팀 회고 목록 조회 (API-010)
+    pub async fn list_team_retrospects(
+        state: AppState,
+        user_id: i64,
+        team_id: i64,
+    ) -> Result<Vec<TeamRetrospectListItem>, AppError> {
+        // 1. 팀 존재 여부 확인
+        let team_exists = team::Entity::find_by_id(team_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if team_exists.is_none() {
+            return Err(AppError::TeamNotFound(
+                "존재하지 않는 팀입니다.".to_string(),
+            ));
+        }
+
+        // 2. 팀 멤버십 확인
+        let is_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(team_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_member.is_none() {
+            return Err(AppError::TeamAccessDenied(
+                "해당 팀에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 3. 팀에 속한 회고 목록 조회 (최신순 정렬)
+        let retrospects = retrospect::Entity::find()
+            .filter(retrospect::Column::TeamId.eq(team_id))
+            .order_by_desc(retrospect::Column::StartTime)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 4. DTO 변환
+        let result: Vec<TeamRetrospectListItem> =
+            retrospects.into_iter().map(|r| r.into()).collect();
+
+        Ok(result)
     }
 }
 

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
-use super::entity::retrospect::RetrospectMethod;
+use super::entity::retrospect::{Model as RetrospectModel, RetrospectMethod};
 
 /// 회고 생성 요청 DTO
 #[derive(Debug, Deserialize, Validate, ToSchema)]
@@ -57,6 +57,48 @@ pub struct SuccessCreateRetrospectResponse {
     pub code: String,
     pub message: String,
     pub result: CreateRetrospectResponse,
+}
+
+// ============================================
+// API-010: 팀 회고 목록 조회 DTO
+// ============================================
+
+/// 팀 회고 목록 아이템 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamRetrospectListItem {
+    /// 회고 고유 식별자
+    pub retrospect_id: i64,
+    /// 프로젝트 이름
+    pub project_name: String,
+    /// 회고 방식
+    pub retrospect_method: RetrospectMethod,
+    /// 회고 날짜 (yyyy-MM-dd)
+    pub retrospect_date: String,
+    /// 회고 시간 (HH:mm)
+    pub retrospect_time: String,
+}
+
+impl From<RetrospectModel> for TeamRetrospectListItem {
+    fn from(model: RetrospectModel) -> Self {
+        Self {
+            retrospect_id: model.retrospect_id,
+            project_name: model.title,
+            retrospect_method: model.retrospect_method,
+            retrospect_date: model.start_time.format("%Y-%m-%d").to_string(),
+            retrospect_time: model.start_time.format("%H:%M").to_string(),
+        }
+    }
+}
+
+/// Swagger용 팀 회고 목록 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessTeamRetrospectListResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: Vec<TeamRetrospectListItem>,
 }
 
 #[cfg(test)]
