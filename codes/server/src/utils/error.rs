@@ -1,5 +1,5 @@
 use axum::{
-    extract::rejection::JsonRejection,
+    extract::rejection::{JsonRejection, QueryRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -127,6 +127,13 @@ impl IntoResponse for AppError {
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
         AppError::JsonParseFailed(rejection.to_string())
+    }
+}
+
+/// QueryRejection을 AppError로 변환
+impl From<QueryRejection> for AppError {
+    fn from(rejection: QueryRejection) -> Self {
+        AppError::BadRequest(rejection.to_string())
     }
 }
 
