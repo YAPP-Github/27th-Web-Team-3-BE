@@ -42,10 +42,11 @@
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `src/domain/retrospect/dto.rs` | UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse DTO 추가 + 단위 테스트 5개 |
+| `src/domain/retrospect/dto.rs` | UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse DTO 추가 |
 | `src/domain/retrospect/service.rs` | `update_retro_room_name()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `update_retro_room_name` 핸들러 추가 + Swagger 문서화 |
 | `src/utils/error.rs` | NoRoomPermission 에러 타입 추가 |
+| `src/tests/api_008_retro_room_name_test.rs` | 단위 테스트 10개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -74,7 +75,7 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 - dto.rs (5개)
+### 단위 테스트 (10개) - `src/tests/api_008_retro_room_name_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|
@@ -82,7 +83,11 @@
 | `should_fail_validation_when_name_is_empty` | 빈 문자열 → 검증 실패 |
 | `should_fail_validation_when_name_exceeds_20_chars` | 21자 이상 → 검증 실패 |
 | `should_allow_name_with_exactly_20_chars` | 정확히 20자 → 검증 통과 |
-| `should_serialize_name_update_response_in_camel_case` | 응답이 camelCase로 직렬화됨 (retroRoomId, retroRoomName, updatedAt) |
+| `should_allow_name_with_exactly_1_char` | 정확히 1자 → 검증 통과 |
+| `should_allow_name_with_korean_characters` | 한글 이름 허용 검증 |
+| `should_allow_name_with_special_characters` | 특수문자 포함 이름 허용 검증 |
+| `should_serialize_name_update_response_in_camel_case` | 응답이 camelCase로 직렬화됨 |
+| `should_deserialize_name_request_from_camel_case` | 요청 역직렬화 검증 |
 
 ## 코드 리뷰 체크리스트
 
@@ -97,7 +102,7 @@
 
 ## 품질 검증 결과
 ```text
-cargo test     → 31 passed, 0 failed
+cargo test     → 48 passed, 0 failed
 cargo clippy   → 0 errors, 0 warnings
 cargo fmt      → clean
 ```

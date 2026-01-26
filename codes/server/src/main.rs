@@ -1,6 +1,8 @@
 mod config;
 mod domain;
 mod state;
+#[cfg(test)]
+mod tests;
 mod utils;
 
 use axum::{routing::get, Router};

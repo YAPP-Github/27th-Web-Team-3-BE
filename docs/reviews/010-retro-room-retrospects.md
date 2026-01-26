@@ -46,9 +46,10 @@
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `src/domain/retrospect/dto.rs` | RetrospectListItem, SuccessRetrospectListResponse DTO 추가 + 단위 테스트 2개 |
+| `src/domain/retrospect/dto.rs` | RetrospectListItem, SuccessRetrospectListResponse DTO 추가 |
 | `src/domain/retrospect/service.rs` | `list_retrospects()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `list_retrospects` 핸들러 추가 + Swagger 문서화 |
+| `src/tests/api_010_retro_room_retrospects_test.rs` | 단위 테스트 5개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -91,12 +92,15 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 - dto.rs (2개)
+### 단위 테스트 (5개) - `src/tests/api_010_retro_room_retrospects_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|
-| `should_serialize_retrospect_list_item_in_camel_case` | RetrospectListItem이 camelCase로 직렬화됨 (retrospectId, projectName, retrospectMethod, retrospectDate, retrospectTime) |
+| `should_serialize_retrospect_list_item_in_camel_case` | RetrospectListItem이 camelCase로 직렬화됨 |
 | `should_serialize_empty_retrospect_list` | 빈 배열 응답 시 `"result":[]` 형태로 직렬화됨 |
+| `should_serialize_list_with_multiple_retrospects` | 다중 회고 목록 직렬화 검증 |
+| `should_preserve_retrospect_method_values` | 모든 retrospectMethod 값 보존 검증 (KPT, FOUR_L, FIVE_F, PMI, FREE) |
+| `should_preserve_date_format` | 날짜/시간 포맷 보존 검증 |
 
 ## 코드 리뷰 체크리스트
 
@@ -111,7 +115,7 @@
 
 ## 품질 검증 결과
 ```text
-cargo test     → 31 passed, 0 failed
+cargo test     → 48 passed, 0 failed
 cargo clippy   → 0 errors, 0 warnings
 cargo fmt      → clean
 ```

@@ -41,10 +41,11 @@
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `src/domain/retrospect/dto.rs` | RetroRoomListItem, SuccessRetroRoomListResponse DTO 추가 + 단위 테스트 2개 |
+| `src/domain/retrospect/dto.rs` | RetroRoomListItem, SuccessRetroRoomListResponse DTO 추가 |
 | `src/domain/retrospect/service.rs` | `list_retro_rooms()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `list_retro_rooms` 핸들러 추가 + Swagger 문서화 |
 | `src/domain/member/entity/member_retro_room.rs` | `order_index: i32` 필드 추가 |
+| `src/tests/api_006_retro_room_list_test.rs` | 단위 테스트 4개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -64,12 +65,14 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 - dto.rs (2개)
+### 단위 테스트 (4개) - `src/tests/api_006_retro_room_list_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|
-| `should_serialize_list_item_in_camel_case` | RetroRoomListItem이 camelCase로 직렬화됨 (retroRoomId, retroRoomName, orderIndex) |
+| `should_serialize_list_item_in_camel_case` | RetroRoomListItem이 camelCase로 직렬화됨 |
 | `should_serialize_empty_list_response` | 빈 배열 응답 시 `"result":[]` 형태로 직렬화됨 |
+| `should_serialize_list_with_multiple_items` | 다중 아이템 목록 직렬화 검증 |
+| `should_preserve_order_index_values` | order_index 값이 보존되는지 검증 |
 
 ## 코드 리뷰 체크리스트
 
@@ -84,7 +87,7 @@
 
 ## 품질 검증 결과
 ```text
-cargo test     → 31 passed, 0 failed
+cargo test     → 48 passed, 0 failed
 cargo clippy   → 0 errors, 0 warnings
 cargo fmt      → clean
 ```

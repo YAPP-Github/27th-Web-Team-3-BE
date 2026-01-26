@@ -41,10 +41,11 @@
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `src/domain/retrospect/dto.rs` | JoinRetroRoomRequest, JoinRetroRoomResponse DTO 추가 + 단위 테스트 3개 |
-| `src/domain/retrospect/service.rs` | `join_retro_room()`, `extract_invite_code()` 메서드 추가 + 단위 테스트 6개 |
+| `src/domain/retrospect/dto.rs` | JoinRetroRoomRequest, JoinRetroRoomResponse DTO 추가 |
+| `src/domain/retrospect/service.rs` | `join_retro_room()`, `extract_invite_code()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `join_retro_room` 핸들러 추가 + Swagger 문서화 |
 | `src/utils/error.rs` | InvalidInviteLink, ExpiredInviteLink, AlreadyMember 에러 타입 추가 |
+| `src/tests/api_005_retro_room_join_test.rs` | 단위 테스트 10개 |
 | `src/main.rs` | 라우트 등록 + OpenAPI 스키마/경로 추가 |
 
 ## 비즈니스 로직
@@ -77,18 +78,14 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 - dto.rs (3개)
+### 단위 테스트 (10개) - `src/tests/api_005_retro_room_join_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|
 | `should_validate_join_request_with_valid_url` | 유효한 URL로 요청 시 검증 통과 |
 | `should_fail_validation_with_invalid_url_format` | 잘못된 URL 형식 → 검증 실패 |
+| `should_validate_join_request_with_query_param_url` | 쿼리 파라미터 형식 URL 검증 통과 |
 | `should_serialize_join_response_in_camel_case` | 응답이 camelCase로 직렬화됨 |
-
-### 단위 테스트 - service.rs (6개)
-
-| 테스트 | 검증 내용 |
-|--------|----------|
 | `should_extract_invite_code_from_path_segment` | Path segment에서 초대 코드 추출 |
 | `should_extract_invite_code_from_query_parameter` | Query parameter에서 초대 코드 추출 |
 | `should_extract_invite_code_from_query_with_multiple_params` | 다중 쿼리 파라미터에서 code 추출 |
@@ -109,7 +106,7 @@
 
 ## 품질 검증 결과
 ```text
-cargo test     → 31 passed, 0 failed
+cargo test     → 48 passed, 0 failed
 cargo clippy   → 0 errors, 0 warnings
 cargo fmt      → clean
 ```

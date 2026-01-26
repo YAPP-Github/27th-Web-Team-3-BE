@@ -377,8 +377,8 @@ impl RetrospectService {
         Ok(result)
     }
 
-    fn generate_invite_code() -> String {
-        // Simple random-ish code generator
+    /// 초대 코드 생성 (형식: INV-XXXX-XXXX)
+    pub fn generate_invite_code() -> String {
         let now = Utc::now().timestamp_nanos_opt().unwrap_or(0);
         let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let mut code = String::from("INV-");
@@ -400,7 +400,7 @@ impl RetrospectService {
     /// 지원 형식:
     /// - Path segment: `https://service.com/invite/INV-A1B2-C3D4`
     /// - Query parameter: `https://service.com/join?code=INV-A1B2-C3D4`
-    fn extract_invite_code(invite_url: &str) -> Result<String, AppError> {
+    pub fn extract_invite_code(invite_url: &str) -> Result<String, AppError> {
         // 1. 쿼리 파라미터 형식 확인 (?code=...)
         if let Some(query_start) = invite_url.find('?') {
             let query_string = &invite_url[query_start + 1..];
@@ -425,83 +425,5 @@ impl RetrospectService {
         Err(AppError::InvalidInviteLink(
             "유효하지 않은 초대 링크입니다.".into(),
         ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn should_extract_invite_code_from_path_segment() {
-        // Arrange
-        let url = "https://service.com/invite/INV-A1B2-C3D4";
-
-        // Act
-        let result = RetrospectService::extract_invite_code(url);
-
-        // Assert
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "INV-A1B2-C3D4");
-    }
-
-    #[test]
-    fn should_extract_invite_code_from_query_parameter() {
-        // Arrange
-        let url = "https://service.com/join?code=INV-A1B2-C3D4";
-
-        // Act
-        let result = RetrospectService::extract_invite_code(url);
-
-        // Assert
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "INV-A1B2-C3D4");
-    }
-
-    #[test]
-    fn should_extract_invite_code_from_query_with_multiple_params() {
-        // Arrange
-        let url = "https://service.com/join?ref=abc&code=INV-TEST-1234&foo=bar";
-
-        // Act
-        let result = RetrospectService::extract_invite_code(url);
-
-        // Assert
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "INV-TEST-1234");
-    }
-
-    #[test]
-    fn should_return_error_for_invalid_url() {
-        // Arrange
-        let url = "https://service.com/invalid/path";
-
-        // Act
-        let result = RetrospectService::extract_invite_code(url);
-
-        // Assert
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn should_return_error_for_empty_code() {
-        // Arrange
-        let url = "https://service.com/join?code=";
-
-        // Act
-        let result = RetrospectService::extract_invite_code(url);
-
-        // Assert
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn should_generate_valid_invite_code() {
-        // Act
-        let code = RetrospectService::generate_invite_code();
-
-        // Assert
-        assert!(code.starts_with("INV-"));
-        assert!(code.len() > 4);
     }
 }

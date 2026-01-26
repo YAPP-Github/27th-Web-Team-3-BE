@@ -40,10 +40,11 @@
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `src/domain/retrospect/dto.rs` | RetroRoomOrderItem, UpdateRetroRoomOrderRequest, SuccessEmptyResponse DTO 추가 + 단위 테스트 5개 |
+| `src/domain/retrospect/dto.rs` | RetroRoomOrderItem, UpdateRetroRoomOrderRequest, SuccessEmptyResponse DTO 추가 |
 | `src/domain/retrospect/service.rs` | `update_retro_room_order()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `update_retro_room_order` 핸들러 추가 + Swagger 문서화 |
 | `src/utils/error.rs` | InvalidOrderData, NoPermission 에러 타입 추가 |
+| `src/tests/api_007_retro_room_order_test.rs` | 단위 테스트 8개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -72,7 +73,7 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 - dto.rs (5개)
+### 단위 테스트 (8개) - `src/tests/api_007_retro_room_order_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|
@@ -80,7 +81,10 @@
 | `should_fail_validation_when_order_list_is_empty` | 빈 배열 → 검증 실패 |
 | `should_fail_validation_when_order_index_is_zero` | orderIndex=0 → 검증 실패 |
 | `should_fail_validation_when_order_index_is_negative` | orderIndex=-1 → 검증 실패 |
+| `should_validate_order_index_with_large_value` | 큰 orderIndex 값 허용 검증 |
 | `should_deserialize_order_request_from_camel_case` | camelCase JSON 역직렬화 검증 |
+| `should_deserialize_order_request_with_multiple_items` | 다중 아이템 역직렬화 검증 |
+| `should_serialize_order_item_in_camel_case` | camelCase 직렬화 검증 |
 
 ## 코드 리뷰 체크리스트
 
@@ -95,7 +99,7 @@
 
 ## 품질 검증 결과
 ```text
-cargo test     → 31 passed, 0 failed
+cargo test     → 48 passed, 0 failed
 cargo clippy   → 0 errors, 0 warnings
 cargo fmt      → clean
 ```

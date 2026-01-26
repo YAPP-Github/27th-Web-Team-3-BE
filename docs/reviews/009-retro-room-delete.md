@@ -34,9 +34,10 @@
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `src/domain/retrospect/dto.rs` | DeleteRetroRoomResponse, SuccessDeleteRetroRoomResponse DTO 추가 + 단위 테스트 1개 |
+| `src/domain/retrospect/dto.rs` | DeleteRetroRoomResponse, SuccessDeleteRetroRoomResponse DTO 추가 |
 | `src/domain/retrospect/service.rs` | `delete_retro_room()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `delete_retro_room` 핸들러 추가 + Swagger 문서화 |
+| `src/tests/api_009_retro_room_delete_test.rs` | 단위 테스트 3개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -67,11 +68,13 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 - dto.rs (1개)
+### 단위 테스트 (3개) - `src/tests/api_009_retro_room_delete_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|
-| `should_serialize_delete_response_in_camel_case` | 응답이 camelCase로 직렬화됨 (retroRoomId, deletedAt) |
+| `should_serialize_delete_response_in_camel_case` | 응답이 camelCase로 직렬화됨 |
+| `should_serialize_success_delete_response` | 전체 성공 응답 직렬화 검증 |
+| `should_preserve_timestamp_format` | 타임스탬프 포맷 보존 검증 |
 
 ## 코드 리뷰 체크리스트
 
@@ -86,7 +89,7 @@
 
 ## 품질 검증 결과
 ```text
-cargo test     → 31 passed, 0 failed
+cargo test     → 48 passed, 0 failed
 cargo clippy   → 0 errors, 0 warnings
 cargo fmt      → clean
 ```
