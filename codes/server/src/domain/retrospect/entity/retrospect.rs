@@ -6,6 +6,7 @@ use utoipa::ToSchema;
     Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, ToSchema,
 )]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "RetroCategory")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RetroCategory {
     /// Keep-Problem-Try
     #[sea_orm(string_value = "KPT")]

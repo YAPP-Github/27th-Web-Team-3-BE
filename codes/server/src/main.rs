@@ -18,9 +18,10 @@ use crate::domain::auth::dto::{
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
-    StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessStorageResponse,
-    SuccessSubmitRetrospectResponse,
+    RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem, StorageRangeFilter,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessRetrospectDetailResponse,
+    SuccessStorageResponse, SuccessSubmitRetrospectResponse,
 };
 use crate::domain::retrospect::entity::retrospect::RetroCategory;
 use crate::state::AppState;
@@ -34,6 +35,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::auth::handler::login,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
+        domain::retrospect::handler::get_retrospect_detail,
         domain::retrospect::handler::submit_retrospect,
         domain::retrospect::handler::get_storage
     ),
@@ -56,6 +58,10 @@ use crate::utils::{BaseResponse, ErrorResponse};
             StorageYearGroup,
             StorageResponse,
             SuccessStorageResponse,
+            RetrospectDetailResponse,
+            RetrospectMemberItem,
+            RetrospectQuestionItem,
+            SuccessRetrospectDetailResponse,
             RetroCategory
         )
     ),
@@ -137,6 +143,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/storage",
             axum::routing::get(domain::retrospect::handler::get_storage),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id",
+            axum::routing::get(domain::retrospect::handler::get_retrospect_detail),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/submit",

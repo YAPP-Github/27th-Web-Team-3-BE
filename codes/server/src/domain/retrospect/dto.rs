@@ -147,6 +147,62 @@ pub struct SuccessStorageResponse {
     pub result: StorageResponse,
 }
 
+// ============================================
+// API-012: 회고 상세 정보 조회 DTO
+// ============================================
+
+/// 회고 상세 정보 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetrospectDetailResponse {
+    /// 회고가 속한 팀의 고유 ID
+    pub team_id: i64,
+    /// 회고 제목 (프로젝트명)
+    pub title: String,
+    /// 회고 시작 날짜 (YYYY-MM-DD)
+    pub start_time: String,
+    /// 회고 유형
+    pub retro_category: RetroCategory,
+    /// 참여 멤버 리스트 (참석 등록일 기준 오름차순 정렬)
+    pub members: Vec<RetrospectMemberItem>,
+    /// 회고 전체 좋아요 합계
+    pub total_like_count: i64,
+    /// 회고 전체 댓글 합계
+    pub total_comment_count: i64,
+    /// 해당 회고의 질문 리스트 (index 기준 오름차순 정렬, 최대 5개)
+    pub questions: Vec<RetrospectQuestionItem>,
+}
+
+/// 회고 참여 멤버 아이템
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetrospectMemberItem {
+    /// 멤버 고유 식별자
+    pub member_id: i64,
+    /// 멤버 이름 (닉네임)
+    pub user_name: String,
+}
+
+/// 회고 질문 아이템
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetrospectQuestionItem {
+    /// 질문 순서 (1~5)
+    pub index: i32,
+    /// 질문 내용
+    pub content: String,
+}
+
+/// Swagger용 회고 상세 정보 조회 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessRetrospectDetailResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: RetrospectDetailResponse,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +315,161 @@ mod tests {
 
         // Assert
         assert_eq!(json["years"].as_array().unwrap().len(), 0);
+    }
+
+    // ========================================
+    // API-012: RetrospectDetailResponse 테스트
+    // ========================================
+
+    #[test]
+    fn should_serialize_retrospect_detail_response_in_camel_case() {
+        // Arrange
+        let response = RetrospectDetailResponse {
+            team_id: 789,
+            title: "3차 스프린트 회고".to_string(),
+            start_time: "2026-01-24".to_string(),
+            retro_category: RetroCategory::Kpt,
+            members: vec![
+                RetrospectMemberItem {
+                    member_id: 1,
+                    user_name: "김민철".to_string(),
+                },
+                RetrospectMemberItem {
+                    member_id: 2,
+                    user_name: "카이".to_string(),
+                },
+            ],
+            total_like_count: 156,
+            total_comment_count: 42,
+            questions: vec![
+                RetrospectQuestionItem {
+                    index: 1,
+                    content: "계속 유지하고 싶은 좋은 점은 무엇인가요?".to_string(),
+                },
+                RetrospectQuestionItem {
+                    index: 2,
+                    content: "개선이 필요한 문제점은 무엇인가요?".to_string(),
+                },
+                RetrospectQuestionItem {
+                    index: 3,
+                    content: "다음에 시도해보고 싶은 것은 무엇인가요?".to_string(),
+                },
+            ],
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["teamId"], 789);
+        assert_eq!(json["title"], "3차 스프린트 회고");
+        assert_eq!(json["startTime"], "2026-01-24");
+        assert_eq!(json["retroCategory"], "KPT");
+        assert_eq!(json["totalLikeCount"], 156);
+        assert_eq!(json["totalCommentCount"], 42);
+
+        // members 검증
+        let members = json["members"].as_array().unwrap();
+        assert_eq!(members.len(), 2);
+        assert_eq!(members[0]["memberId"], 1);
+        assert_eq!(members[0]["userName"], "김민철");
+        assert_eq!(members[1]["memberId"], 2);
+        assert_eq!(members[1]["userName"], "카이");
+
+        // questions 검증
+        let questions = json["questions"].as_array().unwrap();
+        assert_eq!(questions.len(), 3);
+        assert_eq!(questions[0]["index"], 1);
+        assert!(questions[0]["content"].as_str().unwrap().contains("유지"));
+        assert_eq!(questions[1]["index"], 2);
+        assert_eq!(questions[2]["index"], 3);
+    }
+
+    #[test]
+    fn should_serialize_retrospect_detail_with_empty_members_and_questions() {
+        // Arrange
+        let response = RetrospectDetailResponse {
+            team_id: 1,
+            title: "빈 회고".to_string(),
+            start_time: "2026-01-01".to_string(),
+            retro_category: RetroCategory::Free,
+            members: vec![],
+            total_like_count: 0,
+            total_comment_count: 0,
+            questions: vec![],
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["members"].as_array().unwrap().len(), 0);
+        assert_eq!(json["questions"].as_array().unwrap().len(), 0);
+        assert_eq!(json["totalLikeCount"], 0);
+        assert_eq!(json["totalCommentCount"], 0);
+        assert_eq!(json["retroCategory"], "FREE");
+    }
+
+    #[test]
+    fn should_serialize_all_retro_categories_correctly() {
+        // Arrange & Act & Assert
+        let categories = vec![
+            (RetroCategory::Kpt, "KPT"),
+            (RetroCategory::FourL, "FOUR_L"),
+            (RetroCategory::FiveF, "FIVE_F"),
+            (RetroCategory::Pmi, "PMI"),
+            (RetroCategory::Free, "FREE"),
+        ];
+
+        for (category, expected) in categories {
+            let response = RetrospectDetailResponse {
+                team_id: 1,
+                title: "테스트".to_string(),
+                start_time: "2026-01-01".to_string(),
+                retro_category: category,
+                members: vec![],
+                total_like_count: 0,
+                total_comment_count: 0,
+                questions: vec![],
+            };
+
+            let json = serde_json::to_value(&response).unwrap();
+            assert_eq!(json["retroCategory"], expected);
+        }
+    }
+
+    #[test]
+    fn should_serialize_member_item_in_camel_case() {
+        // Arrange
+        let member = RetrospectMemberItem {
+            member_id: 42,
+            user_name: "테스트유저".to_string(),
+        };
+
+        // Act
+        let json = serde_json::to_value(&member).unwrap();
+
+        // Assert
+        assert_eq!(json["memberId"], 42);
+        assert_eq!(json["userName"], "테스트유저");
+        // snake_case 키가 없는지 확인
+        assert!(json.get("member_id").is_none());
+        assert!(json.get("user_name").is_none());
+    }
+
+    #[test]
+    fn should_serialize_question_item_in_camel_case() {
+        // Arrange
+        let question = RetrospectQuestionItem {
+            index: 3,
+            content: "테스트 질문입니다".to_string(),
+        };
+
+        // Act
+        let json = serde_json::to_value(&question).unwrap();
+
+        // Assert
+        assert_eq!(json["index"], 3);
+        assert_eq!(json["content"], "테스트 질문입니다");
     }
 }

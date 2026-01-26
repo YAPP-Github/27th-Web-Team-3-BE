@@ -19,6 +19,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub member_id: i64,
     pub email: String,
+    pub nickname: String,
     pub insight_count: i32,
     #[sea_orm(column_name = "SocialType")]
     pub social_type: SocialType,

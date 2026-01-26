@@ -46,6 +46,9 @@ pub enum AppError {
 
     /// RETRO4033: 이미 제출 완료 (403)
     RetroAlreadySubmitted(String),
+
+    /// TEAM4031: 팀 접근 권한 없음 (403)
+    TeamAccessDenied(String),
 }
 
 impl AppError {
@@ -63,6 +66,7 @@ impl AppError {
             AppError::RetroAnswerTooLong(msg) => msg.clone(),
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
             AppError::RetroAlreadySubmitted(msg) => msg.clone(),
+            AppError::TeamAccessDenied(msg) => msg.clone(),
         }
     }
 
@@ -80,6 +84,7 @@ impl AppError {
             AppError::RetroAnswerTooLong(_) => "RETRO4003",
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
             AppError::RetroAlreadySubmitted(_) => "RETRO4033",
+            AppError::TeamAccessDenied(_) => "TEAM4031",
         }
     }
 
@@ -97,6 +102,7 @@ impl AppError {
             AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
+            AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
         }
     }
 }

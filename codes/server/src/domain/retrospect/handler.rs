@@ -9,9 +9,60 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    RetrospectDetailResponse, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
+    SubmitRetrospectResponse,
 };
 use super::service::RetrospectService;
+
+/// 회고 상세 정보 조회 API (API-012)
+///
+/// 특정 회고 세션의 상세 정보(제목, 일시, 유형, 참여 멤버, 질문 리스트 및 전체 통계)를 조회합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retrospects/{retrospectId}",
+    params(
+        ("retrospectId" = i64, Path, description = "조회할 회고의 고유 식별자")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "회고 상세 정보 조회를 성공했습니다.", body = SuccessRetrospectDetailResponse),
+        (status = 400, description = "잘못된 Path Parameter", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn get_retrospect_detail(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(retrospect_id): Path<i64>,
+) -> Result<Json<BaseResponse<RetrospectDetailResponse>>, AppError> {
+    // retrospectId 검증 (1 이상의 양수)
+    if retrospect_id < 1 {
+        return Err(AppError::BadRequest(
+            "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result = RetrospectService::get_retrospect_detail(state, user_id, retrospect_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고 상세 정보 조회를 성공했습니다.",
+    )))
+}
 
 /// 회고 최종 제출 API (API-017)
 ///
