@@ -1,35 +1,35 @@
-# Team Create API Implementation Review
+# Retro Room Create API Implementation Review
 
 ## 1. 개요
-- **API 명**: `POST /api/v1/teams`
-- **구현 목적**: 새로운 회고 팀(방)을 생성하고, 생성한 유저에게 관리자(Owner) 권한을 부여하며 초대 코드를 발급한다.
+- **API 명**: `POST /api/v1/retro-rooms`
+- **구현 목적**: 새로운 회고 레트로룸(방)을 생성하고, 생성한 유저에게 관리자(Owner) 권한을 부여하며 초대 코드를 발급한다.
 - **담당자**: Gemini Agent
 
 ## 2. 요구사항 및 구현 상세
 
 ### 2.1 요구사항 분석
-- **팀 생성**: 팀 이름(필수, 20자 이내)과 설명(선택, 50자 이내)을 입력받아 생성.
-- **초대 코드**: 팀 생성 시 8자리의 고유 초대 코드(`INV-XXXX-XXXX`) 자동 생성.
-- **권한 부여**: 생성 요청을 보낸 유저는 자동으로 해당 팀의 `OWNER`가 되어야 함.
-- **중복 검사**: 동일한 팀 이름으로 생성을 시도할 경우 `409 Conflict` 에러 반환.
+- **레트로룸 생성**: 레트로룸 이름(필수, 20자 이내)과 설명(선택, 50자 이내)을 입력받아 생성.
+- **초대 코드**: 레트로룸 생성 시 8자리의 고유 초대 코드(`INV-XXXX-XXXX`) 자동 생성.
+- **권한 부여**: 생성 요청을 보낸 유저는 자동으로 해당 레트로룸의 `OWNER`가 되어야 함.
+- **중복 검사**: 동일한 레트로룸 이름으로 생성을 시도할 경우 `409 Conflict` 에러 반환.
 - **유효성 검사**: 입력값 길이 제한 검증.
 
-### 2.2 구현 상세 (수정한 부분)
+### 2.2 구현 상세 (수정된 부분)
 
 #### Database Schema
 - **`retro_room.rs`**:
-    - `description` 필드 추가 (팀 설명).
+    - `description` 필드 추가 (레트로룸 설명).
 - **`member_retro_room.rs`**:
     - `role` 필드 추가 (`RoomRole` Enum: `OWNER`, `MEMBER`).
-    - 팀과 멤버의 관계 및 권한을 관리하기 위함.
+    - 레트로룸과 멤버의 관계 및 권한을 관리하기 위함.
 
 #### Domain Logic (`codes/server/src/domain/retrospect/`)
 - **`dto.rs`**:
-    - `TeamCreateRequest`: `validator`를 통한 길이 검증 적용.
-    - `SuccessTeamCreateResponse`: Swagger 문서화를 위해 `BaseResponse` 구조 반영.
+    - `RetroRoomCreateRequest`: `validator`를 통한 길이 검증 적용.
+    - `SuccessRetroRoomCreateResponse`: Swagger 문서화를 위해 `BaseResponse` 구조 반영.
 - **`service.rs`**:
-    - `create_team`: 트랜잭션 단위 로직 구현 (현재는 단일 연결 사용).
-        1.  팀 이름 중복 조회.
+    - `create_retro_room`: 트랜잭션 단위 로직 구현 (현재는 단일 연결 사용).
+        1.  레트로룸 이름 중복 조회.
         2.  초대 코드 생성 (`INV-` + 랜덤 문자열 알고리즘).
         3.  `retro_room` insert.
         4.  `member_retro_room` insert (Role: `OWNER`).
@@ -39,8 +39,8 @@
 
 #### Error Handling (`utils/error.rs`)
 - **에러 코드 추가**:
-    - `TEAM4001`: 팀 이름 길이 초과 (Bad Request).
-    - `TEAM4091`: 팀 이름 중복 (Conflict).
+    - `RETRO4001`: 레트로룸 이름 길이 초과 (Bad Request).
+    - `RETRO4091`: 레트로룸 이름 중복 (Conflict).
 - **HTTP Status**: `409 Conflict` 지원 추가.
 
 ## 3. 테스트 결과
