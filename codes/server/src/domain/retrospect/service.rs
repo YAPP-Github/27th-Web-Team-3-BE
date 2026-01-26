@@ -349,11 +349,12 @@ impl RetrospectService {
 
         let response_ids: Vec<i64> = responses.iter().map(|r| r.response_id).collect();
 
-        // 5. 질문 리스트 추출 (중복 제거, 순서 유지)
+        // 5. 질문 리스트 추출 (중복 제거, 순서 유지, 최대 5개)
         let mut seen_questions = HashSet::new();
         let questions: Vec<RetrospectQuestionItem> = responses
             .iter()
             .filter(|r| seen_questions.insert(r.question.clone()))
+            .take(5)
             .enumerate()
             .map(|(i, r)| RetrospectQuestionItem {
                 index: (i + 1) as i32,

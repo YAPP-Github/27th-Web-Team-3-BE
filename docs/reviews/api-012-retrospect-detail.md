@@ -45,6 +45,7 @@
 ## 변경 파일
 
 ### 수정 파일
+
 | 파일 | 변경 내용 |
 |------|----------|
 | `src/domain/retrospect/dto.rs` | `RetrospectDetailResponse`, `RetrospectMemberItem`, `RetrospectQuestionItem`, `SuccessRetrospectDetailResponse` DTO 추가 + 단위 테스트 5개 |
@@ -91,9 +92,21 @@
 | `should_serialize_member_item_in_camel_case` | RetrospectMemberItem camelCase 직렬화 (memberId, userName) + snake_case 키 부재 확인 |
 | `should_serialize_question_item_in_camel_case` | RetrospectQuestionItem camelCase 직렬화 (index, content) 검증 |
 
-### 통합 테스트
+### 통합 테스트 (11개) - `tests/retrospect_detail_test.rs`
 
-현재 API-012 전용 통합 테스트 파일은 별도로 존재하지 않습니다. 통합 테스트는 다른 API(API-017, API-019)의 테스트 파일에서 간접적으로 검증되며, 핸들러의 라우트 등록 및 Swagger 문서화는 서버 기동 시 `/health` 체크와 `/swagger-ui`를 통해 확인됩니다.
+| 테스트 | 검증 내용 |
+|--------|----------|
+| `api012_should_return_401_when_authorization_header_missing` | 인증 헤더 없이 요청 시 401 반환 |
+| `api012_should_return_401_when_authorization_header_format_invalid` | 잘못된 Authorization 형식 시 401 반환 |
+| `api012_should_return_400_when_retrospect_id_is_zero` | retrospectId가 0일 때 400 반환 |
+| `api012_should_return_400_when_retrospect_id_is_negative` | retrospectId가 음수일 때 400 반환 |
+| `api012_should_return_404_when_retrospect_not_found` | 존재하지 않는 회고 요청 시 404 반환 |
+| `api012_should_return_403_when_user_is_not_team_member` | 팀 멤버가 아닌 사용자 요청 시 403 반환 |
+| `api012_should_return_200_when_valid_request` | 유효한 요청 시 200 성공 응답 |
+| `api012_should_return_correct_result_structure` | 성공 응답의 result 필드 구조 검증 |
+| `api012_should_return_correct_members_fields` | 멤버 데이터 (memberId, userName) 검증 |
+| `api012_should_return_correct_questions_fields` | 질문 데이터 (index, content) 검증 |
+| `api012_should_use_camel_case_field_names_in_response` | 응답 전체 camelCase 필드명 검증 |
 
 ## 주요 구현 특징
 
