@@ -1,8 +1,5 @@
 use axum::{
-    async_trait,
-    extract::FromRequestParts,
-    http::header::AUTHORIZATION,
-    http::request::Parts,
+    async_trait, extract::FromRequestParts, http::header::AUTHORIZATION, http::request::Parts,
 };
 
 use crate::state::AppState;

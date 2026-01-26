@@ -31,6 +31,15 @@ pub enum AppError {
 
     /// COMMON403: 권한 없음 (403)
     Forbidden(String),
+
+    /// RETRO4041: 존재하지 않는 회고 (404)
+    RetrospectNotFound(String),
+
+    /// RETRO4003: 답변 길이 초과 (400)
+    RetroAnswerTooLong(String),
+
+    /// TEAM4031: 팀 접근 권한 없음 (403)
+    TeamAccessDenied(String),
 }
 
 impl AppError {
@@ -43,6 +52,9 @@ impl AppError {
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
             AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
+            AppError::RetrospectNotFound(msg) => msg.clone(),
+            AppError::RetroAnswerTooLong(msg) => msg.clone(),
+            AppError::TeamAccessDenied(msg) => msg.clone(),
         }
     }
 
@@ -55,6 +67,9 @@ impl AppError {
             AppError::JsonParseFailed(_) => "COMMON400",
             AppError::Unauthorized(_) => "COMMON401",
             AppError::Forbidden(_) => "COMMON403",
+            AppError::RetrospectNotFound(_) => "RETRO4041",
+            AppError::RetroAnswerTooLong(_) => "RETRO4003",
+            AppError::TeamAccessDenied(_) => "TEAM4031",
         }
     }
 
@@ -67,6 +82,9 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
+            AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
         }
     }
 }

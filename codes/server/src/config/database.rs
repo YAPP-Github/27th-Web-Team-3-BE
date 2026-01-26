@@ -1,14 +1,12 @@
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr, Schema, Statement};
-use tracing::info;
-use std::env;
 use crate::domain::{
-    member::entity::{
-        member, member_response, member_retro, member_retro_room,
-    },
+    member::entity::{member, member_response, member_retro, member_retro_room},
     retrospect::entity::{
         response, response_comment, response_like, retro_reference, retro_room, retrospect,
     },
 };
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr, Schema, Statement};
+use std::env;
+use tracing::info;
 
 pub async fn establish_connection(database_url: &str) -> Result<DatabaseConnection, DbErr> {
     let db = Database::connect(database_url).await?;
@@ -38,14 +36,14 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
 
     // List of entities to create
     // Order matters for foreign keys! (Parent first, then Child)
-    
+
     // 1. Independent Entities
     create_table_if_not_exists(db, &schema, member::Entity).await?;
     create_table_if_not_exists(db, &schema, retro_room::Entity).await?;
 
     // 2. Dependent Entities (Level 1)
     create_table_if_not_exists(db, &schema, retrospect::Entity).await?;
-    
+
     // 3. Dependent Entities (Level 2)
     create_table_if_not_exists(db, &schema, response::Entity).await?;
     create_table_if_not_exists(db, &schema, retro_reference::Entity).await?;
@@ -70,13 +68,14 @@ where
     E: sea_orm::EntityTrait,
 {
     let backend = db.get_database_backend();
-    let create_stmt: Statement = backend.build(schema.create_table_from_entity(entity).if_not_exists());
+    let create_stmt: Statement =
+        backend.build(schema.create_table_from_entity(entity).if_not_exists());
 
     match db.execute(create_stmt).await {
         Ok(_) => {
             // Log success (optional, verbose)
             Ok(())
-        },
+        }
         Err(e) => {
             tracing::error!("Failed to create table: {}", e);
             Err(e)

@@ -31,6 +31,16 @@ impl<T: Serialize> BaseResponse<T> {
             result: Some(result),
         }
     }
+
+    /// 커스텀 메시지 포함 성공 응답 생성
+    pub fn success_with_message(result: T, message: impl Into<String>) -> Self {
+        Self {
+            is_success: true,
+            code: "COMMON200".to_string(),
+            message: message.into(),
+            result: Some(result),
+        }
+    }
 }
 
 /// 에러 응답 구조체

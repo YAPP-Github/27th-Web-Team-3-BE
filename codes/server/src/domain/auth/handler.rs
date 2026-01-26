@@ -2,12 +2,13 @@ use axum::{extract::State, Json};
 use utoipa;
 use validator::Validate;
 
+#[allow(unused_imports)]
+use super::dto::{EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse};
+use super::service::AuthService;
 use crate::state::AppState;
+use crate::utils::auth::AuthUser;
 use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
-use crate::utils::auth::AuthUser;
-use super::dto::{LoginRequest, LoginResponse, EmailLoginRequest, SuccessLoginResponse};
-use super::service::AuthService;
 
 /// 인증 테스트 API
 ///
@@ -25,9 +26,7 @@ use super::service::AuthService;
     ),
     tag = "Auth"
 )]
-pub async fn auth_test(
-    user: AuthUser,
-) -> Json<BaseResponse<String>> {
+pub async fn auth_test(user: AuthUser) -> Json<BaseResponse<String>> {
     Json(BaseResponse::success(format!("User ID: {}", user.0.sub)))
 }
 
@@ -49,9 +48,9 @@ pub async fn login_by_email(
     Json(req): Json<EmailLoginRequest>,
 ) -> Result<Json<BaseResponse<LoginResponse>>, AppError> {
     req.validate()?;
-    
+
     let result = AuthService::login_by_email(state, req).await?;
-    
+
     Ok(Json(BaseResponse::success(result)))
 }
 
@@ -75,8 +74,8 @@ pub async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<BaseResponse<LoginResponse>>, AppError> {
     req.validate()?;
-    
+
     let result = AuthService::login(state, req).await?;
-    
+
     Ok(Json(BaseResponse::success(result)))
 }
