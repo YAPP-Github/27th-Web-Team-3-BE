@@ -29,7 +29,7 @@
 
 ## 파일 구조
 
-```
+```text
 codes/server/src/
 ├── domain/
 │   └── retrospect/
@@ -92,7 +92,7 @@ pub async fn create_participant(
 ```
 
 **비즈니스 로직 흐름:**
-```
+```text
 1. 회고 존재 여부 확인 → RetrospectNotFound (404)
 2. 회고의 team_id로 팀 멤버십 확인 → TeamAccessDenied (403)
 3. 진행 예정인 회고인지 확인 (start_time > now_kst) → RetrospectAlreadyStarted (400)
@@ -155,7 +155,7 @@ pub async fn create_participant(
 
 ### 테스트 실행 결과
 
-```
+```text
 running 66 tests
 test domain::retrospect::dto::tests::should_fail_validation_when_project_name_is_empty ... ok
 ...

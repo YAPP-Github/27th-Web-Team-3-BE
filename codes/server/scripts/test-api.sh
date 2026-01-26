@@ -41,7 +41,7 @@ echo -e "${GREEN}✓ Token acquired${NC}"
 
 # 3. 회고 생성 - 정상 케이스
 echo -e "\n${YELLOW}[3] 회고 생성 (정상 케이스)${NC}"
-FUTURE_DATE=$(date -v+7d +%Y-%m-%d 2>/dev/null || date -d "+7 days" +%Y-%m-%d)
+FUTURE_DATE=$(date -v+7d +%Y-%m-%d 2>/dev/null) || FUTURE_DATE=$(date -d "+7 days" +%Y-%m-%d)
 CREATE_RESP=$(curl -s -X POST "$BASE_URL/api/v1/retrospects" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
@@ -59,16 +59,20 @@ if echo "$CREATE_RESP" | jq -e '.isSuccess == true' > /dev/null; then
     echo -e "${GREEN}✓ Retrospect created (ID: $RETRO_ID)${NC}"
 else
     echo -e "${RED}✗ Create failed: $(echo "$CREATE_RESP" | jq -r '.message')${NC}"
+    exit 1
 fi
 
 # 4. 에러 케이스 - 인증 없음
 echo -e "\n${YELLOW}[4] 에러 테스트: 인증 없음${NC}"
 NO_AUTH_RESP=$(curl -s -X POST "$BASE_URL/api/v1/retrospects" \
   -H "Content-Type: application/json" \
-  -d '{"teamId": 1, "projectName": "Test", "retrospectDate": "2026-02-01", "retrospectMethod": "KPT"}')
+  -d "{\"teamId\": 1, \"projectName\": \"Test\", \"retrospectDate\": \"$FUTURE_DATE\", \"retrospectMethod\": \"KPT\"}")
 echo "$NO_AUTH_RESP" | jq .
 if echo "$NO_AUTH_RESP" | jq -e '.code == "AUTH4001"' > /dev/null; then
     echo -e "${GREEN}✓ Correctly returned AUTH4001${NC}"
+else
+    echo -e "${RED}✗ Expected AUTH4001 but got: $(echo "$NO_AUTH_RESP" | jq -r '.code')${NC}"
+    exit 1
 fi
 
 # 5. 에러 케이스 - 프로젝트 이름 초과
@@ -85,6 +89,9 @@ LONG_NAME_RESP=$(curl -s -X POST "$BASE_URL/api/v1/retrospects" \
 echo "$LONG_NAME_RESP" | jq .
 if echo "$LONG_NAME_RESP" | jq -e '.code == "RETRO4001"' > /dev/null; then
     echo -e "${GREEN}✓ Correctly returned RETRO4001${NC}"
+else
+    echo -e "${RED}✗ Expected RETRO4001 but got: $(echo "$LONG_NAME_RESP" | jq -r '.code')${NC}"
+    exit 1
 fi
 
 # 6. 에러 케이스 - 유효하지 않은 회고 방식
@@ -101,6 +108,9 @@ INVALID_METHOD_RESP=$(curl -s -X POST "$BASE_URL/api/v1/retrospects" \
 echo "$INVALID_METHOD_RESP" | jq .
 if echo "$INVALID_METHOD_RESP" | jq -e '.code == "RETRO4005"' > /dev/null; then
     echo -e "${GREEN}✓ Correctly returned RETRO4005${NC}"
+else
+    echo -e "${RED}✗ Expected RETRO4005 but got: $(echo "$INVALID_METHOD_RESP" | jq -r '.code')${NC}"
+    exit 1
 fi
 
 echo -e "\n========================================"
