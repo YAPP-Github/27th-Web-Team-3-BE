@@ -1,12 +1,14 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    TransactionTrait,
 };
 use std::collections::HashSet;
 
 use crate::domain::member::entity::member;
 use crate::domain::member::entity::member_retro;
 use crate::domain::retrospect::entity::response;
+use crate::domain::retrospect::entity::response_comment;
 use crate::domain::retrospect::entity::retro_reference;
 use crate::domain::retrospect::entity::retro_room;
 use crate::domain::retrospect::entity::retrospect;
@@ -16,7 +18,8 @@ use crate::state::AppState;
 use crate::utils::error::AppError;
 
 use super::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
+    CommentItem, CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
+    CreateRetrospectRequest, CreateRetrospectResponse, ListCommentsResponse, ReferenceItem,
     TeamRetrospectListItem, REFERENCE_URL_MAX_LENGTH,
 };
 
@@ -436,6 +439,177 @@ impl RetrospectService {
             .collect();
 
         Ok(result)
+    }
+
+    /// 회고 답변 조회 및 팀 멤버십 확인 헬퍼
+    /// 비멤버에게 답변 존재 여부를 노출하지 않도록
+    /// "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
+    async fn find_response_for_member(
+        state: &AppState,
+        user_id: i64,
+        response_id: i64,
+    ) -> Result<response::Model, AppError> {
+        // 1. response 조회
+        let response_model = response::Entity::find_by_id(response_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
+            })?;
+
+        // 2. response -> retrospect -> team 경로로 팀 정보 조회
+        let retrospect_model = retrospect::Entity::find_by_id(response_model.retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
+            })?;
+
+        // 3. 팀 멤버십 확인
+        let is_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_member.is_none() {
+            return Err(AppError::TeamAccessDenied(
+                "해당 리소스에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        Ok(response_model)
+    }
+
+    /// 회고 답변 댓글 목록 조회 (API-026)
+    pub async fn list_comments(
+        state: AppState,
+        user_id: i64,
+        response_id: i64,
+        cursor: Option<i64>,
+        size: i32,
+    ) -> Result<ListCommentsResponse, AppError> {
+        // 1. 답변 조회 및 팀 멤버십 확인
+        let _response_model = Self::find_response_for_member(&state, user_id, response_id).await?;
+
+        // 2. 댓글 목록 조회 (커서 기반 페이지네이션, 최신순 정렬)
+        // size + 1개를 조회하여 다음 페이지 존재 여부 확인
+        let mut query = response_comment::Entity::find()
+            .filter(response_comment::Column::ResponseId.eq(response_id));
+
+        // 커서가 있으면 해당 커서 이전의 댓글만 조회 (commentId 내림차순이므로 < 사용)
+        if let Some(cursor_id) = cursor {
+            query = query.filter(response_comment::Column::ResponseCommentId.lt(cursor_id));
+        }
+
+        let comments = query
+            .order_by_desc(response_comment::Column::ResponseCommentId)
+            .limit((size + 1) as u64)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 3. 다음 페이지 존재 여부 확인
+        let has_next = comments.len() > size as usize;
+        let comments = if has_next {
+            comments.into_iter().take(size as usize).collect()
+        } else {
+            comments
+        };
+
+        // 4. 작성자 정보 조회
+        let member_ids: Vec<i64> = comments.iter().map(|c| c.member_id).collect();
+        let members = if !member_ids.is_empty() {
+            member::Entity::find()
+                .filter(member::Column::MemberId.is_in(member_ids))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+        } else {
+            vec![]
+        };
+
+        // member_id -> nickname 매핑
+        let member_map: std::collections::HashMap<i64, String> = members
+            .into_iter()
+            .map(|m| {
+                let nickname = m.email.split('@').next().unwrap_or(&m.email).to_string();
+                (m.member_id, nickname)
+            })
+            .collect();
+
+        // 5. DTO 변환
+        let comment_items: Vec<CommentItem> = comments
+            .iter()
+            .map(|c| CommentItem {
+                comment_id: c.response_comment_id,
+                member_id: c.member_id,
+                user_name: member_map
+                    .get(&c.member_id)
+                    .cloned()
+                    .unwrap_or_else(|| "Unknown".to_string()),
+                content: c.content.clone(),
+                created_at: c.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            })
+            .collect();
+
+        // 6. 다음 커서 계산
+        let next_cursor = if has_next {
+            comment_items.last().map(|c| c.comment_id)
+        } else {
+            None
+        };
+
+        Ok(ListCommentsResponse {
+            comments: comment_items,
+            has_next,
+            next_cursor,
+        })
+    }
+
+    /// 회고 답변 댓글 작성 (API-027)
+    pub async fn create_comment(
+        state: AppState,
+        user_id: i64,
+        response_id: i64,
+        req: CreateCommentRequest,
+    ) -> Result<CreateCommentResponse, AppError> {
+        // 1. 댓글 길이 검증 (200자 초과 시 RES4001)
+        if req.content.chars().count() > 200 {
+            return Err(AppError::CommentTooLong(
+                "댓글은 최대 200자까지만 입력 가능합니다.".to_string(),
+            ));
+        }
+
+        // 2. 답변 조회 및 팀 멤버십 확인
+        let _response_model = Self::find_response_for_member(&state, user_id, response_id).await?;
+
+        // 3. 댓글 생성
+        let now = Utc::now().naive_utc();
+        let comment_model = response_comment::ActiveModel {
+            content: Set(req.content.clone()),
+            created_at: Set(now),
+            updated_at: Set(now),
+            response_id: Set(response_id),
+            member_id: Set(user_id),
+            ..Default::default()
+        };
+
+        let inserted = comment_model
+            .insert(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 4. 응답 생성
+        Ok(CreateCommentResponse {
+            comment_id: inserted.response_comment_id,
+            response_id,
+            content: inserted.content,
+            created_at: inserted.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        })
     }
 }
 

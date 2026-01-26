@@ -55,6 +55,12 @@ pub enum AppError {
 
     /// RETRO4002: 과거 회고 참석 불가 (400)
     RetrospectAlreadyStarted(String),
+
+    /// RES4041: 존재하지 않는 회고 답변 (404)
+    ResponseNotFound(String),
+
+    /// RES4001: 댓글 길이 초과 (400)
+    CommentTooLong(String),
 }
 
 impl AppError {
@@ -75,6 +81,8 @@ impl AppError {
             AppError::RetrospectNotFound(msg) => msg.clone(),
             AppError::ParticipantDuplicate(msg) => msg.clone(),
             AppError::RetrospectAlreadyStarted(msg) => msg.clone(),
+            AppError::ResponseNotFound(msg) => msg.clone(),
+            AppError::CommentTooLong(msg) => msg.clone(),
         }
     }
 
@@ -95,6 +103,8 @@ impl AppError {
             AppError::RetrospectNotFound(_) => "RETRO4041",
             AppError::ParticipantDuplicate(_) => "RETRO4091",
             AppError::RetrospectAlreadyStarted(_) => "RETRO4002",
+            AppError::ResponseNotFound(_) => "RES4041",
+            AppError::CommentTooLong(_) => "RES4001",
         }
     }
 
@@ -115,6 +125,8 @@ impl AppError {
             AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
             AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
             AppError::RetrospectAlreadyStarted(_) => StatusCode::BAD_REQUEST,
+            AppError::ResponseNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::CommentTooLong(_) => StatusCode::BAD_REQUEST,
         }
     }
 }

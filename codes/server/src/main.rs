@@ -17,9 +17,11 @@ use crate::domain::auth::dto::{
     EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse,
 };
 use crate::domain::retrospect::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
-    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
-    SuccessReferencesListResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
+    CommentItem, CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
+    CreateRetrospectRequest, CreateRetrospectResponse, ListCommentsQuery, ListCommentsResponse,
+    ReferenceItem, SuccessCreateCommentResponse, SuccessCreateParticipantResponse,
+    SuccessCreateRetrospectResponse, SuccessListCommentsResponse, SuccessReferencesListResponse,
+    SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -36,7 +38,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::create_retrospect,
         domain::retrospect::handler::list_team_retrospects,
         domain::retrospect::handler::create_participant,
-        domain::retrospect::handler::list_references
+        domain::retrospect::handler::list_references,
+        domain::retrospect::handler::list_comments,
+        domain::retrospect::handler::create_comment
     ),
     components(
         schemas(
@@ -56,13 +60,21 @@ use crate::utils::{BaseResponse, ErrorResponse};
             CreateParticipantResponse,
             SuccessCreateParticipantResponse,
             ReferenceItem,
-            SuccessReferencesListResponse
+            SuccessReferencesListResponse,
+            ListCommentsQuery,
+            CommentItem,
+            ListCommentsResponse,
+            SuccessListCommentsResponse,
+            CreateCommentRequest,
+            CreateCommentResponse,
+            SuccessCreateCommentResponse
         )
     ),
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
-        (name = "Retrospect", description = "회고 API")
+        (name = "Retrospect", description = "회고 API"),
+        (name = "Response", description = "회고 답변 API")
     ),
     modifiers(&SecurityAddon),
     info(
@@ -149,6 +161,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/references",
             axum::routing::get(domain::retrospect::handler::list_references),
+        )
+        .route(
+            "/api/v1/responses/:response_id/comments",
+            axum::routing::get(domain::retrospect::handler::list_comments)
+                .post(domain::retrospect::handler::create_comment),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 use validator::Validate;
@@ -10,8 +10,9 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
-    TeamRetrospectListItem,
+    CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
+    CreateRetrospectRequest, CreateRetrospectResponse, ListCommentsQuery, ListCommentsResponse,
+    ReferenceItem, TeamRetrospectListItem,
 };
 use super::service::RetrospectService;
 
@@ -209,5 +210,133 @@ pub async fn list_references(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "참고자료 목록을 성공적으로 조회했습니다.",
+    )))
+}
+
+/// 회고 답변 댓글 목록 조회 API (API-026)
+///
+/// 특정 회고 답변에 작성된 댓글 리스트를 조회합니다.
+/// 커서 기반 페이지네이션을 사용하여 무한 스크롤을 지원합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/responses/{responseId}/comments",
+    params(
+        ("responseId" = i64, Path, description = "댓글을 조회할 회고 답변의 고유 식별자"),
+        ("cursor" = Option<i64>, Query, description = "마지막으로 조회된 댓글 ID (첫 요청 시 생략)"),
+        ("size" = Option<i32>, Query, description = "페이지당 조회 개수 (1~100, 기본값: 20)")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "댓글 조회를 성공했습니다.", body = SuccessListCommentsResponse),
+        (status = 400, description = "잘못된 요청 (responseId, cursor, size 유효성 오류)", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고 답변", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Response"
+)]
+pub async fn list_comments(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(response_id): Path<i64>,
+    Query(query): Query<ListCommentsQuery>,
+) -> Result<Json<BaseResponse<ListCommentsResponse>>, AppError> {
+    // responseId 검증 (1 이상의 양수)
+    if response_id < 1 {
+        return Err(AppError::BadRequest(
+            "responseId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // cursor 검증 (있으면 1 이상)
+    if let Some(cursor) = query.cursor {
+        if cursor < 1 {
+            return Err(AppError::BadRequest(
+                "cursor는 1 이상의 양수여야 합니다.".to_string(),
+            ));
+        }
+    }
+
+    // size 검증 (1~100, 기본값 20)
+    let size = query.size.unwrap_or(20);
+    if !(1..=100).contains(&size) {
+        return Err(AppError::BadRequest(
+            "size는 1~100 범위의 정수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result =
+        RetrospectService::list_comments(state, user_id, response_id, query.cursor, size).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "댓글 조회를 성공했습니다.",
+    )))
+}
+
+/// 회고 답변 댓글 작성 API (API-027)
+///
+/// 동료의 회고 답변에 댓글(의견)을 남깁니다.
+/// 댓글 내용은 최대 200자까지 작성이 가능합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/responses/{responseId}/comments",
+    params(
+        ("responseId" = i64, Path, description = "댓글을 작성할 대상 답변의 고유 ID")
+    ),
+    request_body = CreateCommentRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "댓글이 성공적으로 등록되었습니다.", body = SuccessCreateCommentResponse),
+        (status = 400, description = "잘못된 요청 (content 필드 누락, 길이 초과)", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고 답변", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Response"
+)]
+pub async fn create_comment(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(response_id): Path<i64>,
+    Json(req): Json<CreateCommentRequest>,
+) -> Result<Json<BaseResponse<CreateCommentResponse>>, AppError> {
+    // responseId 검증 (1 이상의 양수)
+    if response_id < 1 {
+        return Err(AppError::BadRequest(
+            "responseId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 입력값 검증
+    req.validate()?;
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result = RetrospectService::create_comment(state, user_id, response_id, req).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "댓글이 성공적으로 등록되었습니다.",
     )))
 }
