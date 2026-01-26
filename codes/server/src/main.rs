@@ -27,7 +27,8 @@ use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, S
         health_check,
         domain::auth::handler::login,
         domain::auth::handler::login_by_email,
-        domain::auth::handler::auth_test
+        domain::auth::handler::auth_test,
+        domain::retrospect::handler::create_team
     ),
     components(
         schemas(
@@ -37,12 +38,16 @@ use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, S
             LoginRequest,
             LoginResponse,
             EmailLoginRequest,
-            SuccessLoginResponse
+            SuccessLoginResponse,
+            domain::retrospect::dto::TeamCreateRequest,
+            domain::retrospect::dto::TeamCreateResponse,
+            domain::retrospect::dto::SuccessTeamCreateResponse
         )
     ),
     tags(
         (name = "Health", description = "헬스 체크 API"),
-        (name = "Auth", description = "인증 API")
+        (name = "Auth", description = "인증 API"),
+        (name = "Team", description = "팀 관리 API")
     ),
     modifiers(&SecurityAddon),
     info(
@@ -107,6 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/login", axum::routing::post(domain::auth::handler::login))
         .route("/api/auth/login/email", axum::routing::post(domain::auth::handler::login_by_email))
         .route("/api/auth/test", axum::routing::get(domain::auth::handler::auth_test))
+        .route("/api/v1/teams", axum::routing::post(domain::retrospect::handler::create_team))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

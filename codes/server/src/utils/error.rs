@@ -31,6 +31,15 @@ pub enum AppError {
 
     /// COMMON403: 권한 없음 (403)
     Forbidden(String),
+
+    /// COMMON409: 중복된 자원 (409)
+    Conflict(String),
+
+    /// TEAM4001: 팀 이름 길이 초과 (400)
+    TeamNameTooLong(String),
+
+    /// TEAM4091: 팀 이름 중복 (409)
+    TeamNameDuplicate(String),
 }
 
 impl AppError {
@@ -43,6 +52,9 @@ impl AppError {
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
             AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
+            AppError::Conflict(msg) => format!("중복된 요청입니다: {}", msg),
+            AppError::TeamNameTooLong(msg) => msg.clone(),
+            AppError::TeamNameDuplicate(msg) => msg.clone(),
         }
     }
 
@@ -55,6 +67,9 @@ impl AppError {
             AppError::JsonParseFailed(_) => "COMMON400",
             AppError::Unauthorized(_) => "COMMON401",
             AppError::Forbidden(_) => "COMMON403",
+            AppError::Conflict(_) => "COMMON409",
+            AppError::TeamNameTooLong(_) => "TEAM4001",
+            AppError::TeamNameDuplicate(_) => "TEAM4091",
         }
     }
 
@@ -67,6 +82,9 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::TeamNameTooLong(_) => StatusCode::BAD_REQUEST,
+            AppError::TeamNameDuplicate(_) => StatusCode::CONFLICT,
         }
     }
 }
