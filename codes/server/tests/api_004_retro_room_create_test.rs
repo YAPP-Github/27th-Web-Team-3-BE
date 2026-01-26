@@ -23,6 +23,23 @@ fn should_validate_retro_room_create_request_success() {
 }
 
 #[test]
+fn should_fail_validation_when_title_is_empty() {
+    // Arrange
+    let req = RetroRoomCreateRequest {
+        title: "".to_string(),
+        description: None,
+    };
+
+    // Act
+    let result = req.validate();
+
+    // Assert
+    assert!(result.is_err());
+    let errors = result.unwrap_err();
+    assert!(errors.field_errors().contains_key("title"));
+}
+
+#[test]
 fn should_fail_validation_when_title_exceeds_20_chars() {
     // Arrange
     let req = RetroRoomCreateRequest {

@@ -5,7 +5,7 @@ use validator::Validate;
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetroRoomCreateRequest {
-    #[validate(length(max = 20, message = "회고 룸 이름은 20자를 초과할 수 없습니다."))]
+    #[validate(length(min = 1, max = 20, message = "회고 룸 이름은 1~20자여야 합니다."))]
     pub title: String,
 
     #[validate(length(max = 50, message = "회고 룸 한 줄 소개는 50자를 초과할 수 없습니다."))]
