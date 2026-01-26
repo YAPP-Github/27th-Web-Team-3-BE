@@ -30,6 +30,9 @@ dotenvy = "0.15"
 # Date/Time
 chrono = { version = "0.4", features = ["serde"] }
 
+# Random
+rand = "0.8"
+
 # OpenAPI Documentation
 utoipa = { version = "4", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "7", features = ["axum"] }

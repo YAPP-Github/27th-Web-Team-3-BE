@@ -9,6 +9,7 @@ use crate::domain::retrospect::entity::retrospect::{self, Entity as Retrospect};
 use crate::state::AppState;
 use crate::utils::error::AppError;
 use chrono::Utc;
+use rand::Rng;
 use sea_orm::*;
 use std::collections::HashSet;
 
@@ -35,35 +36,42 @@ impl RetrospectService {
 
         // 2. 초대 코드 생성 (형식: INV-XXXX-XXXX)
         let invite_code = Self::generate_invite_code();
-
-        // 3. retro_room 생성
         let now = Utc::now().naive_utc();
-        let retro_room_active = retro_room::ActiveModel {
-            title: Set(req.title.clone()),
-            description: Set(req.description),
-            invition_url: Set(invite_code.clone()),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
+        let title = req.title.clone();
+        let description = req.description;
 
-        let result = retro_room_active
-            .insert(&state.db)
+        // 3. 트랜잭션으로 retro_room + member_retro_room 원자적 생성
+        let result = state
+            .db
+            .transaction::<_, retro_room::Model, DbErr>(|txn| {
+                Box::pin(async move {
+                    // retro_room 생성
+                    let retro_room_active = retro_room::ActiveModel {
+                        title: Set(title),
+                        description: Set(description),
+                        invition_url: Set(invite_code),
+                        created_at: Set(now),
+                        updated_at: Set(now),
+                        ..Default::default()
+                    };
+
+                    let result = retro_room_active.insert(txn).await?;
+
+                    // member_retro_room 생성 (Owner 권한 부여)
+                    let member_retro_room_active = member_retro_room::ActiveModel {
+                        member_id: Set(member_id),
+                        retrospect_room_id: Set(result.retrospect_room_id),
+                        role: Set(RoomRole::Owner),
+                        ..Default::default()
+                    };
+
+                    member_retro_room_active.insert(txn).await?;
+
+                    Ok(result)
+                })
+            })
             .await
             .map_err(|e| AppError::InternalError(format!("회고 룸 생성 실패: {}", e)))?;
-
-        // 4. member_retro_room 생성 (Owner 권한 부여)
-        let member_retro_room_active = member_retro_room::ActiveModel {
-            member_id: Set(member_id),
-            retrospect_room_id: Set(result.retrospect_room_id),
-            role: Set(RoomRole::Owner),
-            ..Default::default()
-        };
-
-        member_retro_room_active
-            .insert(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(format!("회고 룸 멤버 등록 실패: {}", e)))?;
 
         Ok(RetroRoomCreateResponse {
             retro_room_id: result.retrospect_room_id,
@@ -305,17 +313,24 @@ impl RetrospectService {
             ));
         }
 
-        // 3. 관련 데이터 삭제 (member_retro_room 먼저)
-        MemberRetroRoom::delete_many()
-            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
-            .exec(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(format!("멤버 삭제 실패: {}", e)))?;
+        // 3. 트랜잭션으로 관련 데이터 원자적 삭제
+        state
+            .db
+            .transaction::<_, (), DbErr>(|txn| {
+                Box::pin(async move {
+                    // member_retro_room 삭제 (먼저)
+                    MemberRetroRoom::delete_many()
+                        .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+                        .exec(txn)
+                        .await?;
 
-        // 4. 레트로룸 삭제
-        let active_model: retro_room::ActiveModel = room.into();
-        active_model
-            .delete(&state.db)
+                    // 레트로룸 삭제
+                    let active_model: retro_room::ActiveModel = room.into();
+                    active_model.delete(txn).await?;
+
+                    Ok(())
+                })
+            })
             .await
             .map_err(|e| AppError::InternalError(format!("레트로룸 삭제 실패: {}", e)))?;
 
@@ -368,7 +383,7 @@ impl RetrospectService {
             .map(|r| RetrospectListItem {
                 retrospect_id: r.retrospect_id,
                 project_name: r.title,
-                retrospect_method: format!("{:?}", r.retro_category).to_uppercase(),
+                retrospect_method: r.retro_category.to_string(),
                 retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
                 retrospect_time: r.start_time.format("%H:%M").to_string(),
             })
@@ -378,21 +393,19 @@ impl RetrospectService {
     }
 
     /// 초대 코드 생성 (형식: INV-XXXX-XXXX)
+    /// 난수 기반으로 예측 불가능한 코드를 생성합니다.
     pub fn generate_invite_code() -> String {
-        let now = Utc::now().timestamp_nanos_opt().unwrap_or(0);
-        let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        let mut code = String::from("INV-");
+        const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let mut rng = rand::thread_rng();
 
-        let mut n = now as u64;
-        for i in 0..8 {
-            if i == 4 {
-                code.push('-');
-            }
-            let idx = (n % chars.len() as u64) as usize;
-            code.push(chars.chars().nth(idx).unwrap());
-            n /= chars.len() as u64;
-        }
-        code
+        let code: String = (0..8)
+            .map(|_| {
+                let idx = rng.gen_range(0..CHARS.len());
+                CHARS[idx] as char
+            })
+            .collect();
+
+        format!("INV-{}-{}", &code[..4], &code[4..])
     }
 
     /// 초대 URL에서 초대 코드를 추출합니다.

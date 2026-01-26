@@ -2992,6 +2992,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "jsonwebtoken",
+ "rand 0.8.5",
  "reqwest 0.13.1",
  "sea-orm",
  "serde",
