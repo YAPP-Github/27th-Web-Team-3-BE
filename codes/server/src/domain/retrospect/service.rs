@@ -205,11 +205,11 @@ impl RetrospectService {
             )
         })?;
 
-        // 미래 날짜 검증
+        // 오늘 이후 날짜 검증 (오늘 포함)
         let today = Utc::now().date_naive();
-        if date <= today {
+        if date < today {
             return Err(AppError::BadRequest(
-                "회고 날짜는 미래 날짜만 허용됩니다.".to_string(),
+                "회고 날짜는 오늘 이후만 허용됩니다.".to_string(),
             ));
         }
 
@@ -378,14 +378,14 @@ mod tests {
         // Assert
         assert!(result.is_err());
         if let Err(AppError::BadRequest(msg)) = result {
-            assert!(msg.contains("미래"));
+            assert!(msg.contains("오늘 이후"));
         } else {
             panic!("Expected BadRequest error");
         }
     }
 
     #[test]
-    fn should_fail_for_today_date() {
+    fn should_pass_for_today_date() {
         // Arrange
         let today = Utc::now().date_naive().format("%Y-%m-%d").to_string();
 
@@ -393,12 +393,7 @@ mod tests {
         let result = RetrospectService::validate_and_parse_date(&today);
 
         // Assert
-        assert!(result.is_err());
-        if let Err(AppError::BadRequest(msg)) = result {
-            assert!(msg.contains("미래"));
-        } else {
-            panic!("Expected BadRequest error");
-        }
+        assert!(result.is_ok());
     }
 
     #[test]
