@@ -1,11 +1,27 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, ToSchema,
+)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "RetroCategory")]
 pub enum RetroCategory {
+    /// Keep-Problem-Try
     #[sea_orm(string_value = "KPT")]
     Kpt,
+    /// 4L (Liked-Learned-Lacked-Longed for)
+    #[sea_orm(string_value = "FOUR_L")]
+    FourL,
+    /// 5F (Facts-Feelings-Findings-Future-Feedback)
+    #[sea_orm(string_value = "FIVE_F")]
+    FiveF,
+    /// Plus-Minus-Interesting
+    #[sea_orm(string_value = "PMI")]
+    Pmi,
+    /// Free format
+    #[sea_orm(string_value = "FREE")]
+    Free,
 }
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]

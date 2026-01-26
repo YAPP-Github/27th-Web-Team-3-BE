@@ -31,6 +31,21 @@ pub enum AppError {
 
     /// COMMON403: 권한 없음 (403)
     Forbidden(String),
+
+    /// RETRO4041: 존재하지 않는 회고 (404)
+    RetrospectNotFound(String),
+
+    /// RETRO4002: 답변 누락 (400)
+    RetroAnswersMissing(String),
+
+    /// RETRO4003: 답변 길이 초과 (400)
+    RetroAnswerTooLong(String),
+
+    /// RETRO4007: 공백만 입력 (400)
+    RetroAnswerWhitespaceOnly(String),
+
+    /// RETRO4033: 이미 제출 완료 (403)
+    RetroAlreadySubmitted(String),
 }
 
 impl AppError {
@@ -43,6 +58,11 @@ impl AppError {
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
             AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
+            AppError::RetrospectNotFound(msg) => msg.clone(),
+            AppError::RetroAnswersMissing(msg) => msg.clone(),
+            AppError::RetroAnswerTooLong(msg) => msg.clone(),
+            AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
+            AppError::RetroAlreadySubmitted(msg) => msg.clone(),
         }
     }
 
@@ -55,6 +75,11 @@ impl AppError {
             AppError::JsonParseFailed(_) => "COMMON400",
             AppError::Unauthorized(_) => "COMMON401",
             AppError::Forbidden(_) => "COMMON403",
+            AppError::RetrospectNotFound(_) => "RETRO4041",
+            AppError::RetroAnswersMissing(_) => "RETRO4002",
+            AppError::RetroAnswerTooLong(_) => "RETRO4003",
+            AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
+            AppError::RetroAlreadySubmitted(_) => "RETRO4033",
         }
     }
 
@@ -67,6 +92,11 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::RetroAnswersMissing(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
         }
     }
 }

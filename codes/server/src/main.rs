@@ -1,24 +1,30 @@
 mod config;
 mod domain;
-mod utils;
 mod state;
+mod utils;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use utoipa::openapi::security::{SecurityScheme, HttpAuthScheme, Http};
 
 use crate::config::AppConfig;
-use crate::utils::{BaseResponse, ErrorResponse};
+use crate::domain::auth::dto::{
+    EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse,
+};
+use crate::domain::member::entity::member_retro::RetrospectStatus;
+use crate::domain::retrospect::dto::{
+    StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessStorageResponse,
+    SuccessSubmitRetrospectResponse,
+};
+use crate::domain::retrospect::entity::retrospect::RetroCategory;
 use crate::state::AppState;
-use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, SuccessLoginResponse};
+use crate::utils::{BaseResponse, ErrorResponse};
 
 /// OpenAPI 문서 정의
 #[derive(OpenApi)]
@@ -27,7 +33,9 @@ use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, S
         health_check,
         domain::auth::handler::login,
         domain::auth::handler::login_by_email,
-        domain::auth::handler::auth_test
+        domain::auth::handler::auth_test,
+        domain::retrospect::handler::submit_retrospect,
+        domain::retrospect::handler::get_storage
     ),
     components(
         schemas(
@@ -37,12 +45,24 @@ use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, S
             LoginRequest,
             LoginResponse,
             EmailLoginRequest,
-            SuccessLoginResponse
+            SuccessLoginResponse,
+            SubmitRetrospectRequest,
+            SubmitRetrospectResponse,
+            SubmitAnswerItem,
+            SuccessSubmitRetrospectResponse,
+            RetrospectStatus,
+            StorageRangeFilter,
+            StorageRetrospectItem,
+            StorageYearGroup,
+            StorageResponse,
+            SuccessStorageResponse,
+            RetroCategory
         )
     ),
     tags(
         (name = "Health", description = "헬스 체크 API"),
-        (name = "Auth", description = "인증 API")
+        (name = "Auth", description = "인증 API"),
+        (name = "Retrospect", description = "회고 API")
     ),
     modifiers(&SecurityAddon),
     info(
@@ -60,9 +80,7 @@ impl utoipa::Modify for SecurityAddon {
         if let Some(components) = openapi.components.as_mut() {
             components.add_security_scheme(
                 "bearer_auth",
-                SecurityScheme::Http(
-                    Http::new(HttpAuthScheme::Bearer)
-                ),
+                SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
             )
         }
     }
@@ -90,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = crate::config::establish_connection(&database_url).await?;
 
     // 애플리케이션 상태 생성
-    let app_state = AppState { 
+    let app_state = AppState {
         db,
         config: config.clone(),
     };
@@ -104,9 +122,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 라우터 구성
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/api/auth/login", axum::routing::post(domain::auth::handler::login))
-        .route("/api/auth/login/email", axum::routing::post(domain::auth::handler::login_by_email))
-        .route("/api/auth/test", axum::routing::get(domain::auth::handler::auth_test))
+        .route(
+            "/api/auth/login",
+            axum::routing::post(domain::auth::handler::login),
+        )
+        .route(
+            "/api/auth/login/email",
+            axum::routing::post(domain::auth::handler::login_by_email),
+        )
+        .route(
+            "/api/auth/test",
+            axum::routing::get(domain::auth::handler::auth_test),
+        )
+        .route(
+            "/api/v1/retrospects/storage",
+            axum::routing::get(domain::retrospect::handler::get_storage),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/submit",
+            axum::routing::post(domain::retrospect::handler::submit_retrospect),
+        )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

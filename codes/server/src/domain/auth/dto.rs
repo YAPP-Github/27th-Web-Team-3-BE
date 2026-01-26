@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 use utoipa::ToSchema;
+use validator::Validate;
 
 use crate::domain::member::entity::member::SocialType;
 
@@ -8,7 +8,7 @@ use crate::domain::member::entity::member::SocialType;
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     pub social_type: SocialType, // JSON string "KAKAO" or "GOOGLE"
-    
+
     #[validate(length(min = 1))]
     pub token: String, // Access Token from Provider or ID Token
 }
