@@ -49,7 +49,7 @@
 | `src/domain/retrospect/dto.rs` | RetrospectListItem, SuccessRetrospectListResponse DTO 추가 |
 | `src/domain/retrospect/service.rs` | `list_retrospects()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `list_retrospects` 핸들러 추가 + Swagger 문서화 |
-| `src/tests/api_010_retro_room_retrospects_test.rs` | 단위 테스트 5개 |
+| `tests/api_010_retro_room_retrospects_test.rs` | 단위 테스트 5개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -92,7 +92,7 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 (5개) - `src/tests/api_010_retro_room_retrospects_test.rs`
+### 단위 테스트 (5개) - `tests/api_010_retro_room_retrospects_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|

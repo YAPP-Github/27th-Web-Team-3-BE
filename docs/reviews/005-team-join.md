@@ -45,7 +45,7 @@
 | `src/domain/retrospect/service.rs` | `join_retro_room()`, `extract_invite_code()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `join_retro_room` 핸들러 추가 + Swagger 문서화 |
 | `src/utils/error.rs` | InvalidInviteLink, ExpiredInviteLink, AlreadyMember 에러 타입 추가 |
-| `src/tests/api_005_retro_room_join_test.rs` | 단위 테스트 10개 |
+| `tests/api_005_retro_room_join_test.rs` | 단위 테스트 10개 |
 | `src/main.rs` | 라우트 등록 + OpenAPI 스키마/경로 추가 |
 
 ## 비즈니스 로직
@@ -78,7 +78,7 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 (10개) - `src/tests/api_005_retro_room_join_test.rs`
+### 단위 테스트 (10개) - `tests/api_005_retro_room_join_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|

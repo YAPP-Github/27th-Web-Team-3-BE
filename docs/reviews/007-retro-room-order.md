@@ -44,7 +44,7 @@
 | `src/domain/retrospect/service.rs` | `update_retro_room_order()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `update_retro_room_order` 핸들러 추가 + Swagger 문서화 |
 | `src/utils/error.rs` | InvalidOrderData, NoPermission 에러 타입 추가 |
-| `src/tests/api_007_retro_room_order_test.rs` | 단위 테스트 8개 |
+| `tests/api_007_retro_room_order_test.rs` | 단위 테스트 8개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -73,7 +73,7 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 (8개) - `src/tests/api_007_retro_room_order_test.rs`
+### 단위 테스트 (8개) - `tests/api_007_retro_room_order_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|

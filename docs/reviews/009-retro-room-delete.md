@@ -37,7 +37,7 @@
 | `src/domain/retrospect/dto.rs` | DeleteRetroRoomResponse, SuccessDeleteRetroRoomResponse DTO 추가 |
 | `src/domain/retrospect/service.rs` | `delete_retro_room()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `delete_retro_room` 핸들러 추가 + Swagger 문서화 |
-| `src/tests/api_009_retro_room_delete_test.rs` | 단위 테스트 3개 |
+| `tests/api_009_retro_room_delete_test.rs` | 단위 테스트 3개 |
 | `src/main.rs` | 라우트 등록 |
 
 ## 비즈니스 로직
@@ -68,7 +68,7 @@
 
 ## 테스트 커버리지
 
-### 단위 테스트 (3개) - `src/tests/api_009_retro_room_delete_test.rs`
+### 단위 테스트 (3개) - `tests/api_009_retro_room_delete_test.rs`
 
 | 테스트 | 검증 내용 |
 |--------|----------|
