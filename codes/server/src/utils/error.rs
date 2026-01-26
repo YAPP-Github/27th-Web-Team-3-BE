@@ -52,6 +52,15 @@ pub enum AppError {
 
     /// RETRO4092: 이미 회고 룸 멤버 (409)
     AlreadyMember(String),
+
+    /// TEAM4004: 잘못된 순서 데이터 (400)
+    InvalidOrderData(String),
+
+    /// TEAM4031: 권한 없음 - 순서/삭제 (403)
+    NoPermission(String),
+
+    /// ROOM4031: 권한 없음 - 이름 변경 (403)
+    NoRoomPermission(String),
 }
 
 impl AppError {
@@ -71,6 +80,9 @@ impl AppError {
             AppError::RetroRoomNameTooLong(msg) => msg.clone(),
             AppError::RetroRoomNameDuplicate(msg) => msg.clone(),
             AppError::AlreadyMember(msg) => msg.clone(),
+            AppError::InvalidOrderData(msg) => msg.clone(),
+            AppError::NoPermission(msg) => msg.clone(),
+            AppError::NoRoomPermission(msg) => msg.clone(),
         }
     }
 
@@ -90,6 +102,9 @@ impl AppError {
             AppError::RetroRoomNameTooLong(_) => "RETRO4001",
             AppError::RetroRoomNameDuplicate(_) => "RETRO4091",
             AppError::AlreadyMember(_) => "RETRO4092",
+            AppError::InvalidOrderData(_) => "TEAM4004",
+            AppError::NoPermission(_) => "TEAM4031",
+            AppError::NoRoomPermission(_) => "ROOM4031",
         }
     }
 
@@ -109,6 +124,9 @@ impl AppError {
             AppError::RetroRoomNameTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroRoomNameDuplicate(_) => StatusCode::CONFLICT,
             AppError::AlreadyMember(_) => StatusCode::CONFLICT,
+            AppError::InvalidOrderData(_) => StatusCode::BAD_REQUEST,
+            AppError::NoPermission(_) => StatusCode::FORBIDDEN,
+            AppError::NoRoomPermission(_) => StatusCode::FORBIDDEN,
         }
     }
 }
