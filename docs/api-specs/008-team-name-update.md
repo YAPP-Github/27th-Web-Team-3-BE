@@ -1,12 +1,12 @@
-# [API-008] PATCH /api/v1/teams/{teamId}/name
+# [API-008] PATCH /api/v1/retro-rooms/{retroRoomId}/name
 
-팀 이름 변경 API
+레트로룸 이름 변경 API
 
 ## 개요
 
-기존 팀의 이름을 새로운 이름으로 변경합니다.
+기존 레트로룸의 이름을 새로운 이름으로 변경합니다.
 
-- 팀 관리자(Owner) 권한을 가진 사용자만 변경할 수 있습니다.
+- 레트로룸 관리자(Owner) 권한을 가진 사용자만 변경할 수 있습니다.
 - 이름은 중복을 허용하지 않으며, 최대 20자 제한을 준수해야 합니다.
 
 ## 버전
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-PATCH /api/v1/teams/{teamId}/name
+PATCH /api/v1/retro-rooms/{retroRoomId}/name
 ```
 
 ## 인증
@@ -38,13 +38,13 @@ PATCH /api/v1/teams/{teamId}/name
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| teamId | long | Yes | 이름을 변경할 팀의 고유 식별자 |
+| retroRoomId | long | Yes | 이름을 변경할 레트로룸의 고유 식별자 |
 
 ### Body
 
 ```json
 {
-  "name": "새로운 팀 이름"
+  "name": "새로운 레트로룸 이름"
 }
 ```
 
@@ -52,7 +52,7 @@ PATCH /api/v1/teams/{teamId}/name
 
 | Field | Type | Required | Description | Validation |
 |-------|------|----------|-------------|------------|
-| name | string | Yes | 변경할 새로운 팀 이름 | 1~20자 |
+| name | string | Yes | 변경할 새로운 레트로룸 이름 | 1~20자 |
 
 ## Response
 
@@ -62,10 +62,10 @@ PATCH /api/v1/teams/{teamId}/name
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "팀 이름 변경에 성공하였습니다.",
+  "message": "레트로룸 이름 변경에 성공하였습니다.",
   "result": {
-    "teamId": 123,
-    "teamName": "새로운 팀 이름",
+    "retroRoomId": 123,
+    "retroRoomName": "새로운 레트로룸 이름",
     "updatedAt": "2026-01-24T15:30:00"
   }
 }
@@ -75,21 +75,21 @@ PATCH /api/v1/teams/{teamId}/name
 
 | Field | Type | Description |
 |-------|------|-------------|
-| teamId | long | 팀 고유 ID |
-| teamName | string | 변경된 팀 이름 |
+| retroRoomId | long | 레트로룸 고유 ID |
+| retroRoomName | string | 변경된 레트로룸 이름 |
 | updatedAt | string | 수정 일시 (yyyy-MM-ddTHH:mm:ss) |
 
-> **필드명 참고**: 요청 Body는 `name`, 응답은 `teamName`으로 다른 API와의 일관성을 유지합니다.
+> **필드명 참고**: 요청 Body는 `name`, 응답은 `retroRoomName`으로 다른 API와의 일관성을 유지합니다.
 
 ## 에러 응답
 
-### 400 Bad Request - 팀 이름 길이 초과
+### 400 Bad Request - 레트로룸 이름 길이 초과
 
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4001",
-  "message": "팀 이름은 20자를 초과할 수 없습니다.",
+  "code": "ROOM4001",
+  "message": "레트로룸 이름은 20자를 초과할 수 없습니다.",
   "result": null
 }
 ```
@@ -110,19 +110,19 @@ PATCH /api/v1/teams/{teamId}/name
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "팀 이름을 변경할 권한이 없습니다.",
+  "code": "ROOM4031",
+  "message": "레트로룸 이름을 변경할 권한이 없습니다.",
   "result": null
 }
 ```
 
-### 404 Not Found - 팀 없음
+### 404 Not Found - 레트로룸 없음
 
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4041",
-  "message": "존재하지 않는 팀입니다.",
+  "code": "ROOM4041",
+  "message": "존재하지 않는 레트로룸입니다.",
   "result": null
 }
 ```
@@ -132,8 +132,8 @@ PATCH /api/v1/teams/{teamId}/name
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4091",
-  "message": "이미 사용 중인 팀 이름입니다.",
+  "code": "ROOM4091",
+  "message": "이미 사용 중인 레트로룸 이름입니다.",
   "result": null
 }
 ```
@@ -153,11 +153,11 @@ PATCH /api/v1/teams/{teamId}/name
 
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|----------|
-| TEAM4001 | 400 | 글자 수 제한 유효성 검사 실패 | 팀 이름이 빈 문자열이거나 20자 초과 |
+| ROOM4001 | 400 | 글자 수 제한 유효성 검사 실패 | 레트로룸 이름이 빈 문자열이거나 20자 초과 |
 | AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
-| TEAM4031 | 403 | 팀 관리자가 아닌 유저가 수정 시도 | 팀 관리자(Owner) 권한이 없는 사용자가 이름 변경 요청 |
-| TEAM4041 | 404 | 유효하지 않은 teamId | 존재하지 않거나 삭제된 팀의 teamId로 요청 |
-| TEAM4091 | 409 | 중복된 팀 이름으로 변경 시도 | 동일한 사용자의 다른 팀에서 이미 사용 중인 이름으로 변경 시도 |
+| ROOM4031 | 403 | 레트로룸 관리자가 아닌 유저가 수정 시도 | 레트로룸 관리자(Owner) 권한이 없는 사용자가 이름 변경 요청 |
+| ROOM4041 | 404 | 유효하지 않은 retroRoomId | 존재하지 않거나 삭제된 레트로룸의 retroRoomId로 요청 |
+| ROOM4091 | 409 | 중복된 레트로룸 이름으로 변경 시도 | 동일한 사용자의 다른 레트로룸에서 이미 사용 중인 이름으로 변경 시도 |
 | COMMON500 | 500 | 이름 변경 처리 중 서버 에러 | 데이터베이스 연결 실패, 업데이트 쿼리 실행 오류 |
 
 ## 사용 예시
@@ -165,10 +165,10 @@ PATCH /api/v1/teams/{teamId}/name
 ### cURL
 
 ```bash
-curl -X PATCH https://api.example.com/api/v1/teams/123/name \
+curl -X PATCH https://api.example.com/api/v1/retro-rooms/123/name \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
-    "name": "새로운 팀 이름"
+    "name": "새로운 레트로룸 이름"
   }'
 ```
