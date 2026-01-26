@@ -35,11 +35,23 @@ pub enum AppError {
     /// COMMON409: 중복된 자원 (409)
     Conflict(String),
 
-    /// TEAM4001: 팀 이름 길이 초과 (400)
-    TeamNameTooLong(String),
+    /// RETRO4041: 회고 룸 없음 (404)
+    NotFound(String),
 
-    /// TEAM4091: 팀 이름 중복 (409)
-    TeamNameDuplicate(String),
+    /// RETRO4002: 유효하지 않은 초대 링크 (400)
+    InvalidInviteLink(String),
+
+    /// RETRO4003: 만료된 초대 링크 (400)
+    ExpiredInviteLink(String),
+
+    /// RETRO4001: 회고 룸 이름 길이 초과 (400)
+    RetroRoomNameTooLong(String),
+
+    /// RETRO4091: 회고 룸 이름 중복 (409)
+    RetroRoomNameDuplicate(String),
+
+    /// RETRO4092: 이미 회고 룸 멤버 (409)
+    AlreadyMember(String),
 }
 
 impl AppError {
@@ -53,8 +65,12 @@ impl AppError {
             AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
             AppError::Conflict(msg) => format!("중복된 요청입니다: {}", msg),
-            AppError::TeamNameTooLong(msg) => msg.clone(),
-            AppError::TeamNameDuplicate(msg) => msg.clone(),
+            AppError::NotFound(msg) => msg.clone(),
+            AppError::InvalidInviteLink(msg) => msg.clone(),
+            AppError::ExpiredInviteLink(msg) => msg.clone(),
+            AppError::RetroRoomNameTooLong(msg) => msg.clone(),
+            AppError::RetroRoomNameDuplicate(msg) => msg.clone(),
+            AppError::AlreadyMember(msg) => msg.clone(),
         }
     }
 
@@ -68,8 +84,12 @@ impl AppError {
             AppError::Unauthorized(_) => "COMMON401",
             AppError::Forbidden(_) => "COMMON403",
             AppError::Conflict(_) => "COMMON409",
-            AppError::TeamNameTooLong(_) => "TEAM4001",
-            AppError::TeamNameDuplicate(_) => "TEAM4091",
+            AppError::NotFound(_) => "RETRO4041",
+            AppError::InvalidInviteLink(_) => "RETRO4002",
+            AppError::ExpiredInviteLink(_) => "RETRO4003",
+            AppError::RetroRoomNameTooLong(_) => "RETRO4001",
+            AppError::RetroRoomNameDuplicate(_) => "RETRO4091",
+            AppError::AlreadyMember(_) => "RETRO4092",
         }
     }
 
@@ -83,8 +103,12 @@ impl AppError {
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::Conflict(_) => StatusCode::CONFLICT,
-            AppError::TeamNameTooLong(_) => StatusCode::BAD_REQUEST,
-            AppError::TeamNameDuplicate(_) => StatusCode::CONFLICT,
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::InvalidInviteLink(_) => StatusCode::BAD_REQUEST,
+            AppError::ExpiredInviteLink(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroRoomNameTooLong(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroRoomNameDuplicate(_) => StatusCode::CONFLICT,
+            AppError::AlreadyMember(_) => StatusCode::CONFLICT,
         }
     }
 }
