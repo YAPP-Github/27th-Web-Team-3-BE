@@ -245,6 +245,68 @@ pub struct SuccessRetrospectDetailResponse {
     pub result: RetrospectDetailResponse,
 }
 
+// ============================================
+// API-022: 회고 분석 DTO
+// ============================================
+
+/// 감정 랭킹 아이템
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EmotionRankItem {
+    /// 순위 (1부터 시작, 감정 빈도 기준 내림차순)
+    pub rank: i32,
+    /// 감정 키워드 (예: "피로", "뿌듯")
+    pub label: String,
+    /// 해당 감정에 대한 상세 설명 및 원인 분석
+    pub description: String,
+    /// 해당 감정을 선택/언급한 횟수
+    pub count: i32,
+}
+
+/// 개인 미션 아이템
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MissionItem {
+    /// 개인 미션 제목 (예: "감정 표현 적극적으로 하기")
+    pub mission_title: String,
+    /// 개인 미션 상세 설명 및 인사이트
+    pub mission_desc: String,
+}
+
+/// 사용자별 개인 미션 아이템
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalMissionItem {
+    /// 사용자 고유 ID
+    pub user_id: i64,
+    /// 사용자 이름
+    pub user_name: String,
+    /// 해당 사용자의 개인 미션 리스트 (정확히 3개)
+    pub missions: Vec<MissionItem>,
+}
+
+/// 회고 분석 응답 데이터
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisResponse {
+    /// 팀 전체를 위한 AI 분석 메시지
+    pub team_insight: String,
+    /// 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개)
+    pub emotion_rank: Vec<EmotionRankItem>,
+    /// 사용자별 개인 맞춤 미션 리스트 (userId 오름차순 정렬)
+    pub personal_missions: Vec<PersonalMissionItem>,
+}
+
+/// Swagger용 회고 분석 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessAnalysisResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: AnalysisResponse,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

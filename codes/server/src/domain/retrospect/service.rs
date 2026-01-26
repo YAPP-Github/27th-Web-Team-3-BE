@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use chrono::Utc;
+use chrono::{Datelike, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, Set, TransactionTrait,
@@ -20,10 +20,10 @@ use crate::state::AppState;
 use crate::utils::error::AppError;
 
 use super::dto::{
-    DraftItem, DraftSaveRequest, DraftSaveResponse, RetrospectDetailResponse,
-    RetrospectMemberItem, RetrospectQuestionItem, StorageQueryParams, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse,
+    AnalysisResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem, MissionItem,
+    PersonalMissionItem, RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem,
+    StorageQueryParams, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse,
 };
 
 /// 회고당 질문 수 (고정)
@@ -604,6 +604,253 @@ impl RetrospectService {
         }
 
         Ok(())
+    }
+
+    /// 회고 분석 (API-022)
+    pub async fn analyze_retrospective(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<AnalysisResponse, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            "회고 분석 요청"
+        );
+
+        // 1. retrospect_id 검증 (1 이상)
+        if retrospect_id < 1 {
+            return Err(AppError::BadRequest(
+                "유효하지 않은 회고 ID입니다.".to_string(),
+            ));
+        }
+
+        // 2. 회고 존재 확인 → RETRO4041
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::RetrospectNotFound("존재하지 않는 회고 세션입니다.".to_string())
+            })?;
+
+        // 2-1. 이미 분석 완료 여부 확인 (재분석 방지)
+        if retrospect_model.team_insight.is_some() {
+            return Err(AppError::RetroAlreadyAnalyzed(
+                "이미 분석이 완료된 회고입니다.".to_string(),
+            ));
+        }
+
+        let retrospect_room_id = retrospect_model.retrospect_room_id;
+
+        // 3. 팀 멤버십 확인 (팀에 속한 회고인지 확인)
+        let is_team_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_team_member.is_none() {
+            return Err(AppError::TeamAccessDenied(
+                "해당 회고에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 4. 월간 사용량 확인 (팀당 월 10회 제한)
+        let kst_offset = chrono::Duration::hours(9);
+        let now_kst = Utc::now().naive_utc() + kst_offset;
+        let current_month_start =
+            chrono::NaiveDate::from_ymd_opt(now_kst.year(), now_kst.month(), 1)
+                .ok_or_else(|| AppError::InternalError("날짜 계산 오류".to_string()))?
+                .and_hms_opt(0, 0, 0)
+                .ok_or_else(|| AppError::InternalError("시간 계산 오류".to_string()))?
+                - kst_offset; // UTC로 변환
+
+        // 현재 월에 team_insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
+        let monthly_analysis_count = retrospect::Entity::find()
+            .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
+            .filter(retrospect::Column::TeamInsight.is_not_null())
+            .filter(retrospect::Column::UpdatedAt.gte(current_month_start))
+            .count(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            as i32;
+
+        if monthly_analysis_count >= 10 {
+            return Err(AppError::AiMonthlyLimitExceeded(
+                "월간 분석 가능 횟수를 초과하였습니다.".to_string(),
+            ));
+        }
+
+        // 5. 최소 데이터 기준 확인
+        // 5-1. 제출 완료 참여자 수 (member_retro에서 status = SUBMITTED 또는 ANALYZED)
+        let submitted_members = member_retro::Entity::find()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .filter(
+                member_retro::Column::Status
+                    .is_in([RetrospectStatus::Submitted, RetrospectStatus::Analyzed]),
+            )
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if submitted_members.is_empty() {
+            return Err(AppError::RetroInsufficientData(
+                "분석할 회고 답변 데이터가 부족합니다.".to_string(),
+            ));
+        }
+
+        // 5-2. 답변 수 확인 (content != "" 카운트)
+        let all_responses = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let answer_count = all_responses
+            .iter()
+            .filter(|r| !r.content.trim().is_empty())
+            .count();
+
+        if answer_count < 3 {
+            return Err(AppError::RetroInsufficientData(
+                "분석할 회고 답변 데이터가 부족합니다.".to_string(),
+            ));
+        }
+
+        // 6. 참여자 목록 조회 (member_retro + member 조인)
+        let member_ids: Vec<i64> = submitted_members.iter().map(|mr| mr.member_id).collect();
+
+        let members = if member_ids.is_empty() {
+            vec![]
+        } else {
+            member::Entity::find()
+                .filter(member::Column::MemberId.is_in(member_ids))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+        };
+
+        // member_id -> nickname 매핑
+        let member_map: HashMap<i64, String> = members
+            .iter()
+            .map(|m| (m.member_id, m.nickname.clone()))
+            .collect();
+
+        // 7. AI API 호출을 위한 프롬프트 생성
+        // TODO: 실제 AI 서비스 호출 구현
+        // 지금은 Mock 데이터 반환
+        info!(
+            "AI 분석 호출 준비 완료 (response_count={}, member_count={})",
+            all_responses.len(),
+            members.len()
+        );
+
+        // Mock 응답 생성 (실제 구현 시 AI 서비스 호출로 대체)
+        let team_insight =
+            "이번 회고에서 팀은 목표 의식은 분명했지만, 에너지 관리 측면에서 아쉬움이 있었습니다."
+                .to_string();
+
+        let emotion_rank = vec![
+            EmotionRankItem {
+                rank: 1,
+                label: "피로".to_string(),
+                description: "짧은 스프린트로 인해 팀 전반에 피로도가 높게 나타났습니다."
+                    .to_string(),
+                count: 6,
+            },
+            EmotionRankItem {
+                rank: 2,
+                label: "뿌듯".to_string(),
+                description: "목표 달성에 대한 성취감을 느끼는 팀원이 많았습니다.".to_string(),
+                count: 4,
+            },
+            EmotionRankItem {
+                rank: 3,
+                label: "불안".to_string(),
+                description: "다음 스프린트에 대한 부담감을 가진 팀원들이 있었습니다.".to_string(),
+                count: 2,
+            },
+        ];
+
+        let mut personal_missions = Vec::new();
+        for mr in &submitted_members {
+            if let Some(username) = member_map.get(&mr.member_id) {
+                personal_missions.push(PersonalMissionItem {
+                    user_id: mr.member_id,
+                    user_name: username.clone(),
+                    missions: vec![
+                        MissionItem {
+                            mission_title: "감정 표현 적극적으로 하기".to_string(),
+                            mission_desc: "활발한 협업은 좋았으나 감정 공유를 늘리면 팀 응집력이 더 높아질 것입니다.".to_string(),
+                        },
+                        MissionItem {
+                            mission_title: "스프린트 분량 조절하기".to_string(),
+                            mission_desc: "작은 PR 단위로 나누어 업무를 분배하면 효율적인 리뷰가 가능합니다.".to_string(),
+                        },
+                        MissionItem {
+                            mission_title: "피드백 즉각 공유하기".to_string(),
+                            mission_desc: "즉각적인 응답과 활발한 코드 리뷰로 협업 속도를 높여보세요.".to_string(),
+                        },
+                    ],
+                });
+            }
+        }
+
+        // userId 오름차순 정렬
+        personal_missions.sort_by_key(|pm| pm.user_id);
+
+        // 8. 트랜잭션으로 결과 저장
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 8-1. retrospects.team_insight 업데이트
+        let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
+        retrospect_active.team_insight = Set(Some(team_insight.clone()));
+        retrospect_active.updated_at = Set(Utc::now().naive_utc());
+        retrospect_active
+            .update(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 8-2. 각 member_retro.personal_insight 업데이트 + status = ANALYZED
+        for mr in &submitted_members {
+            // personal_missions에서 해당 member_id의 미션 찾기
+            let personal_insight = personal_missions
+                .iter()
+                .find(|pm| pm.user_id == mr.member_id)
+                .map(|pm| {
+                    pm.missions
+                        .iter()
+                        .map(|m| format!("{}: {}", m.mission_title, m.mission_desc))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                });
+
+            let mut mr_active: member_retro::ActiveModel = mr.clone().into();
+            mr_active.personal_insight = Set(personal_insight);
+            mr_active.status = Set(RetrospectStatus::Analyzed);
+            mr_active
+                .update(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        info!(retrospect_id = retrospect_id, "회고 분석 완료");
+
+        Ok(AnalysisResponse {
+            team_insight,
+            emotion_rank,
+            personal_missions,
+        })
     }
 }
 

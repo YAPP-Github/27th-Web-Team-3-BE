@@ -49,6 +49,30 @@ pub enum AppError {
 
     /// TEAM4031: 팀 접근 권한 없음 (403)
     TeamAccessDenied(String),
+
+    /// AI_001: 유효하지 않은 비밀 키 (401)
+    InvalidSecretKey(String),
+
+    /// RETRO4091: 이미 분석 완료된 회고 (409)
+    RetroAlreadyAnalyzed(String),
+
+    /// AI4031: 월간 분석 가능 횟수 초과 (403)
+    AiMonthlyLimitExceeded(String),
+
+    /// RETRO4042: 분석할 회고 답변 데이터 부족 (404)
+    RetroInsufficientData(String),
+
+    /// AI5001: 데이터 종합 분석 중 오류 (500)
+    AiAnalysisFailed(String),
+
+    /// AI_003: AI 연결 실패 (500)
+    AiConnectionFailed(String),
+
+    /// AI_005: AI 서비스 일시적 오류 (503)
+    AiServiceUnavailable(String),
+
+    /// AI_006: AI 일반 오류 (500)
+    AiGeneralError(String),
 }
 
 impl AppError {
@@ -67,6 +91,14 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
             AppError::RetroAlreadySubmitted(msg) => msg.clone(),
             AppError::TeamAccessDenied(msg) => msg.clone(),
+            AppError::RetroAlreadyAnalyzed(msg) => msg.clone(),
+            AppError::InvalidSecretKey(msg) => msg.clone(),
+            AppError::AiMonthlyLimitExceeded(msg) => msg.clone(),
+            AppError::RetroInsufficientData(msg) => msg.clone(),
+            AppError::AiAnalysisFailed(msg) => msg.clone(),
+            AppError::AiConnectionFailed(msg) => msg.clone(),
+            AppError::AiServiceUnavailable(msg) => msg.clone(),
+            AppError::AiGeneralError(msg) => msg.clone(),
         }
     }
 
@@ -85,6 +117,14 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
             AppError::RetroAlreadySubmitted(_) => "RETRO4033",
             AppError::TeamAccessDenied(_) => "TEAM4031",
+            AppError::RetroAlreadyAnalyzed(_) => "RETRO4091",
+            AppError::InvalidSecretKey(_) => "AI_001",
+            AppError::AiMonthlyLimitExceeded(_) => "AI4031",
+            AppError::RetroInsufficientData(_) => "RETRO4042",
+            AppError::AiAnalysisFailed(_) => "AI5001",
+            AppError::AiConnectionFailed(_) => "AI_003",
+            AppError::AiServiceUnavailable(_) => "AI_005",
+            AppError::AiGeneralError(_) => "AI_006",
         }
     }
 
@@ -103,6 +143,14 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
             AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
+            AppError::RetroAlreadyAnalyzed(_) => StatusCode::CONFLICT,
+            AppError::InvalidSecretKey(_) => StatusCode::UNAUTHORIZED,
+            AppError::AiMonthlyLimitExceeded(_) => StatusCode::FORBIDDEN,
+            AppError::RetroInsufficientData(_) => StatusCode::NOT_FOUND,
+            AppError::AiAnalysisFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -117,6 +165,18 @@ impl IntoResponse for AppError {
         match &self {
             AppError::InternalError(msg) => {
                 error!("Internal Server Error: {}", msg);
+            }
+            AppError::AiAnalysisFailed(msg) => {
+                error!("AI Analysis Failed: {}", msg);
+            }
+            AppError::AiConnectionFailed(msg) => {
+                error!("AI Connection Failed: {}", msg);
+            }
+            AppError::AiServiceUnavailable(msg) => {
+                error!("AI Service Unavailable: {}", msg);
+            }
+            AppError::AiGeneralError(msg) => {
+                error!("AI General Error: {}", msg);
             }
             _ => {
                 error!("Error [{}]: {}", error_code, message);
