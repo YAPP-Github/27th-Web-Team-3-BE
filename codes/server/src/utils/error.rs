@@ -26,7 +26,7 @@ pub enum AppError {
     /// JSON 파싱 실패 (400)
     JsonParseFailed(String),
 
-    /// COMMON401: 인증 실패 (401)
+    /// AUTH4001: 인증 실패 (401)
     Unauthorized(String),
 
     /// COMMON403: 권한 없음 (403)
@@ -73,7 +73,7 @@ impl AppError {
             AppError::ValidationError(_) => "COMMON400",
             AppError::InternalError(_) => "COMMON500",
             AppError::JsonParseFailed(_) => "COMMON400",
-            AppError::Unauthorized(_) => "COMMON401",
+            AppError::Unauthorized(_) => "AUTH4001",
             AppError::Forbidden(_) => "COMMON403",
             AppError::RetrospectNotFound(_) => "RETRO4041",
             AppError::RetroAnswersMissing(_) => "RETRO4002",
