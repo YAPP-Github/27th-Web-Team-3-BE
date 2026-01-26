@@ -31,6 +31,7 @@
 7. **응답 반환**: retrospectId, submittedAt (YYYY-MM-DD), status: "SUBMITTED"
 
 ### 2.3 에러 코드
+
 | Code | HTTP | Description |
 |------|------|-------------|
 | RETRO4002 | 400 | 답변 누락 (5개 미만 또는 questionNumber 누락) |
@@ -84,6 +85,7 @@
 - [x] 불필요한 의존성이 추가되지 않았는가?
 
 ## 5. 변경 파일 목록
+
 | 파일 | 변경 유형 | 설명 |
 |------|----------|------|
 | `src/utils/error.rs` | 수정 | 5개 에러 variant 추가 |

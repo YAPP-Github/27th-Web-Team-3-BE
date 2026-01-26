@@ -1,0 +1,12 @@
+# .coderabbit.yaml
+reviews:
+  # .rs 확장자를 가진 파일만 포함
+  path_filters:
+    - "**/*.rs"
+
+  # Rust 특화 리뷰 지침 추가
+  instructions: |
+    모든 Rust 코드 리뷰 시 다음 사항을 중점적으로 확인하십시오:
+    1. Ownership 및 Borrowing 규칙 준수 여부
+    2. 불필요한 .unwrap() 사용 지양 및 에러 핸들링 적절성
+    3. Clippy가 제안할 법한 Idiomatic한 코드 작성 여부

@@ -32,8 +32,29 @@ pub enum AppError {
     /// COMMON403: 권한 없음 (403)
     Forbidden(String),
 
+    /// RETRO4001: 프로젝트 이름 길이 유효성 검사 실패 (400)
+    RetroProjectNameInvalid(String),
+
+    /// RETRO4005: 유효하지 않은 회고 방식 (400)
+    RetroMethodInvalid(String),
+
+    /// RETRO4006: 유효하지 않은 URL 형식 (400)
+    RetroUrlInvalid(String),
+
+    /// TEAM4031: 팀 접근 권한 없음 (403)
+    TeamAccessDenied(String),
+
+    /// TEAM4041: 존재하지 않는 팀 (404)
+    TeamNotFound(String),
+
     /// RETRO4041: 존재하지 않는 회고 (404)
     RetrospectNotFound(String),
+
+    /// RETRO4091: 중복 참석 (409)
+    ParticipantDuplicate(String),
+
+    /// RETRO4002: 과거 회고 참석 불가 / 답변 누락 (400)
+    RetrospectAlreadyStarted(String),
 
     /// RETRO4002: 답변 누락 (400)
     RetroAnswersMissing(String),
@@ -58,7 +79,14 @@ impl AppError {
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
             AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
+            AppError::RetroProjectNameInvalid(msg) => msg.clone(),
+            AppError::RetroMethodInvalid(msg) => msg.clone(),
+            AppError::RetroUrlInvalid(msg) => msg.clone(),
+            AppError::TeamAccessDenied(msg) => msg.clone(),
+            AppError::TeamNotFound(msg) => msg.clone(),
             AppError::RetrospectNotFound(msg) => msg.clone(),
+            AppError::ParticipantDuplicate(msg) => msg.clone(),
+            AppError::RetrospectAlreadyStarted(msg) => msg.clone(),
             AppError::RetroAnswersMissing(msg) => msg.clone(),
             AppError::RetroAnswerTooLong(msg) => msg.clone(),
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
@@ -73,9 +101,16 @@ impl AppError {
             AppError::ValidationError(_) => "COMMON400",
             AppError::InternalError(_) => "COMMON500",
             AppError::JsonParseFailed(_) => "COMMON400",
-            AppError::Unauthorized(_) => "COMMON401",
+            AppError::Unauthorized(_) => "AUTH4001",
             AppError::Forbidden(_) => "COMMON403",
+            AppError::RetroProjectNameInvalid(_) => "RETRO4001",
+            AppError::RetroMethodInvalid(_) => "RETRO4005",
+            AppError::RetroUrlInvalid(_) => "RETRO4006",
+            AppError::TeamAccessDenied(_) => "TEAM4031",
+            AppError::TeamNotFound(_) => "TEAM4041",
             AppError::RetrospectNotFound(_) => "RETRO4041",
+            AppError::ParticipantDuplicate(_) => "RETRO4091",
+            AppError::RetrospectAlreadyStarted(_) => "RETRO4002",
             AppError::RetroAnswersMissing(_) => "RETRO4002",
             AppError::RetroAnswerTooLong(_) => "RETRO4003",
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
@@ -92,7 +127,14 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::RetroProjectNameInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroMethodInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroUrlInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
+            AppError::TeamNotFound(_) => StatusCode::NOT_FOUND,
             AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
+            AppError::RetrospectAlreadyStarted(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswersMissing(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
@@ -126,7 +168,14 @@ impl IntoResponse for AppError {
 /// JsonRejection을 AppError로 변환
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
-        AppError::JsonParseFailed(rejection.to_string())
+        let message = rejection.to_string();
+
+        // retrospectMethod 필드의 enum 파싱 실패 감지
+        if message.contains("retrospectMethod") && message.contains("unknown variant") {
+            return AppError::RetroMethodInvalid("유효하지 않은 회고 방식입니다.".to_string());
+        }
+
+        AppError::JsonParseFailed(message)
     }
 }
 
@@ -140,8 +189,16 @@ impl From<QueryRejection> for AppError {
 /// ValidationErrors를 AppError로 변환
 impl From<ValidationErrors> for AppError {
     fn from(errors: ValidationErrors) -> Self {
-        let messages: Vec<String> = errors
-            .field_errors()
+        let field_errors = errors.field_errors();
+
+        // project_name 필드 검증 실패 시 RETRO4001 반환
+        if field_errors.contains_key("project_name") {
+            return AppError::RetroProjectNameInvalid(
+                "프로젝트 이름은 1자 이상 20자 이하여야 합니다.".to_string(),
+            );
+        }
+
+        let messages: Vec<String> = field_errors
             .iter()
             .flat_map(|(field, errs)| {
                 errs.iter().map(move |e| {
