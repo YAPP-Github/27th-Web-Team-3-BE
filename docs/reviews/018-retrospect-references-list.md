@@ -29,7 +29,7 @@
 
 ## 파일 구조
 
-```
+```text
 codes/server/src/
 ├── domain/
 │   └── retrospect/
@@ -99,7 +99,7 @@ pub async fn list_references(
 ```
 
 **비즈니스 로직 흐름:**
-```
+```text
 1. 회고 존재 여부 확인 → RetrospectNotFound (404)
 2. 회고의 team_id로 팀 멤버십 확인 → RetrospectNotFound (404, 동일 메시지로 존재 여부 노출 방지)
 3. retro_refrence 테이블에서 참고자료 조회 (referenceId 오름차순)
@@ -154,7 +154,7 @@ pub async fn list_references(
 
 ### 테스트 실행 결과
 
-```
+```text
 running 73 tests
 test domain::retrospect::dto::tests::should_fail_validation_when_project_name_is_empty ... ok
 ...

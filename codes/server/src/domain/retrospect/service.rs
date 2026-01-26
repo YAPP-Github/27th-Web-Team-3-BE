@@ -287,31 +287,27 @@ impl RetrospectService {
         Ok(result)
     }
 
-    /// 회고 참석자 등록 (API-014)
-    pub async fn create_participant(
-        state: AppState,
+    /// 회고 조회 및 팀 멤버십 확인 헬퍼
+    /// 비멤버에게 회고 존재 여부를 노출하지 않도록
+    /// "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
+    async fn find_retrospect_for_member(
+        state: &AppState,
         user_id: i64,
         retrospect_id: i64,
-    ) -> Result<CreateParticipantResponse, AppError> {
-        // 1. 회고 조회 및 팀 멤버십 확인
-        // 비멤버에게 회고 존재 여부를 노출하지 않도록
-        // "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
+    ) -> Result<retrospect::Model, AppError> {
         let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
             .one(&state.db)
             .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::RetrospectNotFound(
+                    "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
+                )
+            })?;
 
-        let retrospect_model = retrospect_model.ok_or_else(|| {
-            AppError::RetrospectNotFound(
-                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
-            )
-        })?;
-
-        // 2. 팀 멤버십 확인 (동일한 에러로 존재 여부 노출 방지)
-        let team_id = retrospect_model.team_id;
         let is_member = member_team::Entity::find()
             .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(team_id))
+            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -322,7 +318,20 @@ impl RetrospectService {
             ));
         }
 
-        // 3. 진행 예정인 회고인지 확인 (과거 회고에는 참석 불가)
+        Ok(retrospect_model)
+    }
+
+    /// 회고 참석자 등록 (API-014)
+    pub async fn create_participant(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<CreateParticipantResponse, AppError> {
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
+
+        // 2. 진행 예정인 회고인지 확인 (과거 회고에는 참석 불가)
         let now_kst = Utc::now().naive_utc() + chrono::Duration::hours(9);
         if retrospect_model.start_time <= now_kst {
             return Err(AppError::RetrospectAlreadyStarted(
@@ -330,7 +339,7 @@ impl RetrospectService {
             ));
         }
 
-        // 4. 이미 참석자로 등록되어 있는지 확인
+        // 3. 이미 참석자로 등록되어 있는지 확인
         let existing_participant = member_retro::Entity::find()
             .filter(member_retro::Column::MemberId.eq(user_id))
             .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
@@ -344,7 +353,7 @@ impl RetrospectService {
             ));
         }
 
-        // 5. member 정보 조회하여 nickname 추출 (이메일에서 @ 앞부분 추출)
+        // 4. member 정보 조회하여 nickname 추출 (이메일에서 @ 앞부분 추출)
         let member_model = member::Entity::find_by_id(user_id)
             .one(&state.db)
             .await
@@ -358,7 +367,7 @@ impl RetrospectService {
             .unwrap_or(&member_model.email)
             .to_string();
 
-        // 6. member_retro 테이블에 새 레코드 삽입
+        // 5. member_retro 테이블에 새 레코드 삽입
         let member_retro_model = member_retro::ActiveModel {
             member_id: Set(user_id),
             retrospect_id: Set(retrospect_id),
@@ -379,7 +388,7 @@ impl RetrospectService {
             }
         })?;
 
-        // 7. CreateParticipantResponse 반환
+        // 6. CreateParticipantResponse 반환
         Ok(CreateParticipantResponse {
             participant_id: inserted.member_retro_id,
             member_id: user_id,
@@ -394,35 +403,10 @@ impl RetrospectService {
         retrospect_id: i64,
     ) -> Result<Vec<ReferenceItem>, AppError> {
         // 1. 회고 조회 및 팀 멤버십 확인
-        // 비멤버에게 회고 존재 여부를 노출하지 않도록
-        // "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
-        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let _retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
-        let retrospect_model = retrospect_model.ok_or_else(|| {
-            AppError::RetrospectNotFound(
-                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
-            )
-        })?;
-
-        // 2. 팀 멤버십 확인 (동일한 에러로 존재 여부 노출 방지)
-        let team_id = retrospect_model.team_id;
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(team_id))
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        if is_member.is_none() {
-            return Err(AppError::RetrospectNotFound(
-                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
-            ));
-        }
-
-        // 3. 참고자료 목록 조회 (referenceId 오름차순)
+        // 2. 참고자료 목록 조회 (referenceId 오름차순)
         let references = retro_reference::Entity::find()
             .filter(retro_reference::Column::RetrospectId.eq(retrospect_id))
             .order_by_asc(retro_reference::Column::RetroRefrenceId)
@@ -430,7 +414,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 4. DTO 변환
+        // 3. DTO 변환
         let result: Vec<ReferenceItem> = references
             .into_iter()
             .map(|r| ReferenceItem {
