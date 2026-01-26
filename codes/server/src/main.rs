@@ -16,10 +16,13 @@ use crate::config::AppConfig;
 use crate::domain::auth::dto::{
     EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse,
 };
+use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
+    SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
     SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
-    SuccessReferencesListResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
+    SuccessReferencesListResponse, SuccessSubmitRetrospectResponse,
+    SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -36,7 +39,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::create_retrospect,
         domain::retrospect::handler::list_team_retrospects,
         domain::retrospect::handler::create_participant,
-        domain::retrospect::handler::list_references
+        domain::retrospect::handler::list_references,
+        domain::retrospect::handler::submit_retrospect
     ),
     components(
         schemas(
@@ -56,7 +60,12 @@ use crate::utils::{BaseResponse, ErrorResponse};
             CreateParticipantResponse,
             SuccessCreateParticipantResponse,
             ReferenceItem,
-            SuccessReferencesListResponse
+            SuccessReferencesListResponse,
+            SubmitRetrospectRequest,
+            SubmitRetrospectResponse,
+            SubmitAnswerItem,
+            SuccessSubmitRetrospectResponse,
+            RetrospectStatus
         )
     ),
     tags(
@@ -149,6 +158,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/references",
             axum::routing::get(domain::retrospect::handler::list_references),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/submit",
+            axum::routing::post(domain::retrospect::handler::submit_retrospect),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
