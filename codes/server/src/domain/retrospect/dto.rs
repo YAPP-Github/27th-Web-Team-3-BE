@@ -1,8 +1,25 @@
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
 use super::entity::retrospect::{Model as RetrospectModel, RetrospectMethod};
+
+/// 참고 URL 최대 길이 (개별 URL당)
+pub const REFERENCE_URL_MAX_LENGTH: usize = 2048;
+
+/// 참고 URL 개별 길이 검증
+fn validate_reference_url_items(urls: &[String]) -> Result<(), validator::ValidationError> {
+    for url in urls {
+        if url.len() > REFERENCE_URL_MAX_LENGTH {
+            let mut err = validator::ValidationError::new("url_too_long");
+            err.message = Some(Cow::Borrowed("각 URL은 최대 2048자까지 허용됩니다"));
+            return Err(err);
+        }
+    }
+    Ok(())
+}
 
 /// 회고 생성 요청 DTO
 #[derive(Debug, Deserialize, Validate, ToSchema)]
@@ -39,8 +56,11 @@ pub struct CreateRetrospectRequest {
     /// 회고 방식
     pub retrospect_method: RetrospectMethod,
 
-    /// 참고 자료 URL 리스트 (최대 10개)
-    #[validate(length(max = 10, message = "참고 URL은 최대 10개까지 등록 가능합니다"))]
+    /// 참고 자료 URL 리스트 (최대 10개, 각 URL 최대 2048자)
+    #[validate(
+        length(max = 10, message = "참고 URL은 최대 10개까지 등록 가능합니다"),
+        custom(function = "validate_reference_url_items")
+    )]
     #[serde(default)]
     pub reference_urls: Vec<String>,
 }
@@ -390,6 +410,41 @@ mod tests {
         // Arrange
         let request = CreateRetrospectRequest {
             reference_urls: vec![],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_validation_when_individual_url_exceeds_max_length() {
+        // Arrange
+        let long_url = format!("https://example.com/{}", "a".repeat(2050));
+        let request = CreateRetrospectRequest {
+            reference_urls: vec![long_url],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("reference_urls"));
+    }
+
+    #[test]
+    fn should_pass_validation_when_url_is_within_max_length() {
+        // Arrange
+        let valid_url = format!("https://example.com/{}", "a".repeat(2020));
+        let request = CreateRetrospectRequest {
+            reference_urls: vec![valid_url],
             ..create_valid_request()
         };
 

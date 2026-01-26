@@ -17,7 +17,7 @@ use crate::utils::error::AppError;
 
 use super::dto::{
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
-    TeamRetrospectListItem,
+    TeamRetrospectListItem, REFERENCE_URL_MAX_LENGTH,
 };
 
 pub struct RetrospectService;
@@ -177,10 +177,11 @@ impl RetrospectService {
         // 각 URL 형식 검증
         for url in urls {
             // 최대 길이 검증
-            if url.len() > 2048 {
-                return Err(AppError::RetroUrlInvalid(
-                    "URL은 최대 2048자까지 허용됩니다.".to_string(),
-                ));
+            if url.len() > REFERENCE_URL_MAX_LENGTH {
+                return Err(AppError::RetroUrlInvalid(format!(
+                    "URL은 최대 {}자까지 허용됩니다.",
+                    REFERENCE_URL_MAX_LENGTH
+                )));
             }
 
             // URL 형식 검증 (http:// 또는 https://로 시작해야 함)
