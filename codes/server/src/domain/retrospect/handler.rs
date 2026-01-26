@@ -10,7 +10,7 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
     TeamRetrospectListItem,
 };
 use super::service::RetrospectService;
@@ -127,8 +127,7 @@ pub async fn list_team_retrospects(
         (status = 200, description = "회고 참석자로 성공적으로 등록되었습니다.", body = SuccessCreateParticipantResponse),
         (status = 400, description = "잘못된 요청 (retrospectId 유효성 오류)", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "팀 접근 권한 없음", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 회고", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고이거나 접근 권한 없음", body = ErrorResponse),
         (status = 409, description = "중복 참석", body = ErrorResponse),
         (status = 500, description = "서버 내부 오류", body = ErrorResponse)
     ),
@@ -159,5 +158,55 @@ pub async fn create_participant(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "회고 참석자로 성공적으로 등록되었습니다.",
+    )))
+}
+
+/// 회고 참고자료 목록 조회 API (API-018)
+///
+/// 특정 회고에 등록된 모든 참고자료(URL) 목록을 조회합니다.
+/// 회고 생성 시 등록했던 외부 링크들을 확인할 수 있습니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retrospects/{retrospectId}/references",
+    params(
+        ("retrospectId" = i64, Path, description = "조회를 원하는 회고의 고유 ID")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "참고자료 목록을 성공적으로 조회했습니다.", body = SuccessReferencesListResponse),
+        (status = 400, description = "잘못된 요청 (retrospectId 유효성 오류)", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고이거나 접근 권한 없음", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn list_references(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(retrospect_id): Path<i64>,
+) -> Result<Json<BaseResponse<Vec<ReferenceItem>>>, AppError> {
+    // retrospectId 검증 (1 이상의 양수)
+    if retrospect_id < 1 {
+        return Err(AppError::BadRequest(
+            "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result = RetrospectService::list_references(state, user_id, retrospect_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "참고자료 목록을 성공적으로 조회했습니다.",
     )))
 }

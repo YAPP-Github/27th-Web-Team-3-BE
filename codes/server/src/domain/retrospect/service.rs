@@ -16,7 +16,7 @@ use crate::state::AppState;
 use crate::utils::error::AppError;
 
 use super::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
     TeamRetrospectListItem,
 };
 
@@ -293,16 +293,21 @@ impl RetrospectService {
         user_id: i64,
         retrospect_id: i64,
     ) -> Result<CreateParticipantResponse, AppError> {
-        // 1. 회고 존재 여부 확인
+        // 1. 회고 조회 및 팀 멤버십 확인
+        // 비멤버에게 회고 존재 여부를 노출하지 않도록
+        // "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
         let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let retrospect_model = retrospect_model
-            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+        let retrospect_model = retrospect_model.ok_or_else(|| {
+            AppError::RetrospectNotFound(
+                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
+            )
+        })?;
 
-        // 2. 회고의 team_id를 가져와서 팀 멤버십 확인
+        // 2. 팀 멤버십 확인 (동일한 에러로 존재 여부 노출 방지)
         let team_id = retrospect_model.team_id;
         let is_member = member_team::Entity::find()
             .filter(member_team::Column::MemberId.eq(user_id))
@@ -312,8 +317,8 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 회고가 속한 팀의 멤버가 아닙니다.".to_string(),
+            return Err(AppError::RetrospectNotFound(
+                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
             ));
         }
 
@@ -380,6 +385,62 @@ impl RetrospectService {
             member_id: user_id,
             nickname,
         })
+    }
+
+    /// 회고 참고자료 목록 조회 (API-018)
+    pub async fn list_references(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<Vec<ReferenceItem>, AppError> {
+        // 1. 회고 조회 및 팀 멤버십 확인
+        // 비멤버에게 회고 존재 여부를 노출하지 않도록
+        // "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let retrospect_model = retrospect_model.ok_or_else(|| {
+            AppError::RetrospectNotFound(
+                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
+            )
+        })?;
+
+        // 2. 팀 멤버십 확인 (동일한 에러로 존재 여부 노출 방지)
+        let team_id = retrospect_model.team_id;
+        let is_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(team_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_member.is_none() {
+            return Err(AppError::RetrospectNotFound(
+                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 3. 참고자료 목록 조회 (referenceId 오름차순)
+        let references = retro_reference::Entity::find()
+            .filter(retro_reference::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(retro_reference::Column::RetroRefrenceId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 4. DTO 변환
+        let result: Vec<ReferenceItem> = references
+            .into_iter()
+            .map(|r| ReferenceItem {
+                reference_id: r.retro_refrence_id,
+                url_name: r.title,
+                url: r.url,
+            })
+            .collect();
+
+        Ok(result)
     }
 }
 

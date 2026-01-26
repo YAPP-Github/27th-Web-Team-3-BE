@@ -135,6 +135,32 @@ pub struct SuccessCreateParticipantResponse {
     pub result: CreateParticipantResponse,
 }
 
+// ============================================
+// API-018: 회고 참고자료 목록 조회 DTO
+// ============================================
+
+/// 참고자료 아이템 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceItem {
+    /// 자료 고유 식별자
+    pub reference_id: i64,
+    /// 자료 별칭 (예: 깃허브 레포지토리)
+    pub url_name: String,
+    /// 참고자료 주소
+    pub url: String,
+}
+
+/// Swagger용 참고자료 목록 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessReferencesListResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: Vec<ReferenceItem>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
