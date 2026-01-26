@@ -28,7 +28,12 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
         domain::retrospect::handler::create_retro_room,
-        domain::retrospect::handler::join_retro_room
+        domain::retrospect::handler::join_retro_room,
+        domain::retrospect::handler::list_retro_rooms,
+        domain::retrospect::handler::update_retro_room_order,
+        domain::retrospect::handler::update_retro_room_name,
+        domain::retrospect::handler::delete_retro_room,
+        domain::retrospect::handler::list_retrospects
     ),
     components(
         schemas(
@@ -44,7 +49,19 @@ use crate::utils::{BaseResponse, ErrorResponse};
             domain::retrospect::dto::SuccessRetroRoomCreateResponse,
             domain::retrospect::dto::JoinRetroRoomRequest,
             domain::retrospect::dto::JoinRetroRoomResponse,
-            domain::retrospect::dto::SuccessJoinRetroRoomResponse
+            domain::retrospect::dto::SuccessJoinRetroRoomResponse,
+            domain::retrospect::dto::RetroRoomListItem,
+            domain::retrospect::dto::SuccessRetroRoomListResponse,
+            domain::retrospect::dto::RetroRoomOrderItem,
+            domain::retrospect::dto::UpdateRetroRoomOrderRequest,
+            domain::retrospect::dto::SuccessEmptyResponse,
+            domain::retrospect::dto::UpdateRetroRoomNameRequest,
+            domain::retrospect::dto::UpdateRetroRoomNameResponse,
+            domain::retrospect::dto::SuccessUpdateRetroRoomNameResponse,
+            domain::retrospect::dto::DeleteRetroRoomResponse,
+            domain::retrospect::dto::SuccessDeleteRetroRoomResponse,
+            domain::retrospect::dto::RetrospectListItem,
+            domain::retrospect::dto::SuccessRetrospectListResponse
         )
     ),
     tags(
@@ -124,11 +141,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route(
             "/api/v1/retro-rooms",
-            axum::routing::post(domain::retrospect::handler::create_retro_room),
+            axum::routing::post(domain::retrospect::handler::create_retro_room)
+                .get(domain::retrospect::handler::list_retro_rooms),
         )
         .route(
             "/api/v1/retro-rooms/join",
             axum::routing::post(domain::retrospect::handler::join_retro_room),
+        )
+        .route(
+            "/api/v1/retro-rooms/order",
+            axum::routing::patch(domain::retrospect::handler::update_retro_room_order),
+        )
+        .route(
+            "/api/v1/retro-rooms/:retro_room_id/name",
+            axum::routing::patch(domain::retrospect::handler::update_retro_room_name),
+        )
+        .route(
+            "/api/v1/retro-rooms/:retro_room_id",
+            axum::routing::delete(domain::retrospect::handler::delete_retro_room),
+        )
+        .route(
+            "/api/v1/retro-rooms/:retro_room_id/retrospects",
+            axum::routing::get(domain::retrospect::handler::list_retrospects),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
