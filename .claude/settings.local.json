@@ -64,7 +64,8 @@
       "Bash(gh pr edit:*)",
       "Bash(git -C /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE log --all --oneline)",
       "Skill(build)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []

@@ -18,6 +18,7 @@
 - **쿼리 파라미터**: `range` (선택, 기본값: ALL)
 
 ### 기간 필터 (StorageRangeFilter)
+
 | 값 | 설명 | 일수 |
 |----|------|------|
 | `ALL` | 전체 기간 (기본값) | 제한 없음 |
@@ -53,11 +54,13 @@
 ## 변경 파일
 
 ### 신규 파일
+
 | 파일 | 설명 |
 |------|------|
 | `tests/retrospect_storage_test.rs` | 통합 테스트 (12개) |
 
 ### 수정 파일
+
 | 파일 | 변경 내용 |
 |------|----------|
 | `src/domain/retrospect/dto.rs` | StorageRangeFilter, StorageQueryParams, StorageRetrospectItem, StorageYearGroup, StorageResponse, SuccessStorageResponse DTO 추가 + 단위 테스트 8개 |
@@ -80,6 +83,7 @@
 7. 연도 내림차순 + 그룹 내 날짜 내림차순 정렬
 
 ### 에러 처리
+
 | 상황 | HTTP | 코드 | 메시지 |
 |------|------|------|--------|
 | 인증 실패 | 401 | AUTH4001 | 인증 정보가 유효하지 않습니다. |
@@ -89,6 +93,7 @@
 ## 테스트 커버리지
 
 ### 단위 테스트 (8개) - dto.rs
+
 | 테스트 | 검증 내용 |
 |--------|----------|
 | `should_deserialize_all_range_filter` | ALL 역직렬화 + days() None |
@@ -102,6 +107,7 @@
 | `should_serialize_empty_storage_response` | 빈 응답 직렬화 검증 |
 
 ### 통합 테스트 (12개) - retrospect_storage_test.rs
+
 | 테스트 | 검증 내용 |
 |--------|----------|
 | `api019_should_return_401_when_authorization_header_missing` | 인증 헤더 누락 → 401 |
@@ -131,7 +137,7 @@
 - [x] Swagger/OpenAPI 문서화 완료
 
 ## 품질 검증 결과
-```
+```text
 cargo test     → 51 passed, 0 failed
 cargo clippy   → 0 errors, 0 warnings
 cargo fmt      → clean
