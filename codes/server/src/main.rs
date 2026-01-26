@@ -19,10 +19,10 @@ use crate::domain::auth::dto::{
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
-    SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
-    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
-    SuccessReferencesListResponse, SuccessSubmitRetrospectResponse,
-    SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
+    StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessCreateParticipantResponse,
+    SuccessCreateRetrospectResponse, SuccessReferencesListResponse, SuccessStorageResponse,
+    SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -40,7 +40,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::list_team_retrospects,
         domain::retrospect::handler::create_participant,
         domain::retrospect::handler::list_references,
-        domain::retrospect::handler::submit_retrospect
+        domain::retrospect::handler::submit_retrospect,
+        domain::retrospect::handler::get_storage
     ),
     components(
         schemas(
@@ -65,7 +66,12 @@ use crate::utils::{BaseResponse, ErrorResponse};
             SubmitRetrospectResponse,
             SubmitAnswerItem,
             SuccessSubmitRetrospectResponse,
-            RetrospectStatus
+            RetrospectStatus,
+            StorageRangeFilter,
+            StorageRetrospectItem,
+            StorageYearGroup,
+            StorageResponse,
+            SuccessStorageResponse
         )
     ),
     tags(
@@ -158,6 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/references",
             axum::routing::get(domain::retrospect::handler::list_references),
+        )
+        .route(
+            "/api/v1/retrospects/storage",
+            axum::routing::get(domain::retrospect::handler::get_storage),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/submit",
