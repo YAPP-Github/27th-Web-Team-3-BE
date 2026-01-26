@@ -32,7 +32,7 @@ impl<T: Serialize> BaseResponse<T> {
         }
     }
 
-    /// 커스텀 메시지와 함께 성공 응답 생성
+    /// 커스텀 메시지를 포함한 성공 응답 생성
     pub fn success_with_message(result: T, message: impl Into<String>) -> Self {
         Self {
             is_success: true,

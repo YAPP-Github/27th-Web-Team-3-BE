@@ -18,9 +18,13 @@ use crate::domain::auth::dto::{
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
     SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
-    SuccessSubmitRetrospectResponse,
+    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
+    SuccessReferencesListResponse, SuccessSubmitRetrospectResponse,
+    SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
+use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
 use crate::utils::{BaseResponse, ErrorResponse};
 
@@ -32,6 +36,10 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::auth::handler::login,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
+        domain::retrospect::handler::create_retrospect,
+        domain::retrospect::handler::list_team_retrospects,
+        domain::retrospect::handler::create_participant,
+        domain::retrospect::handler::list_references,
         domain::retrospect::handler::submit_retrospect
     ),
     components(
@@ -43,6 +51,16 @@ use crate::utils::{BaseResponse, ErrorResponse};
             LoginResponse,
             EmailLoginRequest,
             SuccessLoginResponse,
+            CreateRetrospectRequest,
+            CreateRetrospectResponse,
+            SuccessCreateRetrospectResponse,
+            TeamRetrospectListItem,
+            SuccessTeamRetrospectListResponse,
+            RetrospectMethod,
+            CreateParticipantResponse,
+            SuccessCreateParticipantResponse,
+            ReferenceItem,
+            SuccessReferencesListResponse,
             SubmitRetrospectRequest,
             SubmitRetrospectResponse,
             SubmitAnswerItem,
@@ -124,6 +142,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/auth/test",
             axum::routing::get(domain::auth::handler::auth_test),
+        )
+        .route(
+            "/api/v1/retrospects",
+            axum::routing::post(domain::retrospect::handler::create_retrospect),
+        )
+        .route(
+            "/api/v1/teams/:team_id/retrospects",
+            axum::routing::get(domain::retrospect::handler::list_team_retrospects),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/participants",
+            axum::routing::post(domain::retrospect::handler::create_participant),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/references",
+            axum::routing::get(domain::retrospect::handler::list_references),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/submit",
