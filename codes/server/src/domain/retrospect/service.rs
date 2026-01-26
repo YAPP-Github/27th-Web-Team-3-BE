@@ -16,8 +16,8 @@ use crate::state::AppState;
 use crate::utils::error::AppError;
 
 use super::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    TeamRetrospectListItem,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
+    TeamRetrospectListItem, REFERENCE_URL_MAX_LENGTH,
 };
 
 pub struct RetrospectService;
@@ -177,10 +177,11 @@ impl RetrospectService {
         // 각 URL 형식 검증
         for url in urls {
             // 최대 길이 검증
-            if url.len() > 2048 {
-                return Err(AppError::RetroUrlInvalid(
-                    "URL은 최대 2048자까지 허용됩니다.".to_string(),
-                ));
+            if url.len() > REFERENCE_URL_MAX_LENGTH {
+                return Err(AppError::RetroUrlInvalid(format!(
+                    "URL은 최대 {}자까지 허용됩니다.",
+                    REFERENCE_URL_MAX_LENGTH
+                )));
             }
 
             // URL 형식 검증 (http:// 또는 https://로 시작해야 함)
@@ -297,37 +298,51 @@ impl RetrospectService {
         Ok(result)
     }
 
+    /// 회고 조회 및 팀 멤버십 확인 헬퍼
+    /// 비멤버에게 회고 존재 여부를 노출하지 않도록
+    /// "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
+    async fn find_retrospect_for_member(
+        state: &AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<retrospect::Model, AppError> {
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::RetrospectNotFound(
+                    "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
+                )
+            })?;
+
+        let is_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_member.is_none() {
+            return Err(AppError::RetrospectNotFound(
+                "존재하지 않는 회고이거나 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        Ok(retrospect_model)
+    }
+
     /// 회고 참석자 등록 (API-014)
     pub async fn create_participant(
         state: AppState,
         user_id: i64,
         retrospect_id: i64,
     ) -> Result<CreateParticipantResponse, AppError> {
-        // 1. 회고 존재 여부 확인
-        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
-        let retrospect_model = retrospect_model
-            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
-
-        // 2. 회고의 team_id를 가져와서 팀 멤버십 확인
-        let team_id = retrospect_model.team_id;
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(team_id))
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 회고가 속한 팀의 멤버가 아닙니다.".to_string(),
-            ));
-        }
-
-        // 3. 진행 예정인 회고인지 확인 (과거 회고에는 참석 불가)
+        // 2. 진행 예정인 회고인지 확인 (과거 회고에는 참석 불가)
         let now_kst = Utc::now().naive_utc() + chrono::Duration::hours(9);
         if retrospect_model.start_time <= now_kst {
             return Err(AppError::RetrospectAlreadyStarted(
@@ -335,7 +350,7 @@ impl RetrospectService {
             ));
         }
 
-        // 4. 이미 참석자로 등록되어 있는지 확인
+        // 3. 이미 참석자로 등록되어 있는지 확인
         let existing_participant = member_retro::Entity::find()
             .filter(member_retro::Column::MemberId.eq(user_id))
             .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
@@ -349,7 +364,7 @@ impl RetrospectService {
             ));
         }
 
-        // 5. member 정보 조회하여 nickname 추출 (이메일에서 @ 앞부분 추출)
+        // 4. member 정보 조회하여 nickname 추출 (이메일에서 @ 앞부분 추출)
         let member_model = member::Entity::find_by_id(user_id)
             .one(&state.db)
             .await
@@ -363,7 +378,7 @@ impl RetrospectService {
             .unwrap_or(&member_model.email)
             .to_string();
 
-        // 6. member_retro 테이블에 새 레코드 삽입
+        // 5. member_retro 테이블에 새 레코드 삽입
         let member_retro_model = member_retro::ActiveModel {
             member_id: Set(user_id),
             retrospect_id: Set(retrospect_id),
@@ -384,12 +399,43 @@ impl RetrospectService {
             }
         })?;
 
-        // 7. CreateParticipantResponse 반환
+        // 6. CreateParticipantResponse 반환
         Ok(CreateParticipantResponse {
             participant_id: inserted.member_retro_id,
             member_id: user_id,
             nickname,
         })
+    }
+
+    /// 회고 참고자료 목록 조회 (API-018)
+    pub async fn list_references(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<Vec<ReferenceItem>, AppError> {
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let _retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
+
+        // 2. 참고자료 목록 조회 (referenceId 오름차순)
+        let references = retro_reference::Entity::find()
+            .filter(retro_reference::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(retro_reference::Column::RetroRefrenceId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 3. DTO 변환
+        let result: Vec<ReferenceItem> = references
+            .into_iter()
+            .map(|r| ReferenceItem {
+                reference_id: r.retro_refrence_id,
+                url_name: r.title,
+                url: r.url,
+            })
+            .collect();
+
+        Ok(result)
     }
 }
 

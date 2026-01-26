@@ -285,14 +285,14 @@ mod test_helpers {
                 ));
             }
 
-            // Mock: 팀 멤버가 아님 (888)
+            // Mock: 팀 멤버가 아님 (888) - 존재 여부 노출 방지를 위해 404로 통일
             if retrospect_id == 888 {
                 return Err((
-                    StatusCode::FORBIDDEN,
+                    StatusCode::NOT_FOUND,
                     axum::Json(json!({
                         "isSuccess": false,
-                        "code": "TEAM4031",
-                        "message": "해당 회고가 속한 팀의 멤버가 아닙니다.",
+                        "code": "RETRO4041",
+                        "message": "존재하지 않는 회고이거나 접근 권한이 없습니다.",
                         "result": null
                     })),
                 ));
@@ -1026,9 +1026,9 @@ async fn api014_should_return_404_when_retrospect_not_found() {
         .contains("존재하지 않는 회고"));
 }
 
-/// [API-014] 팀 멤버가 아닌 경우 403 반환 테스트
+/// [API-014] 팀 멤버가 아닌 경우 404 반환 테스트 (존재 여부 노출 방지)
 #[tokio::test]
-async fn api014_should_return_403_when_not_team_member() {
+async fn api014_should_return_404_when_not_team_member() {
     // Arrange
     let app = test_helpers::create_participant_test_router();
 
@@ -1042,16 +1042,16 @@ async fn api014_should_return_403_when_not_team_member() {
     // Act
     let response = app.oneshot(request).await.unwrap();
 
-    // Assert
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    // Assert - 비멤버에게 회고 존재 여부를 노출하지 않도록 404로 통일
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     let body = test_helpers::parse_response_body(response.into_body()).await;
     assert_eq!(body["isSuccess"], false);
-    assert_eq!(body["code"], "TEAM4031");
+    assert_eq!(body["code"], "RETRO4041");
     assert!(body["message"]
         .as_str()
         .unwrap()
-        .contains("팀의 멤버가 아닙니다"));
+        .contains("존재하지 않는 회고이거나 접근 권한이 없습니다"));
 }
 
 /// [API-014] 이미 참석자로 등록된 경우 409 반환 테스트
@@ -1142,4 +1142,336 @@ async fn api014_should_return_200_when_valid_request() {
     assert_eq!(result["participantId"], 5001);
     assert_eq!(result["memberId"], 123);
     assert_eq!(result["nickname"], "제이슨");
+}
+
+// ============================================
+// API-018: 회고 참고자료 목록 조회 통합 테스트
+// ============================================
+
+mod api018_test_helpers {
+    use super::*;
+
+    /// API-018 테스트용 라우터 생성 (참고자료 목록 조회)
+    pub fn create_references_test_router() -> Router {
+        async fn test_handler(
+            headers: axum::http::HeaderMap,
+            axum::extract::Path(retrospect_id): axum::extract::Path<i64>,
+        ) -> Result<axum::Json<Value>, (StatusCode, axum::Json<Value>)> {
+            // Authorization 헤더 검증
+            let auth = headers.get(header::AUTHORIZATION);
+            if auth.is_none() {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "AUTH4001",
+                        "message": "인증 정보가 유효하지 않습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            let auth_str = auth.and_then(|v| v.to_str().ok()).unwrap_or("");
+            if !auth_str.starts_with("Bearer ") {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "AUTH4001",
+                        "message": "인증 정보가 유효하지 않습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // retrospectId 검증
+            if retrospect_id < 1 {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "COMMON400",
+                        "message": "retrospectId는 1 이상의 양수여야 합니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // Mock: 존재하지 않는 회고 (999) - 비멤버와 동일한 메시지로 통일
+            if retrospect_id == 999 {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "RETRO4041",
+                        "message": "존재하지 않는 회고이거나 접근 권한이 없습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // Mock: 팀 멤버가 아님 (888) - 존재 여부 노출 방지를 위해 404로 통일
+            if retrospect_id == 888 {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    axum::Json(json!({
+                        "isSuccess": false,
+                        "code": "RETRO4041",
+                        "message": "존재하지 않는 회고이거나 접근 권한이 없습니다.",
+                        "result": null
+                    })),
+                ));
+            }
+
+            // Mock: 참고자료가 없는 회고 (555)
+            if retrospect_id == 555 {
+                return Ok(axum::Json(json!({
+                    "isSuccess": true,
+                    "code": "COMMON200",
+                    "message": "참고자료 목록을 성공적으로 조회했습니다.",
+                    "result": []
+                })));
+            }
+
+            // 성공 응답 (Mock 데이터)
+            Ok(axum::Json(json!({
+                "isSuccess": true,
+                "code": "COMMON200",
+                "message": "참고자료 목록을 성공적으로 조회했습니다.",
+                "result": [
+                    {
+                        "referenceId": 1,
+                        "urlName": "프로젝트 저장소",
+                        "url": "https://github.com/jayson/my-project"
+                    },
+                    {
+                        "referenceId": 2,
+                        "urlName": "기획 문서",
+                        "url": "https://notion.so/doc/123"
+                    }
+                ]
+            })))
+        }
+
+        Router::new().route(
+            "/api/v1/retrospects/:retrospect_id/references",
+            get(test_handler),
+        )
+    }
+}
+
+/// [API-018] 인증 헤더 없이 요청 시 401 반환 테스트
+#[tokio::test]
+async fn api018_should_return_401_when_authorization_header_missing() {
+    // Arrange
+    let app = api018_test_helpers::create_references_test_router();
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/retrospects/1/references")
+        // Authorization 헤더 없음
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "AUTH4001");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("인증 정보가 유효하지 않습니다"));
+}
+
+/// [API-018] 유효하지 않은 retrospectId (0) 요청 시 400 반환 테스트
+#[tokio::test]
+async fn api018_should_return_400_when_retrospect_id_is_zero() {
+    // Arrange
+    let app = api018_test_helpers::create_references_test_router();
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/retrospects/0/references")
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "COMMON400");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("retrospectId는 1 이상의 양수여야 합니다"));
+}
+
+/// [API-018] 유효하지 않은 retrospectId (음수) 요청 시 400 반환 테스트
+#[tokio::test]
+async fn api018_should_return_400_when_retrospect_id_is_negative() {
+    // Arrange
+    let app = api018_test_helpers::create_references_test_router();
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/retrospects/-1/references")
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "COMMON400");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("retrospectId는 1 이상의 양수여야 합니다"));
+}
+
+/// [API-018] 존재하지 않는 회고 요청 시 404 반환 테스트
+#[tokio::test]
+async fn api018_should_return_404_when_retrospect_not_found() {
+    // Arrange
+    let app = api018_test_helpers::create_references_test_router();
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/retrospects/999/references") // 999는 존재하지 않는 회고
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "RETRO4041");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("존재하지 않는 회고이거나 접근 권한이 없습니다"));
+}
+
+/// [API-018] 팀 멤버가 아닌 경우 404 반환 테스트 (존재 여부 노출 방지)
+#[tokio::test]
+async fn api018_should_return_404_when_not_team_member() {
+    // Arrange
+    let app = api018_test_helpers::create_references_test_router();
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/retrospects/888/references") // 888은 팀 멤버가 아닌 케이스
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert - 비멤버에게 회고 존재 여부를 노출하지 않도록 404로 통일
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], false);
+    assert_eq!(body["code"], "RETRO4041");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("존재하지 않는 회고이거나 접근 권한이 없습니다"));
+}
+
+/// [API-018] 참고자료가 없는 경우 빈 배열 반환 테스트
+#[tokio::test]
+async fn api018_should_return_200_with_empty_array_when_no_references() {
+    // Arrange
+    let app = api018_test_helpers::create_references_test_router();
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/retrospects/555/references") // 555는 참고자료가 없는 회고
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], true);
+    assert_eq!(body["code"], "COMMON200");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("성공적으로 조회"));
+
+    // 빈 배열 확인
+    let result = body["result"].as_array().unwrap();
+    assert!(result.is_empty());
+}
+
+/// [API-018] 유효한 요청 시 참고자료 목록 반환 테스트
+#[tokio::test]
+async fn api018_should_return_200_with_references_list_when_valid_request() {
+    // Arrange
+    let app = api018_test_helpers::create_references_test_router();
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/retrospects/1/references")
+        .header(header::AUTHORIZATION, "Bearer valid_token_123")
+        .body(Body::empty())
+        .unwrap();
+
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = test_helpers::parse_response_body(response.into_body()).await;
+    assert_eq!(body["isSuccess"], true);
+    assert_eq!(body["code"], "COMMON200");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("성공적으로 조회"));
+
+    // result가 배열인지 확인
+    let result = body["result"].as_array().unwrap();
+    assert_eq!(result.len(), 2);
+
+    // 첫 번째 참고자료 확인 (referenceId 오름차순)
+    let first = &result[0];
+    assert_eq!(first["referenceId"], 1);
+    assert_eq!(first["urlName"], "프로젝트 저장소");
+    assert_eq!(first["url"], "https://github.com/jayson/my-project");
+
+    // 두 번째 참고자료 확인
+    let second = &result[1];
+    assert_eq!(second["referenceId"], 2);
+    assert_eq!(second["urlName"], "기획 문서");
+    assert_eq!(second["url"], "https://notion.so/doc/123");
 }
