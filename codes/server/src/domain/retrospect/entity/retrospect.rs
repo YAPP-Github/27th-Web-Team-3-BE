@@ -14,7 +14,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub retrospect_id: i64,
     pub title: String,
-    pub team_insight: Option<String>,
+    pub retro_room_insight: Option<String>,
     pub retro_category: RetroCategory,
     pub created_at: DateTime,
     pub updated_at: DateTime,
