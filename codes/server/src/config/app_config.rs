@@ -2,12 +2,13 @@ use std::env;
 
 /// 애플리케이션 설정
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct AppConfig {
     pub server_port: u16,
     pub jwt_secret: String,
     pub jwt_expiration: i64,
-    
-    // Social Login
+
+    // Social Login (향후 소셜 로그인 기능에서 사용)
     pub google_client_id: String,
     pub google_redirect_uri: String,
     pub kakao_client_id: String,
@@ -22,8 +23,12 @@ impl AppConfig {
             .parse()
             .map_err(|_| ConfigError::InvalidPort)?;
 
-        let jwt_secret = env::var("JWT_SECRET")
-            .unwrap_or_else(|_| "secret".to_string());
+        let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| {
+            tracing::warn!(
+                "JWT_SECRET 환경변수가 설정되지 않았습니다. 프로덕션 환경에서는 반드시 설정하세요."
+            );
+            "secret".to_string()
+        });
 
         let jwt_expiration = env::var("JWT_EXPIRATION")
             .unwrap_or_else(|_| "86400".to_string())

@@ -7,6 +7,7 @@
 ```
 docs/
 ├── api-specs/          # API 명세서 (OpenAPI, Swagger)
+├── reviews/            # API 구현 리뷰 문서
 ├── implementations/    # 구현 설명서 (PR Description 대용)
 ├── meetings/           # 회의록
 ├── requirements/       # 기능 요구사항
@@ -22,6 +23,12 @@ docs/
 - API 엔드포인트 명세
 - Request/Response 스키마
 - 에러 코드 정의
+- 총 27개 API 명세 포함
+
+### reviews/
+- API 구현 리뷰 문서
+- 각 API별 구현 완료 후 작성하는 리뷰
+- 코드 리뷰 체크리스트 포함
 
 ### implementations/
 - 각 기능 구현에 대한 설명

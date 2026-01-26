@@ -2,12 +2,13 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "response_like")]
+#[sea_orm(table_name = "member_team")]
 pub struct Model {
-    #[sea_orm(primary_key, column_name = "repsonse_like_id")]
-    pub response_like_id: i64,
+    #[sea_orm(primary_key)]
+    pub member_team_id: i64,
     pub member_id: i64,
-    pub response_id: i64,
+    pub team_id: i64,
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -21,13 +22,13 @@ pub enum Relation {
     )]
     Member,
     #[sea_orm(
-        belongs_to = "super::response::Entity",
-        from = "Column::ResponseId",
-        to = "super::response::Column::ResponseId",
+        belongs_to = "super::team::Entity",
+        from = "Column::TeamId",
+        to = "super::team::Column::TeamId",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Response,
+    Team,
 }
 
 impl Related<crate::domain::member::entity::member::Entity> for Entity {
@@ -36,9 +37,9 @@ impl Related<crate::domain::member::entity::member::Entity> for Entity {
     }
 }
 
-impl Related<super::response::Entity> for Entity {
+impl Related<super::team::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Response.def()
+        Relation::Team.def()
     }
 }
 

@@ -1,0 +1,299 @@
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use validator::Validate;
+
+use super::entity::retrospect::RetrospectMethod;
+
+/// 회고 생성 요청 DTO
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRetrospectRequest {
+    /// 회고가 속한 팀의 고유 ID
+    #[validate(range(min = 1, message = "팀 ID는 1 이상이어야 합니다"))]
+    pub team_id: i64,
+
+    /// 프로젝트 이름 (최소 1자, 최대 20자)
+    #[validate(length(
+        min = 1,
+        max = 20,
+        message = "프로젝트 이름은 1자 이상 20자 이하여야 합니다"
+    ))]
+    pub project_name: String,
+
+    /// 회고 날짜 (ISO 8601 형식: YYYY-MM-DD)
+    #[validate(length(
+        min = 10,
+        max = 10,
+        message = "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD 형식 필요)"
+    ))]
+    pub retrospect_date: String,
+
+    /// 회고 방식
+    pub retrospect_method: RetrospectMethod,
+
+    /// 참고 자료 URL 리스트 (최대 10개)
+    #[validate(length(max = 10, message = "참고 URL은 최대 10개까지 등록 가능합니다"))]
+    #[serde(default)]
+    pub reference_urls: Vec<String>,
+}
+
+/// 회고 생성 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRetrospectResponse {
+    /// 생성된 회고 고유 ID
+    pub retrospect_id: i64,
+    /// 회고가 속한 팀의 고유 ID
+    pub team_id: i64,
+    /// 저장된 프로젝트 이름
+    pub project_name: String,
+}
+
+/// Swagger용 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessCreateRetrospectResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: CreateRetrospectResponse,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use validator::Validate;
+
+    fn create_valid_request() -> CreateRetrospectRequest {
+        CreateRetrospectRequest {
+            team_id: 1,
+            project_name: "테스트 프로젝트".to_string(),
+            retrospect_date: "2025-01-25".to_string(),
+            retrospect_method: RetrospectMethod::Kpt,
+            reference_urls: vec![],
+        }
+    }
+
+    // ========================================
+    // project_name 검증 테스트
+    // ========================================
+
+    #[test]
+    fn should_fail_validation_when_project_name_is_empty() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            project_name: "".to_string(),
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("project_name"));
+    }
+
+    #[test]
+    fn should_fail_validation_when_project_name_exceeds_20_chars() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            project_name: "가".repeat(21), // 21자
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("project_name"));
+    }
+
+    #[test]
+    fn should_pass_validation_when_project_name_is_exactly_20_chars() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            project_name: "가".repeat(20), // 정확히 20자
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    // ========================================
+    // team_id 검증 테스트
+    // ========================================
+
+    #[test]
+    fn should_fail_validation_when_team_id_is_zero() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            team_id: 0,
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("team_id"));
+    }
+
+    #[test]
+    fn should_fail_validation_when_team_id_is_negative() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            team_id: -1,
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("team_id"));
+    }
+
+    #[test]
+    fn should_pass_validation_when_team_id_is_positive() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            team_id: 1,
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    // ========================================
+    // retrospect_date 검증 테스트
+    // ========================================
+
+    #[test]
+    fn should_fail_validation_when_retrospect_date_is_too_short() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            retrospect_date: "2025-1-1".to_string(), // 8자 (형식 오류)
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("retrospect_date"));
+    }
+
+    #[test]
+    fn should_fail_validation_when_retrospect_date_is_too_long() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            retrospect_date: "2025-01-251".to_string(), // 11자 (형식 오류)
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("retrospect_date"));
+    }
+
+    #[test]
+    fn should_pass_validation_when_retrospect_date_has_correct_format() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            retrospect_date: "2025-01-25".to_string(), // 정확히 10자
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    // ========================================
+    // reference_urls 검증 테스트
+    // ========================================
+
+    #[test]
+    fn should_fail_validation_when_reference_urls_exceed_10() {
+        // Arrange
+        let urls: Vec<String> = (0..11)
+            .map(|i| format!("https://example.com/{}", i))
+            .collect();
+        let request = CreateRetrospectRequest {
+            reference_urls: urls, // 11개
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("reference_urls"));
+    }
+
+    #[test]
+    fn should_pass_validation_when_reference_urls_are_exactly_10() {
+        // Arrange
+        let urls: Vec<String> = (0..10)
+            .map(|i| format!("https://example.com/{}", i))
+            .collect();
+        let request = CreateRetrospectRequest {
+            reference_urls: urls, // 정확히 10개
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_pass_validation_when_reference_urls_are_empty() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            reference_urls: vec![],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+}
