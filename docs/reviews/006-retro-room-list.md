@@ -1,21 +1,22 @@
-# API-006 RetroRoom List Implementation Review
+# API-006: 레트로룸 목록 조회 API 구현 리뷰
 
 ## 개요
-- **API**: `GET /api/v1/retro-rooms`
-- **기능**: 참여 중인 레트로룸 목록 조회
-- **담당자**: Claude Code
-- **작성일**: 2026-01-26
-- **상태**: 구현 완료
 
-## API 스펙 요약
+| 항목 | 내용 |
+|------|------|
+| **API** | GET /api/v1/retro-rooms |
+| **브랜치** | feat/team-generate |
+| **베이스 브랜치** | dev |
+| **명세서** | docs/api-specs/006-team-list.md |
 
-### Request
-```
-GET /api/v1/retro-rooms
-Authorization: Bearer {accessToken}
-```
+## 구현 내용
 
-### Response (200 OK)
+### 엔드포인트
+- **Method**: GET
+- **Path**: `/api/v1/retro-rooms`
+- **인증**: Bearer Token 필수
+
+### 응답 구조
 ```json
 {
   "isSuccess": true,
@@ -36,81 +37,54 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-## 구현 상세
+## 변경 파일
 
-### 1. DTO 설계 (`domain/retrospect/dto.rs`)
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/domain/retrospect/dto.rs` | RetroRoomListItem, SuccessRetroRoomListResponse DTO 추가 + 단위 테스트 2개 |
+| `src/domain/retrospect/service.rs` | `list_retro_rooms()` 메서드 추가 |
+| `src/domain/retrospect/handler.rs` | `list_retro_rooms` 핸들러 추가 + Swagger 문서화 |
+| `src/domain/member/entity/member_retro_room.rs` | `order_index: i32` 필드 추가 |
+| `src/main.rs` | 라우트 등록 |
 
-```rust
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RetroRoomListItem {
-    pub retro_room_id: i64,
-    pub retro_room_name: String,
-    pub order_index: i32,
-}
-```
+## 비즈니스 로직
 
-### 2. 비즈니스 로직 (`domain/retrospect/service.rs`)
-
-```rust
-pub async fn list_retro_rooms(
-    state: AppState,
-    member_id: i64,
-) -> Result<Vec<RetroRoomListItem>, AppError> {
-    // 1. member_retro_room에서 사용자가 참여 중인 룸 목록 조회
-    // 2. order_index 기준 오름차순 정렬
-    // 3. retro_room 테이블과 조인하여 룸 이름 조회
-}
-```
-
-**처리 순서**:
+### 서비스 흐름 (`RetrospectService::list_retro_rooms`)
 1. `member_retro_room` 테이블에서 member_id로 필터링
 2. `order_index` 기준 오름차순 정렬
-3. 각 룸의 상세 정보 조회 후 반환
+3. 각 룸의 `retro_room` 정보 조회
+4. `RetroRoomListItem` 리스트로 변환하여 반환
 
-### 3. 핸들러 (`domain/retrospect/handler.rs`)
+### 에러 처리
 
-```rust
-#[utoipa::path(
-    get,
-    path = "/api/v1/retro-rooms",
-    security(("bearer_auth" = [])),
-    responses(
-        (status = 200, description = "레트로룸 목록 조회 성공", body = SuccessRetroRoomListResponse),
-        (status = 401, description = "인증 실패", body = ErrorResponse)
-    ),
-    tag = "RetroRoom"
-)]
-pub async fn list_retro_rooms(
-    State(state): State<AppState>,
-    user: AuthUser,
-) -> Result<Json<BaseResponse<Vec<RetroRoomListItem>>>, AppError>
-```
+| 상황 | HTTP | 코드 | 메시지 |
+|------|------|------|--------|
+| 인증 실패 | 401 | COMMON401 | 인증 실패: ... |
+| 서버 오류 | 500 | COMMON500 | 서버 에러, 관리자에게 문의 바랍니다. |
 
-## 에러 처리
+## 테스트 커버리지
 
-| 에러 코드 | HTTP 상태 | 설명 |
-|-----------|-----------|------|
-| `AUTH4001` | 401 | 인증 정보가 유효하지 않음 |
-| `COMMON500` | 500 | 서버 내부 에러 |
+### 단위 테스트 - dto.rs (2개)
 
-## Entity 변경
-
-### member_retro_room.rs
-```rust
-pub struct Model {
-    pub member_retrospect_room_id: i64,
-    pub member_id: i64,
-    pub retrospect_room_id: i64,
-    pub role: RoomRole,
-    pub order_index: i32,  // 추가됨
-}
-```
+| 테스트 | 검증 내용 |
+|--------|----------|
+| `should_serialize_list_item_in_camel_case` | RetroRoomListItem이 camelCase로 직렬화됨 (retroRoomId, retroRoomName, orderIndex) |
+| `should_serialize_empty_list_response` | 빈 배열 응답 시 `"result":[]` 형태로 직렬화됨 |
 
 ## 코드 리뷰 체크리스트
 
-- [x] API 명세에 맞게 구현되었는가?
-- [x] 정렬 순서가 올바른가? (order_index ASC)
-- [x] 빈 배열 응답이 처리되는가?
-- [x] Swagger 문서가 생성되는가?
-- [x] 코드가 Rust 컨벤션을 따르는가?
+- [x] TDD 원칙을 따라 테스트 코드가 먼저 작성되었는가?
+- [x] 모든 테스트가 통과하는가?
+- [x] 공통 유틸리티를 재사용했는가? (BaseResponse, AppError, AuthUser)
+- [x] 에러 처리가 적절하게 되어 있는가? (Result + ? 연산자)
+- [x] 코드가 Rust 컨벤션을 따르는가? (camelCase DTO, snake_case 함수)
+- [x] `cargo clippy -- -D warnings` 통과
+- [x] `cargo fmt` 적용 완료
+- [x] Swagger/OpenAPI 문서화 완료
+
+## 품질 검증 결과
+```text
+cargo test     → 31 passed, 0 failed
+cargo clippy   → 0 errors, 0 warnings
+cargo fmt      → clean
+```

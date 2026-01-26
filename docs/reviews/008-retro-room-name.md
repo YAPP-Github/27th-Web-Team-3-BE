@@ -1,26 +1,30 @@
-# API-008 RetroRoom Name Update Implementation Review
+# API-008: 레트로룸 이름 변경 API 구현 리뷰
 
 ## 개요
-- **API**: `PATCH /api/v1/retro-rooms/{retroRoomId}/name`
-- **기능**: 레트로룸 이름 변경
-- **담당자**: Claude Code
-- **작성일**: 2026-01-26
-- **상태**: 구현 완료
 
-## API 스펙 요약
+| 항목 | 내용 |
+|------|------|
+| **API** | PATCH /api/v1/retro-rooms/{retroRoomId}/name |
+| **브랜치** | feat/team-generate |
+| **베이스 브랜치** | dev |
+| **명세서** | docs/api-specs/008-team-name-update.md |
 
-### Request
+## 구현 내용
+
+### 엔드포인트
+- **Method**: PATCH
+- **Path**: `/api/v1/retro-rooms/{retro_room_id}/name`
+- **인증**: Bearer Token 필수
+- **권한**: Owner만 가능
+
+### 요청 구조
 ```json
-PATCH /api/v1/retro-rooms/{retroRoomId}/name
-Authorization: Bearer {accessToken}
-Content-Type: application/json
-
 {
   "name": "새로운 레트로룸 이름"
 }
 ```
 
-### Response (200 OK)
+### 응답 구조
 ```json
 {
   "isSuccess": true,
@@ -34,101 +38,66 @@ Content-Type: application/json
 }
 ```
 
-## 구현 상세
+## 변경 파일
 
-### 1. DTO 설계 (`domain/retrospect/dto.rs`)
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/domain/retrospect/dto.rs` | UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse DTO 추가 + 단위 테스트 5개 |
+| `src/domain/retrospect/service.rs` | `update_retro_room_name()` 메서드 추가 |
+| `src/domain/retrospect/handler.rs` | `update_retro_room_name` 핸들러 추가 + Swagger 문서화 |
+| `src/utils/error.rs` | NoRoomPermission 에러 타입 추가 |
+| `src/main.rs` | 라우트 등록 |
 
-**Request**:
-```rust
-#[derive(Debug, Deserialize, Validate, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateRetroRoomNameRequest {
-    #[validate(length(min = 1, max = 20, message = "레트로룸 이름은 1~20자여야 합니다."))]
-    pub name: String,
-}
-```
+## 비즈니스 로직
 
-**Response**:
-```rust
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateRetroRoomNameResponse {
-    pub retro_room_id: i64,
-    pub retro_room_name: String,
-    pub updated_at: String,
-}
-```
-
-### 2. 비즈니스 로직 (`domain/retrospect/service.rs`)
-
-```rust
-pub async fn update_retro_room_name(
-    state: AppState,
-    member_id: i64,
-    retro_room_id: i64,
-    req: UpdateRetroRoomNameRequest,
-) -> Result<UpdateRetroRoomNameResponse, AppError> {
-    // 1. 룸 존재 확인
-    // 2. Owner 권한 확인 (RoomRole::Owner)
-    // 3. 이름 중복 체크 (다른 룸과 중복 불가)
-    // 4. 이름 및 updated_at 업데이트
-}
-```
-
-**처리 순서**:
+### 서비스 흐름 (`RetrospectService::update_retro_room_name`)
 1. `retro_room_id`로 룸 존재 확인
 2. `member_retro_room`에서 Owner 역할 확인
-3. 동일 이름의 다른 룸이 있는지 확인
+3. 동일 이름의 다른 룸이 있는지 중복 체크
 4. `retro_room.title` 및 `updated_at` 업데이트
 
-### 3. 핸들러 (`domain/retrospect/handler.rs`)
+### 유효성 검증
+- `name`은 1자 이상 20자 이하
+- 빈 문자열 불가
 
-```rust
-#[utoipa::path(
-    patch,
-    path = "/api/v1/retro-rooms/{retro_room_id}/name",
-    request_body = UpdateRetroRoomNameRequest,
-    params(
-        ("retro_room_id" = i64, Path, description = "레트로룸 ID")
-    ),
-    security(("bearer_auth" = [])),
-    responses(
-        (status = 200, description = "이름 변경 성공", body = SuccessUpdateRetroRoomNameResponse),
-        (status = 400, description = "이름 길이 초과", body = ErrorResponse),
-        (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "권한 없음", body = ErrorResponse),
-        (status = 404, description = "룸 없음", body = ErrorResponse),
-        (status = 409, description = "이름 중복", body = ErrorResponse)
-    ),
-    tag = "RetroRoom"
-)]
-pub async fn update_retro_room_name(...)
-```
+### 에러 처리
 
-## 에러 처리
+| 상황 | HTTP | 코드 | 메시지 |
+|------|------|------|--------|
+| 인증 실패 | 401 | COMMON401 | 인증 실패: ... |
+| 이름이 빈 문자열 | 400 | COMMON400 | 레트로룸 이름은 1~20자여야 합니다. |
+| 이름이 20자 초과 | 400 | COMMON400 | 레트로룸 이름은 1~20자여야 합니다. |
+| Owner가 아님 | 403 | ROOM4031 | 레트로룸 이름을 변경할 권한이 없습니다. |
+| 룸이 존재하지 않음 | 404 | RETRO4041 | 존재하지 않는 레트로룸입니다. |
+| 이름 중복 | 409 | RETRO4091 | 이미 사용 중인 레트로룸 이름입니다. |
+| 서버 오류 | 500 | COMMON500 | 서버 에러, 관리자에게 문의 바랍니다. |
 
-| 에러 코드 | HTTP 상태 | 설명 |
-|-----------|-----------|------|
-| `COMMON400` | 400 | 이름 길이 유효성 검사 실패 (1~20자) |
-| `AUTH4001` | 401 | 인증 정보가 유효하지 않음 |
-| `ROOM4031` | 403 | 이름 변경 권한 없음 (Owner가 아님) |
-| `RETRO4041` | 404 | 존재하지 않는 레트로룸 |
-| `RETRO4091` | 409 | 이미 사용 중인 이름 |
-| `COMMON500` | 500 | 서버 내부 에러 |
+## 테스트 커버리지
 
-## 추가된 에러 타입
+### 단위 테스트 - dto.rs (5개)
 
-### error.rs
-```rust
-/// ROOM4031: 권한 없음 - 이름 변경 (403)
-NoRoomPermission(String),
-```
+| 테스트 | 검증 내용 |
+|--------|----------|
+| `should_validate_name_update_request_success` | 유효한 이름으로 검증 통과 |
+| `should_fail_validation_when_name_is_empty` | 빈 문자열 → 검증 실패 |
+| `should_fail_validation_when_name_exceeds_20_chars` | 21자 이상 → 검증 실패 |
+| `should_allow_name_with_exactly_20_chars` | 정확히 20자 → 검증 통과 |
+| `should_serialize_name_update_response_in_camel_case` | 응답이 camelCase로 직렬화됨 (retroRoomId, retroRoomName, updatedAt) |
 
 ## 코드 리뷰 체크리스트
 
-- [x] Owner 권한 검증이 작동하는가?
-- [x] 이름 길이 검증이 올바른가? (1~20자)
-- [x] 이름 중복 검증이 작동하는가?
-- [x] updated_at이 업데이트되는가?
-- [x] Swagger 문서가 생성되는가?
-- [x] 코드가 Rust 컨벤션을 따르는가?
+- [x] TDD 원칙을 따라 테스트 코드가 먼저 작성되었는가?
+- [x] 모든 테스트가 통과하는가?
+- [x] 공통 유틸리티를 재사용했는가? (BaseResponse, AppError, AuthUser)
+- [x] 에러 처리가 적절하게 되어 있는가? (Result + ? 연산자)
+- [x] 코드가 Rust 컨벤션을 따르는가? (camelCase DTO, snake_case 함수)
+- [x] `cargo clippy -- -D warnings` 통과
+- [x] `cargo fmt` 적용 완료
+- [x] Swagger/OpenAPI 문서화 완료
+
+## 품질 검증 결과
+```text
+cargo test     → 31 passed, 0 failed
+cargo clippy   → 0 errors, 0 warnings
+cargo fmt      → clean
+```

@@ -1,175 +1,115 @@
-# API-005 Retro Room Join Implementation Review
+# API-005: 레트로룸 참여 (Team Join) API 구현 리뷰
 
 ## 개요
-- **API**: `POST /api/v1/retro-rooms/join`
-- **기능**: 초대 URL을 통한 레트로룸(Retro Room) 합류
-- **담당자**: Claude Code
-- **작성일**: 2026-01-26
-- **상태**: 구현 완료
 
-## API 스펙 요약
+| 항목 | 내용 |
+|------|------|
+| **API** | POST /api/v1/retro-rooms/join |
+| **브랜치** | feat/team-generate |
+| **베이스 브랜치** | dev |
+| **명세서** | docs/api-specs/005-team-join.md |
 
-### Request
+## 구현 내용
+
+### 엔드포인트
+- **Method**: POST
+- **Path**: `/api/v1/retro-rooms/join`
+- **인증**: Bearer Token 필수
+
+### 요청 구조
 ```json
 {
   "inviteUrl": "https://service.com/invite/INV-A1B2-C3D4"
 }
 ```
 
-### Response (200 OK)
+### 응답 구조
 ```json
 {
   "isSuccess": true,
   "code": "COMMON200",
   "message": "성공입니다.",
   "result": {
-    "retroRoomId": 789,
-    "title": "코드 마스터즈",
-    "joinedAt": "2026-01-24T15:45:00"
+    "retroRoomId": 123,
+    "title": "프로젝트 A 회고",
+    "joinedAt": "2026-01-26T15:30:00"
   }
 }
 ```
 
-## 구현 상세
+## 변경 파일
 
-### 1. DTO 설계 (`domain/retrospect/dto.rs`)
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/domain/retrospect/dto.rs` | JoinRetroRoomRequest, JoinRetroRoomResponse DTO 추가 + 단위 테스트 3개 |
+| `src/domain/retrospect/service.rs` | `join_retro_room()`, `extract_invite_code()` 메서드 추가 + 단위 테스트 6개 |
+| `src/domain/retrospect/handler.rs` | `join_retro_room` 핸들러 추가 + Swagger 문서화 |
+| `src/utils/error.rs` | InvalidInviteLink, ExpiredInviteLink, AlreadyMember 에러 타입 추가 |
+| `src/main.rs` | 라우트 등록 + OpenAPI 스키마/경로 추가 |
 
-**Request**:
-```rust
-#[derive(Debug, Deserialize, Validate, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct JoinRetroRoomRequest {
-    #[validate(url(message = "유효한 URL 형식이 아닙니다."))]
-    pub invite_url: String,
-}
-```
+## 비즈니스 로직
 
-**Response**:
-```rust
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct JoinRetroRoomResponse {
-    pub retro_room_id: i64,
-    pub title: String,
-    pub joined_at: String,
-}
-```
+### 서비스 흐름 (`RetrospectService::join_retro_room`)
+1. 초대 URL에서 초대 코드 추출 (`extract_invite_code`)
+2. 초대 코드로 레트로룸 조회
+3. 초대 링크 만료 체크 (7일)
+4. 이미 참여 중인 멤버인지 확인
+5. `member_retro_room` 테이블에 Member 권한으로 추가
+6. 응답 반환 (retroRoomId, title, joinedAt)
 
-### 2. 비즈니스 로직 (`domain/retrospect/service.rs`)
+### 초대 코드 추출 (`extract_invite_code`)
+지원 형식:
+- **Path segment**: `https://service.com/invite/INV-A1B2-C3D4`
+- **Query parameter**: `https://service.com/join?code=INV-A1B2-C3D4`
+- **다중 쿼리 파라미터**: `https://service.com/join?ref=abc&code=INV-A1B2-C3D4&foo=bar`
 
-**초대 코드 추출 로직**:
-- Path segment 형식: `https://service.com/invite/INV-A1B2-C3D4`
-- Query parameter 형식: `https://service.com/join?code=INV-A1B2-C3D4`
+### 에러 처리
 
-```rust
-fn extract_invite_code(invite_url: &str) -> Result<String, AppError> {
-    // 1. 쿼리 파라미터 형식 확인 (?code=...)
-    if let Some(query_start) = invite_url.find('?') {
-        let query_string = &invite_url[query_start + 1..];
-        for param in query_string.split('&') {
-            if let Some((key, value)) = param.split_once('=') {
-                if key == "code" && value.starts_with("INV-") {
-                    return Ok(value.to_string());
-                }
-            }
-        }
-    }
+| 상황 | HTTP | 코드 | 메시지 |
+|------|------|------|--------|
+| 인증 실패 | 401 | COMMON401 | 인증 실패: ... |
+| 유효하지 않은 URL 형식 | 400 | COMMON400 | 유효한 URL 형식이 아닙니다. |
+| 유효하지 않은 초대 코드 | 400 | RETRO4002 | 유효하지 않은 초대 링크입니다. |
+| 만료된 초대 링크 (7일) | 400 | RETRO4003 | 만료된 초대 링크입니다. |
+| 존재하지 않는 룸 | 404 | RETRO4041 | 존재하지 않는 회고 룸입니다. |
+| 이미 참여 중 | 409 | RETRO4092 | 이미 해당 회고 룸의 멤버입니다. |
+| 서버 오류 | 500 | COMMON500 | 서버 에러, 관리자에게 문의 바랍니다. |
 
-    // 2. Path segment 형식 확인
-    let path = invite_url.split('?').next().unwrap_or(invite_url);
-    if let Some(last_segment) = path.split('/').next_back() {
-        if last_segment.starts_with("INV-") {
-            return Ok(last_segment.to_string());
-        }
-    }
+## 테스트 커버리지
 
-    Err(AppError::InvalidInviteLink("유효하지 않은 초대 링크입니다.".into()))
-}
-```
+### 단위 테스트 - dto.rs (3개)
 
-**합류 프로세스**:
-1. URL에서 초대 코드 추출
-2. 초대 코드로 `retro_room` 테이블 조회
-3. 초대 코드 만료 체크 (생성일 기준 7일)
-4. 중복 가입 체크 (`member_retro_room` 테이블)
-5. `member_retro_room` 테이블에 `MEMBER` 권한으로 추가
+| 테스트 | 검증 내용 |
+|--------|----------|
+| `should_validate_join_request_with_valid_url` | 유효한 URL로 요청 시 검증 통과 |
+| `should_fail_validation_with_invalid_url_format` | 잘못된 URL 형식 → 검증 실패 |
+| `should_serialize_join_response_in_camel_case` | 응답이 camelCase로 직렬화됨 |
 
-### 3. 에러 처리 (`utils/error.rs`)
+### 단위 테스트 - service.rs (6개)
 
-| 에러 코드 | HTTP 상태 | 설명 |
-|-----------|-----------|------|
-| `RETRO4002` | 400 | 유효하지 않은 초대 링크 |
-| `RETRO4003` | 400 | 만료된 초대 링크 (7일 초과) |
-| `RETRO4041` | 404 | 존재하지 않는 회고 룸 |
-| `RETRO4092` | 409 | 이미 해당 룸의 멤버 |
-
-### 4. 핸들러 (`domain/retrospect/handler.rs`)
-
-```rust
-#[utoipa::path(
-    post,
-    path = "/api/v1/retro-rooms/join",
-    request_body = JoinRetroRoomRequest,
-    security(("bearer_auth" = [])),
-    responses(
-        (status = 200, description = "회고 룸 참여 성공", body = SuccessJoinRetroRoomResponse),
-        (status = 400, description = "잘못된 초대 링크 또는 만료됨", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 룸", body = ErrorResponse),
-        (status = 409, description = "이미 참여 중", body = ErrorResponse)
-    ),
-    tag = "RetroRoom"
-)]
-pub async fn join_retro_room(
-    State(state): State<AppState>,
-    user: AuthUser,
-    Json(req): Json<JoinRetroRoomRequest>,
-) -> Result<Json<BaseResponse<JoinRetroRoomResponse>>, AppError>
-```
-
-## 테스트
-
-### 단위 테스트 (service.rs)
-```
-running 6 tests
-test should_extract_invite_code_from_path_segment ... ok
-test should_extract_invite_code_from_query_parameter ... ok
-test should_extract_invite_code_from_query_with_multiple_params ... ok
-test should_return_error_for_invalid_url ... ok
-test should_return_error_for_empty_code ... ok
-test should_generate_valid_invite_code ... ok
-```
-
-### 테스트 커버리지
-- [x] Path segment에서 초대 코드 추출
-- [x] Query parameter에서 초대 코드 추출
-- [x] 다중 query parameter에서 초대 코드 추출
-- [x] 유효하지 않은 URL 에러 처리
-- [x] 빈 코드 에러 처리
-- [x] 초대 코드 생성 검증
+| 테스트 | 검증 내용 |
+|--------|----------|
+| `should_extract_invite_code_from_path_segment` | Path segment에서 초대 코드 추출 |
+| `should_extract_invite_code_from_query_parameter` | Query parameter에서 초대 코드 추출 |
+| `should_extract_invite_code_from_query_with_multiple_params` | 다중 쿼리 파라미터에서 code 추출 |
+| `should_return_error_for_invalid_url` | 유효하지 않은 URL → 에러 반환 |
+| `should_return_error_for_empty_code` | 빈 code 파라미터 → 에러 반환 |
+| `should_generate_valid_invite_code` | 초대 코드 생성 형식 검증 (INV-XXXX-XXXX) |
 
 ## 코드 리뷰 체크리스트
 
-- [x] TDD 원칙을 따라 테스트 코드가 작성되었는가?
+- [x] TDD 원칙을 따라 테스트 코드가 먼저 작성되었는가?
 - [x] 모든 테스트가 통과하는가?
-- [x] API 문서가 `docs/reviews/` 디렉토리에 작성되었는가?
-- [x] 공통 유틸리티를 재사용했는가? (`BaseResponse`, `AppError`)
-- [x] 에러 처리가 적절하게 되어 있는가?
-- [x] 코드가 Rust 컨벤션을 따르는가? (`cargo fmt`, `cargo clippy`)
-- [x] 불필요한 의존성이 추가되지 않았는가?
+- [x] 공통 유틸리티를 재사용했는가? (BaseResponse, AppError, AuthUser)
+- [x] 에러 처리가 적절하게 되어 있는가? (Result + ? 연산자)
+- [x] 코드가 Rust 컨벤션을 따르는가? (camelCase DTO, snake_case 함수)
+- [x] `cargo clippy -- -D warnings` 통과
+- [x] `cargo fmt` 적용 완료
+- [x] Swagger/OpenAPI 문서화 완료
 
-## 품질 검사 결과
-
-```bash
-$ cargo fmt    # 통과
-$ cargo clippy -- -D warnings  # 통과
-$ cargo test   # 8 passed
+## 품질 검증 결과
+```text
+cargo test     → 31 passed, 0 failed
+cargo clippy   → 0 errors, 0 warnings
+cargo fmt      → clean
 ```
-
-## 변경 파일 목록
-
-| 파일 | 변경 유형 | 설명 |
-|------|-----------|------|
-| `domain/retrospect/service.rs` | 수정 | `extract_invite_code` 함수 추가, 테스트 추가 |
-| `domain/auth/handler.rs` | 수정 | unused import 경고 수정 |
-| `config/app_config.rs` | 수정 | dead_code 경고 수정 |
-| `docs/reviews/005-team-join.md` | 수정 | 구현 리뷰 문서 업데이트 |
