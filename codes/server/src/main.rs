@@ -19,10 +19,12 @@ use crate::domain::auth::dto::{
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
-    StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem, StorageRangeFilter,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
     SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessCreateParticipantResponse,
-    SuccessCreateRetrospectResponse, SuccessReferencesListResponse, SuccessStorageResponse,
-    SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
+    SuccessCreateRetrospectResponse, SuccessReferencesListResponse, SuccessRetrospectDetailResponse,
+    SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
+    TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -40,6 +42,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::list_team_retrospects,
         domain::retrospect::handler::create_participant,
         domain::retrospect::handler::list_references,
+        domain::retrospect::handler::get_retrospect_detail,
         domain::retrospect::handler::submit_retrospect,
         domain::retrospect::handler::get_storage
     ),
@@ -71,7 +74,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
             StorageRetrospectItem,
             StorageYearGroup,
             StorageResponse,
-            SuccessStorageResponse
+            SuccessStorageResponse,
+            RetrospectDetailResponse,
+            RetrospectMemberItem,
+            RetrospectQuestionItem,
+            SuccessRetrospectDetailResponse
         )
     ),
     tags(
@@ -168,6 +175,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/storage",
             axum::routing::get(domain::retrospect::handler::get_storage),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id",
+            axum::routing::get(domain::retrospect::handler::get_retrospect_detail),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/submit",

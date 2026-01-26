@@ -1,17 +1,20 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
-    TransactionTrait,
+    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set, TransactionTrait,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::domain::member::entity::member;
 use crate::domain::member::entity::member_response;
 use crate::domain::member::entity::member_retro;
 use crate::domain::member::entity::member_retro::RetrospectStatus;
+use crate::domain::member::entity::member_retro_room;
 use crate::domain::retrospect::entity::response;
+use crate::domain::retrospect::entity::response_comment;
+use crate::domain::retrospect::entity::response_like;
 use crate::domain::retrospect::entity::retro_reference;
 use crate::domain::retrospect::entity::retro_room;
 use crate::domain::retrospect::entity::retrospect;
@@ -22,7 +25,8 @@ use crate::utils::error::AppError;
 
 use super::dto::{
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, ReferenceItem,
-    StorageQueryParams, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem, StorageQueryParams,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
     SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
     REFERENCE_URL_MAX_LENGTH,
 };
@@ -606,24 +610,23 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 5. 각 회고의 참여자 수 조회
-        let mut member_counts: std::collections::HashMap<i64, i64> =
-            std::collections::HashMap::new();
-        for retro_id in &retrospect_ids {
-            let count = member_retro::Entity::find()
-                .filter(member_retro::Column::RetrospectId.eq(*retro_id))
-                .all(&state.db)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?
-                .len() as i64;
-            member_counts.insert(*retro_id, count);
+        // 5. 각 회고의 참여자 수 조회 (단일 배치 쿼리)
+        let all_member_retros_for_count = member_retro::Entity::find()
+            .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let mut member_counts: HashMap<i64, i64> = HashMap::new();
+        for mr in &all_member_retros_for_count {
+            *member_counts.entry(mr.retrospect_id).or_insert(0) += 1;
         }
 
         // 6. 연도별 그룹핑 (BTreeMap으로 정렬)
         let mut year_groups: BTreeMap<i32, Vec<StorageRetrospectItem>> = BTreeMap::new();
 
         // member_retro에서 submitted_at 기준으로 날짜 매핑
-        let submitted_dates: std::collections::HashMap<i64, chrono::NaiveDateTime> = member_retros
+        let submitted_dates: HashMap<i64, chrono::NaiveDateTime> = member_retros
             .iter()
             .filter_map(|mr| mr.submitted_at.map(|dt| (mr.retrospect_id, dt)))
             .collect();
@@ -677,6 +680,147 @@ impl RetrospectService {
         years.sort_by(|a, b| b.year_label.cmp(&a.year_label));
 
         Ok(StorageResponse { years })
+    }
+
+    /// 회고 상세 정보 조회 (API-012)
+    pub async fn get_retrospect_detail(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<RetrospectDetailResponse, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            "회고 상세 정보 조회 요청"
+        );
+
+        // 1. 회고 존재 여부 확인
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+
+        // 2. 접근 권한 확인 (해당 회고가 속한 팀의 멤버인지 확인)
+        let retrospect_room_id = retrospect_model.retrospect_room_id;
+        let is_team_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_team_member.is_none() {
+            return Err(AppError::TeamAccessDenied(
+                "해당 회고에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 3. 참여 멤버 조회 (member_retro + member 조인, 등록일 기준 오름차순)
+        let member_retros = member_retro::Entity::find()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(member_retro::Column::MemberRetroId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let member_ids: Vec<i64> = member_retros.iter().map(|mr| mr.member_id).collect();
+
+        let members = if member_ids.is_empty() {
+            vec![]
+        } else {
+            member::Entity::find()
+                .filter(member::Column::MemberId.is_in(member_ids))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+        };
+
+        let member_map: HashMap<i64, String> = members
+            .iter()
+            .map(|m| (m.member_id, m.nickname.clone()))
+            .collect();
+
+        // member_retro 순서 유지 (참석 등록일 기준 오름차순)
+        let member_items: Vec<RetrospectMemberItem> = member_retros
+            .iter()
+            .filter_map(|mr| {
+                let name = member_map.get(&mr.member_id);
+                if name.is_none() {
+                    warn!(
+                        member_id = mr.member_id,
+                        retrospect_id = retrospect_id,
+                        "member_retro에 등록되어 있으나 member 테이블에 존재하지 않는 멤버"
+                    );
+                }
+                name.map(|n| RetrospectMemberItem {
+                    member_id: mr.member_id,
+                    user_name: n.clone(),
+                })
+            })
+            .collect();
+
+        // 4. 해당 회고의 전체 응답(response) 조회
+        let responses = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(response::Column::ResponseId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let response_ids: Vec<i64> = responses.iter().map(|r| r.response_id).collect();
+
+        // 5. 질문 리스트 추출 (중복 제거, 순서 유지, 최대 5개)
+        let mut seen_questions = HashSet::new();
+        let questions: Vec<RetrospectQuestionItem> = responses
+            .iter()
+            .filter(|r| seen_questions.insert(r.question.clone()))
+            .take(5)
+            .enumerate()
+            .map(|(i, r)| RetrospectQuestionItem {
+                index: (i + 1) as i32,
+                content: r.question.clone(),
+            })
+            .collect();
+
+        // 6. 전체 좋아요 수 조회
+        let total_like_count = if response_ids.is_empty() {
+            0
+        } else {
+            response_like::Entity::find()
+                .filter(response_like::Column::ResponseId.is_in(response_ids.clone()))
+                .count(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))? as i64
+        };
+
+        // 7. 전체 댓글 수 조회
+        let total_comment_count = if response_ids.is_empty() {
+            0
+        } else {
+            response_comment::Entity::find()
+                .filter(response_comment::Column::ResponseId.is_in(response_ids))
+                .count(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))? as i64
+        };
+
+        // 8. 시작일 포맷 (UTC → KST, YYYY-MM-DD)
+        let kst_offset = chrono::Duration::hours(9);
+        let start_time = (retrospect_model.start_time + kst_offset)
+            .format("%Y-%m-%d")
+            .to_string();
+
+        Ok(RetrospectDetailResponse {
+            team_id: retrospect_room_id,
+            title: retrospect_model.title,
+            start_time,
+            retro_category: retrospect_model.retrospect_method,
+            members: member_items,
+            total_like_count,
+            total_comment_count,
+            questions,
+        })
     }
 
     /// 답변 비즈니스 검증
