@@ -1,10 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
     TransactionTrait,
 };
+use tracing::info;
 
 use crate::domain::member::entity::member_response;
 use crate::domain::member::entity::member_retro;
@@ -14,7 +15,10 @@ use crate::domain::retrospect::entity::retrospect;
 use crate::state::AppState;
 use crate::utils::error::AppError;
 
-use super::dto::{SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse};
+use super::dto::{
+    StorageQueryParams, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse,
+};
 
 pub struct RetrospectService;
 
@@ -130,6 +134,127 @@ impl RetrospectService {
             submitted_at: kst_display,
             status: RetrospectStatus::Submitted,
         })
+    }
+
+    /// 보관함 조회 (API-019)
+    pub async fn get_storage(
+        state: AppState,
+        user_id: i64,
+        params: StorageQueryParams,
+    ) -> Result<StorageResponse, AppError> {
+        let range_filter = params.range.unwrap_or_default();
+
+        info!(
+            user_id = user_id,
+            range = %range_filter,
+            "보관함 조회 요청"
+        );
+
+        // 1. 사용자가 참여한 회고 중 제출 완료/분석 완료 상태만 조회
+        let mut member_retro_query = member_retro::Entity::find()
+            .filter(member_retro::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro::Column::Status
+                    .is_in([RetrospectStatus::Submitted, RetrospectStatus::Analyzed]),
+            );
+
+        // 2. 기간 필터 적용
+        if let Some(days) = range_filter.days() {
+            let cutoff = Utc::now().naive_utc() - chrono::Duration::days(days);
+            member_retro_query =
+                member_retro_query.filter(member_retro::Column::SubmittedAt.gte(cutoff));
+        }
+
+        let member_retros = member_retro_query
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if member_retros.is_empty() {
+            return Ok(StorageResponse { years: vec![] });
+        }
+
+        // 3. 관련 회고 ID 추출
+        let retrospect_ids: Vec<i64> = member_retros.iter().map(|mr| mr.retrospect_id).collect();
+
+        // 4. 회고 정보 조회
+        let retrospects = retrospect::Entity::find()
+            .filter(retrospect::Column::RetrospectId.is_in(retrospect_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 5. 각 회고의 참여자 수 조회
+        let mut member_counts: std::collections::HashMap<i64, i64> =
+            std::collections::HashMap::new();
+        for retro_id in &retrospect_ids {
+            let count = member_retro::Entity::find()
+                .filter(member_retro::Column::RetrospectId.eq(*retro_id))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+                .len() as i64;
+            member_counts.insert(*retro_id, count);
+        }
+
+        // 6. 연도별 그룹핑 (BTreeMap으로 정렬)
+        let mut year_groups: BTreeMap<i32, Vec<StorageRetrospectItem>> = BTreeMap::new();
+
+        // member_retro에서 submitted_at 기준으로 날짜 매핑
+        let submitted_dates: std::collections::HashMap<i64, chrono::NaiveDateTime> = member_retros
+            .iter()
+            .filter_map(|mr| mr.submitted_at.map(|dt| (mr.retrospect_id, dt)))
+            .collect();
+
+        for retro in &retrospects {
+            // UTC → KST 변환은 표시용에서만 수행
+            let kst_offset = chrono::Duration::hours(9);
+
+            let display_date = submitted_dates
+                .get(&retro.retrospect_id)
+                .map(|dt| (*dt + kst_offset).format("%Y-%m-%d").to_string())
+                .unwrap_or_else(|| {
+                    (retro.created_at + kst_offset)
+                        .format("%Y-%m-%d")
+                        .to_string()
+                });
+
+            let year = submitted_dates
+                .get(&retro.retrospect_id)
+                .map(|dt| (*dt + kst_offset).format("%Y").to_string())
+                .unwrap_or_else(|| (retro.created_at + kst_offset).format("%Y").to_string())
+                .parse::<i32>()
+                .unwrap_or(0);
+
+            let item = StorageRetrospectItem {
+                retrospect_id: retro.retrospect_id,
+                display_date,
+                title: retro.title.clone(),
+                retro_category: retro.retro_category.clone(),
+                member_count: *member_counts.get(&retro.retrospect_id).unwrap_or(&0),
+            };
+
+            year_groups.entry(year).or_default().push(item);
+        }
+
+        // 7. 연도별 내림차순 정렬 + 각 그룹 내 최신순 정렬
+        let mut years: Vec<StorageYearGroup> = year_groups
+            .into_iter()
+            .rev()
+            .map(|(year, mut items)| {
+                items.sort_by(|a, b| b.display_date.cmp(&a.display_date));
+                StorageYearGroup {
+                    year_label: format!("{}년", year),
+                    retrospects: items,
+                }
+            })
+            .collect();
+
+        // BTreeMap의 rev()는 이미 내림차순이므로 추가 정렬 불필요
+        // 하지만 안전을 위해 정렬 보장
+        years.sort_by(|a, b| b.year_label.cmp(&a.year_label));
+
+        Ok(StorageResponse { years })
     }
 
     /// 답변 비즈니스 검증

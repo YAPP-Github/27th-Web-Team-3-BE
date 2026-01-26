@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 
@@ -8,7 +8,9 @@ use crate::utils::auth::AuthUser;
 use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
-use super::dto::{SubmitRetrospectRequest, SubmitRetrospectResponse};
+use super::dto::{
+    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
+};
 use super::service::RetrospectService;
 
 /// 회고 최종 제출 API (API-017)
@@ -61,5 +63,45 @@ pub async fn submit_retrospect(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "회고 제출이 성공적으로 완료되었습니다.",
+    )))
+}
+
+/// 보관함 조회 API (API-019)
+///
+/// 완료된 회고 목록을 연도별로 그룹화하여 조회합니다.
+/// 기간 필터를 통해 특정 기간의 회고만 조회할 수 있습니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retrospects/storage",
+    params(StorageQueryParams),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "보관함 조회를 성공했습니다.", body = SuccessStorageResponse),
+        (status = 400, description = "유효하지 않은 기간 필터", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn get_storage(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Query(params): Query<StorageQueryParams>,
+) -> Result<Json<BaseResponse<StorageResponse>>, AppError> {
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result = RetrospectService::get_storage(state, user_id, params).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "보관함 조회를 성공했습니다.",
     )))
 }
