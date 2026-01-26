@@ -205,14 +205,24 @@ impl RetrospectService {
         Ok(())
     }
 
-    /// 날짜 형식 검증
+    /// 날짜 형식 및 미래 날짜 검증
     fn validate_and_parse_date(date_str: &str) -> Result<NaiveDate, AppError> {
         // YYYY-MM-DD 형식 파싱
-        NaiveDate::parse_from_str(date_str, "%Y-%m-%d").map_err(|_| {
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").map_err(|_| {
             AppError::BadRequest(
                 "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD 형식 필요)".to_string(),
             )
-        })
+        })?;
+
+        // 오늘 이후 날짜 검증 (오늘 포함)
+        let today = Utc::now().date_naive();
+        if date < today {
+            return Err(AppError::BadRequest(
+                "회고 날짜는 오늘 이후만 허용됩니다.".to_string(),
+            ));
+        }
+
+        Ok(date)
     }
 
     /// 시간 형식 검증
@@ -522,10 +532,44 @@ mod tests {
     #[test]
     fn should_pass_valid_date_format() {
         // Arrange
-        let valid_date = "2026-01-25";
+        let valid_date = &Utc::now()
+            .date_naive()
+            .succ_opt()
+            .expect("valid date")
+            .format("%Y-%m-%d")
+            .to_string();
 
         // Act
         let result = RetrospectService::validate_and_parse_date(valid_date);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_for_past_date() {
+        // Arrange
+        let past_date = "2020-01-01";
+
+        // Act
+        let result = RetrospectService::validate_and_parse_date(past_date);
+
+        // Assert
+        assert!(result.is_err());
+        if let Err(AppError::BadRequest(msg)) = result {
+            assert!(msg.contains("오늘 이후"));
+        } else {
+            panic!("Expected BadRequest error");
+        }
+    }
+
+    #[test]
+    fn should_pass_for_today_date() {
+        // Arrange
+        let today = Utc::now().date_naive().format("%Y-%m-%d").to_string();
+
+        // Act
+        let result = RetrospectService::validate_and_parse_date(&today);
 
         // Assert
         assert!(result.is_ok());

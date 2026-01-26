@@ -65,6 +65,7 @@
 
 | 코드 | HTTP | 설명 | 발생 조건 |
 |------|------|------|---------|
+| `AUTH4001` | 401 | 인증 실패 | JWT 토큰 누락, 만료, 또는 유효하지 않은 토큰 |
 | `RETRO4001` | 400 | 프로젝트 이름 유효성 검사 실패 | 1자 미만 또는 20자 초과 |
 | `RETRO4005` | 400 | 유효하지 않은 회고 방식 | Enum 외의 값 입력 |
 | `RETRO4006` | 400 | 유효하지 않은 URL 형식 | http/https 아닌 URL |
@@ -77,7 +78,7 @@
 |------|------|------------|
 | `teamId` | 1 이상의 양수 | COMMON400 |
 | `projectName` | 1자 이상 20자 이하 | RETRO4001 |
-| `retrospectDate` | YYYY-MM-DD 형식, **미래 날짜만 허용** | COMMON400 |
+| `retrospectDate` | YYYY-MM-DD 형식, **오늘 이후 날짜만 허용 (오늘 포함)** | COMMON400 |
 | `retrospectMethod` | KPT, FOUR_L, FIVE_F, PMI, FREE 중 하나 | RETRO4005 |
 | `referenceUrls` | 최대 10개, http/https 스키마, 최대 2048자, 중복 불가 | RETRO4006 |
 
@@ -85,7 +86,7 @@
 
 ```
 1. 참고 URL 검증 (중복, 형식, 길이)
-2. 날짜 형식 및 미래 날짜 검증
+2. 날짜 형식 및 오늘 이후 날짜 검증 (오늘 포함)
 3. 팀 존재 여부 확인 → TeamNotFound (404)
 4. 팀 멤버십 확인 → TeamAccessDenied (403)
 5. 트랜잭션 시작
@@ -131,7 +132,7 @@
 #### 날짜 검증 테스트 (5개) - `service.rs`
 - `should_pass_valid_future_date`
 - `should_fail_for_past_date`
-- `should_fail_for_today_date`
+- `should_pass_for_today_date`
 - `should_fail_for_invalid_date_format`
 - `should_fail_for_invalid_date_string`
 
@@ -255,9 +256,9 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
 - **이유**: 데이터 일관성 보장, 부분 생성 방지
 - **Trade-off**: 트랜잭션 시간 증가 가능성, 락 경합 가능성
 
-### 2. 미래 날짜만 허용
-- **결정**: `retrospectDate`는 오늘 이후 날짜만 허용
-- **이유**: 회고는 미래에 진행할 예정인 세션을 생성하는 기능
+### 2. 오늘 이후 날짜 허용 (오늘 포함)
+- **결정**: `retrospectDate`는 오늘 이후 날짜만 허용 (오늘 포함)
+- **이유**: 오늘 바로 회고를 진행할 수도 있으므로 당일 생성도 허용
 - **Trade-off**: 과거 회고 기록을 위한 별도 API 필요할 수 있음
 
 ### 3. URL 형식 검증

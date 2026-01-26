@@ -75,6 +75,7 @@ pub async fn create_retrospect(
     ),
     responses(
         (status = 200, description = "팀 내 전체 회고 목록 조회를 성공했습니다.", body = SuccessTeamRetrospectListResponse),
+        (status = 400, description = "잘못된 요청 (team_id는 1 이상이어야 합니다.)", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 403, description = "팀 접근 권한 없음", body = ErrorResponse),
         (status = 404, description = "존재하지 않는 팀", body = ErrorResponse),

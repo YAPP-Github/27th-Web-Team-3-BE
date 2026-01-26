@@ -12,7 +12,7 @@
 
 ## 파일 구조
 
-```
+```text
 codes/server/src/
 ├── domain/
 │   └── retrospect/
@@ -132,7 +132,7 @@ pub async fn list_team_retrospects(
 
 ### 전체 테스트 현황
 
-```
+```text
 running 50 tests
 test result: ok. 50 passed; 0 failed; 0 ignored
 ```
