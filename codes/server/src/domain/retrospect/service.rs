@@ -1,9 +1,11 @@
-use chrono::{NaiveDate, Utc};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
 };
 use std::collections::HashSet;
 
+use crate::domain::member::entity::member;
+use crate::domain::member::entity::member_retro;
 use crate::domain::retrospect::entity::response;
 use crate::domain::retrospect::entity::retro_reference;
 use crate::domain::retrospect::entity::retro_room;
@@ -13,7 +15,10 @@ use crate::domain::team::entity::team;
 use crate::state::AppState;
 use crate::utils::error::AppError;
 
-use super::dto::{CreateRetrospectRequest, CreateRetrospectResponse, TeamRetrospectListItem};
+use super::dto::{
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    TeamRetrospectListItem,
+};
 
 pub struct RetrospectService;
 
@@ -27,10 +32,14 @@ impl RetrospectService {
         // 1. 참고 URL 검증
         Self::validate_reference_urls(&req.reference_urls)?;
 
-        // 2. 날짜 형식 및 미래 날짜 검증
+        // 2. 날짜 및 시간 형식 검증
         let retrospect_date = Self::validate_and_parse_date(&req.retrospect_date)?;
+        let retrospect_time = Self::validate_and_parse_time(&req.retrospect_time)?;
 
-        // 3. 팀 존재 여부 확인
+        // 3. 미래 날짜/시간 검증
+        Self::validate_future_datetime(retrospect_date, retrospect_time)?;
+
+        // 4. 팀 존재 여부 확인
         let team_exists = team::Entity::find_by_id(req.team_id)
             .one(&state.db)
             .await
@@ -42,7 +51,7 @@ impl RetrospectService {
             ));
         }
 
-        // 4. 팀 멤버십 확인
+        // 5. 팀 멤버십 확인
         let is_member = member_team::Entity::find()
             .filter(member_team::Column::MemberId.eq(user_id))
             .filter(member_team::Column::TeamId.eq(req.team_id))
@@ -56,14 +65,14 @@ impl RetrospectService {
             ));
         }
 
-        // 5. 트랜잭션 시작
+        // 6. 트랜잭션 시작
         let txn = state
             .db
             .begin()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 6. 회고방 생성
+        // 7. 회고방 생성
         let now = Utc::now().naive_utc();
         let base_url = std::env::var("INVITATION_BASE_URL")
             .unwrap_or_else(|_| "https://retro.example.com".to_string());
@@ -88,10 +97,8 @@ impl RetrospectService {
 
         let retrospect_room_id = retro_room_result.retrospect_room_id;
 
-        // 7. 회고 생성
-        let start_time = retrospect_date
-            .and_hms_opt(0, 0, 0)
-            .ok_or_else(|| AppError::BadRequest("날짜 변환 실패".to_string()))?;
+        // 8. 회고 생성
+        let start_time = NaiveDateTime::new(retrospect_date, retrospect_time);
 
         let retrospect_model = retrospect::ActiveModel {
             title: Set(req.project_name.clone()),
@@ -112,7 +119,7 @@ impl RetrospectService {
 
         let retrospect_id = retrospect_result.retrospect_id;
 
-        // 8. 회고 방식에 따른 기본 질문 생성
+        // 9. 회고 방식에 따른 기본 질문 생성
         let questions = req.retrospect_method.default_questions();
         for question in questions {
             let response_model = response::ActiveModel {
@@ -130,7 +137,7 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
 
-        // 9. 참고 URL 저장
+        // 10. 참고 URL 저장
         for url in &req.reference_urls {
             let reference_model = retro_reference::ActiveModel {
                 title: Set(url.clone()),
@@ -145,7 +152,7 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
 
-        // 10. 트랜잭션 커밋
+        // 11. 트랜잭션 커밋
         txn.commit()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -218,6 +225,30 @@ impl RetrospectService {
         Ok(date)
     }
 
+    /// 시간 형식 검증
+    fn validate_and_parse_time(time_str: &str) -> Result<NaiveTime, AppError> {
+        // HH:mm 형식 파싱
+        NaiveTime::parse_from_str(time_str, "%H:%M").map_err(|_| {
+            AppError::BadRequest("시간 형식이 올바르지 않습니다. (HH:mm 형식 필요)".to_string())
+        })
+    }
+
+    /// 미래 날짜/시간 검증 (한국 시간 기준, UTC+9)
+    fn validate_future_datetime(date: NaiveDate, time: NaiveTime) -> Result<(), AppError> {
+        let input_datetime = NaiveDateTime::new(date, time);
+
+        // 한국 시간 기준 현재 시각 (UTC + 9시간)
+        let now_kst = Utc::now().naive_utc() + chrono::Duration::hours(9);
+
+        if input_datetime <= now_kst {
+            return Err(AppError::BadRequest(
+                "회고 날짜와 시간은 현재보다 미래여야 합니다.".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     /// 팀 회고 목록 조회 (API-010)
     pub async fn list_team_retrospects(
         state: AppState,
@@ -250,10 +281,11 @@ impl RetrospectService {
             ));
         }
 
-        // 3. 팀에 속한 회고 목록 조회 (최신순 정렬)
+        // 3. 팀에 속한 회고 목록 조회 (최신순 정렬, 동일 시간일 경우 ID 역순으로 안정 정렬)
         let retrospects = retrospect::Entity::find()
             .filter(retrospect::Column::TeamId.eq(team_id))
             .order_by_desc(retrospect::Column::StartTime)
+            .order_by_desc(retrospect::Column::RetrospectId)
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -263,6 +295,101 @@ impl RetrospectService {
             retrospects.into_iter().map(|r| r.into()).collect();
 
         Ok(result)
+    }
+
+    /// 회고 참석자 등록 (API-014)
+    pub async fn create_participant(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<CreateParticipantResponse, AppError> {
+        // 1. 회고 존재 여부 확인
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let retrospect_model = retrospect_model
+            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+
+        // 2. 회고의 team_id를 가져와서 팀 멤버십 확인
+        let team_id = retrospect_model.team_id;
+        let is_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(team_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_member.is_none() {
+            return Err(AppError::TeamAccessDenied(
+                "해당 회고가 속한 팀의 멤버가 아닙니다.".to_string(),
+            ));
+        }
+
+        // 3. 진행 예정인 회고인지 확인 (과거 회고에는 참석 불가)
+        let now_kst = Utc::now().naive_utc() + chrono::Duration::hours(9);
+        if retrospect_model.start_time <= now_kst {
+            return Err(AppError::RetrospectAlreadyStarted(
+                "이미 시작되었거나 종료된 회고에는 참석할 수 없습니다.".to_string(),
+            ));
+        }
+
+        // 4. 이미 참석자로 등록되어 있는지 확인
+        let existing_participant = member_retro::Entity::find()
+            .filter(member_retro::Column::MemberId.eq(user_id))
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if existing_participant.is_some() {
+            return Err(AppError::ParticipantDuplicate(
+                "이미 참석자로 등록되어 있습니다.".to_string(),
+            ));
+        }
+
+        // 5. member 정보 조회하여 nickname 추출 (이메일에서 @ 앞부분 추출)
+        let member_model = member::Entity::find_by_id(user_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| AppError::InternalError("회원 정보를 찾을 수 없습니다.".to_string()))?;
+
+        let nickname = member_model
+            .email
+            .split('@')
+            .next()
+            .unwrap_or(&member_model.email)
+            .to_string();
+
+        // 6. member_retro 테이블에 새 레코드 삽입
+        let member_retro_model = member_retro::ActiveModel {
+            member_id: Set(user_id),
+            retrospect_id: Set(retrospect_id),
+            personal_insight: Set(None),
+            ..Default::default()
+        };
+
+        let inserted = member_retro_model.insert(&state.db).await.map_err(|e| {
+            // DB 유니크 제약 위반 시 409 Conflict로 매핑
+            let error_msg = e.to_string().to_lowercase();
+            if error_msg.contains("duplicate")
+                || error_msg.contains("unique")
+                || error_msg.contains("constraint")
+            {
+                AppError::ParticipantDuplicate("이미 참석자로 등록되어 있습니다.".to_string())
+            } else {
+                AppError::InternalError(e.to_string())
+            }
+        })?;
+
+        // 7. CreateParticipantResponse 반환
+        Ok(CreateParticipantResponse {
+            participant_id: inserted.member_retro_id,
+            member_id: user_id,
+            nickname,
+        })
     }
 }
 
@@ -400,17 +527,20 @@ mod tests {
         assert!(matches!(result, Err(AppError::RetroUrlInvalid(_))));
     }
 
-    // ===== 날짜 검증 테스트 =====
+    // ===== 날짜 형식 검증 테스트 =====
 
     #[test]
-    fn should_pass_valid_future_date() {
+    fn should_pass_valid_date_format() {
         // Arrange
-        let future_date = (Utc::now().date_naive() + chrono::Duration::days(7))
+        let valid_date = &Utc::now()
+            .date_naive()
+            .succ_opt()
+            .expect("valid date")
             .format("%Y-%m-%d")
             .to_string();
 
         // Act
-        let result = RetrospectService::validate_and_parse_date(&future_date);
+        let result = RetrospectService::validate_and_parse_date(valid_date);
 
         // Assert
         assert!(result.is_ok());
@@ -473,6 +603,107 @@ mod tests {
         // Assert
         assert!(result.is_err());
         assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    // ===== 시간 형식 검증 테스트 =====
+
+    #[test]
+    fn should_pass_valid_time_format() {
+        // Arrange
+        let valid_time = "14:30";
+
+        // Act
+        let result = RetrospectService::validate_and_parse_time(valid_time);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_pass_midnight_time() {
+        // Arrange
+        let midnight = "00:00";
+
+        // Act
+        let result = RetrospectService::validate_and_parse_time(midnight);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_pass_end_of_day_time() {
+        // Arrange
+        let end_of_day = "23:59";
+
+        // Act
+        let result = RetrospectService::validate_and_parse_time(end_of_day);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_for_invalid_time_format() {
+        // Arrange
+        let invalid_time = "1430"; // 콜론 없는 형식
+
+        // Act
+        let result = RetrospectService::validate_and_parse_time(invalid_time);
+
+        // Assert
+        assert!(result.is_err());
+        if let Err(AppError::BadRequest(msg)) = result {
+            assert!(msg.contains("HH:mm"));
+        } else {
+            panic!("Expected BadRequest error");
+        }
+    }
+
+    #[test]
+    fn should_fail_for_invalid_time_value() {
+        // Arrange
+        let invalid_time = "25:00"; // 유효하지 않은 시간
+
+        // Act
+        let result = RetrospectService::validate_and_parse_time(invalid_time);
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+    }
+
+    // ===== 미래 날짜/시간 검증 테스트 =====
+
+    #[test]
+    fn should_pass_future_datetime() {
+        // Arrange
+        let future_date = Utc::now().date_naive() + chrono::Duration::days(7);
+        let time = NaiveTime::from_hms_opt(14, 0, 0).unwrap();
+
+        // Act
+        let result = RetrospectService::validate_future_datetime(future_date, time);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_for_past_datetime() {
+        // Arrange
+        let past_date = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+        let time = NaiveTime::from_hms_opt(14, 0, 0).unwrap();
+
+        // Act
+        let result = RetrospectService::validate_future_datetime(past_date, time);
+
+        // Assert
+        assert!(result.is_err());
+        if let Err(AppError::BadRequest(msg)) = result {
+            assert!(msg.contains("미래"));
+        } else {
+            panic!("Expected BadRequest error");
+        }
     }
 
     // ===== RetrospectMethod 기본 질문 테스트 =====
