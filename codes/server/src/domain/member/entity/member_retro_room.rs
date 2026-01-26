@@ -18,6 +18,8 @@ pub struct Model {
     pub member_id: i64,
     pub retrospect_room_id: i64,
     pub role: RoomRole,
+    #[sea_orm(default_value = "1")]
+    pub order_index: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
