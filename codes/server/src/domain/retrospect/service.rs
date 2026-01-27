@@ -1393,18 +1393,21 @@ impl RetrospectService {
             .map(|m| (m.member_id, m.nickname.clone()))
             .collect();
 
-        // 5. DTO 변환
+        // 5. DTO 변환 (KST 시간대 적용)
         let comment_items: Vec<CommentItem> = comments
             .iter()
-            .map(|c| CommentItem {
-                comment_id: c.response_comment_id,
-                member_id: c.member_id,
-                user_name: member_map
-                    .get(&c.member_id)
-                    .cloned()
-                    .unwrap_or_else(|| "Unknown".to_string()),
-                content: c.content.clone(),
-                created_at: c.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            .map(|c| {
+                let created_at_kst = c.created_at + chrono::Duration::hours(9);
+                CommentItem {
+                    comment_id: c.response_comment_id,
+                    member_id: c.member_id,
+                    user_name: member_map
+                        .get(&c.member_id)
+                        .cloned()
+                        .unwrap_or_else(|| "Unknown".to_string()),
+                    content: c.content.clone(),
+                    created_at: created_at_kst.format("%Y-%m-%dT%H:%M:%S").to_string(),
+                }
             })
             .collect();
 
@@ -1462,12 +1465,13 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 4. 응답 생성
+        // 4. 응답 생성 (KST 시간대 적용)
+        let created_at_kst = inserted.created_at + chrono::Duration::hours(9);
         Ok(CreateCommentResponse {
             comment_id: inserted.response_comment_id,
             response_id,
             content: inserted.content,
-            created_at: inserted.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            created_at: created_at_kst.format("%Y-%m-%dT%H:%M:%S").to_string(),
         })
     }
 }
