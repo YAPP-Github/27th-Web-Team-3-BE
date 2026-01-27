@@ -21,7 +21,7 @@ pub enum Relation {
         from = "Column::RetrospectId",
         to = "super::retrospect::Column::RetrospectId",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Retrospect,
     #[sea_orm(has_many = "super::response_comment::Entity")]

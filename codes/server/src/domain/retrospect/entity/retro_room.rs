@@ -11,6 +11,8 @@ pub struct Model {
     #[sea_orm(column_type = "String(StringLen::N(50))", nullable)]
     pub description: Option<String>,
     pub invition_url: String, // Keeping schema spelling
+    /// 초대 코드 생성 시각 (만료 기준)
+    pub invite_code_created_at: DateTime,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

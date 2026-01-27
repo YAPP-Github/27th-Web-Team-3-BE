@@ -17,7 +17,7 @@ pub enum Relation {
         from = "Column::MemberId",
         to = "crate::domain::member::entity::member::Column::MemberId",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Member,
     #[sea_orm(
@@ -25,7 +25,7 @@ pub enum Relation {
         from = "Column::ResponseId",
         to = "super::response::Column::ResponseId",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Response,
 }

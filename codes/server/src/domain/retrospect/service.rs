@@ -97,6 +97,7 @@ impl RetrospectService {
                         title: Set(title),
                         description: Set(description),
                         invition_url: Set(invite_code),
+                        invite_code_created_at: Set(now),
                         created_at: Set(now),
                         updated_at: Set(now),
                         ..Default::default()
@@ -145,9 +146,9 @@ impl RetrospectService {
         let room =
             room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
 
-        // 3. 만료 체크 (7일)
+        // 3. 만료 체크 (초대 코드 생성 시점부터 7일)
         let now = Utc::now().naive_utc();
-        let diff = now.signed_duration_since(room.created_at);
+        let diff = now.signed_duration_since(room.invite_code_created_at);
         if diff.num_days() >= 7 {
             return Err(AppError::ExpiredInviteLink(
                 "만료된 초대 링크입니다. 룸 관리자에게 새로운 초대 링크를 요청해주세요.".into(),
