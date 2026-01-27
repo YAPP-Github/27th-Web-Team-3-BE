@@ -29,10 +29,14 @@ impl AppConfig {
             .map_err(|_| ConfigError::InvalidPort)?;
 
         let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| {
-            tracing::warn!(
-                "JWT_SECRET 환경변수가 설정되지 않았습니다. 프로덕션 환경에서는 반드시 설정하세요."
-            );
-            "secret".to_string()
+            if cfg!(debug_assertions) {
+                tracing::warn!(
+                    "JWT_SECRET 환경변수가 설정되지 않았습니다. 개발 환경에서 기본값을 사용합니다."
+                );
+                "secret".to_string()
+            } else {
+                panic!("JWT_SECRET 환경변수는 프로덕션 환경에서 필수입니다.")
+            }
         });
 
         let jwt_expiration = env::var("JWT_EXPIRATION")

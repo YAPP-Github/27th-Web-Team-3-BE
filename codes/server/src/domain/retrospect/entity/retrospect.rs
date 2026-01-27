@@ -27,6 +27,19 @@ pub enum RetrospectMethod {
     Free,
 }
 
+impl std::fmt::Display for RetrospectMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            RetrospectMethod::Kpt => "KPT",
+            RetrospectMethod::FourL => "FOUR_L",
+            RetrospectMethod::FiveF => "FIVE_F",
+            RetrospectMethod::Pmi => "PMI",
+            RetrospectMethod::Free => "FREE",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 impl RetrospectMethod {
     /// 회고 방식에 따른 기본 질문 목록을 반환합니다.
     pub fn default_questions(&self) -> Vec<&'static str> {

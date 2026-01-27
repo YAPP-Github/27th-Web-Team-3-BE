@@ -54,11 +54,7 @@ pub async fn create_retro_room(
 ) -> Result<Json<BaseResponse<RetroRoomCreateResponse>>, AppError> {
     req.validate()?;
 
-    let member_id = user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 정보입니다.".into()))?;
+    let member_id = user.user_id()?;
 
     let result = RetrospectService::create_retro_room(state, member_id, req).await?;
 
@@ -90,11 +86,7 @@ pub async fn join_retro_room(
 ) -> Result<Json<BaseResponse<JoinRetroRoomResponse>>, AppError> {
     req.validate()?;
 
-    let member_id = user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 정보입니다.".into()))?;
+    let member_id = user.user_id()?;
 
     let result = RetrospectService::join_retro_room(state, member_id, req).await?;
 
@@ -118,11 +110,7 @@ pub async fn list_retro_rooms(
     State(state): State<AppState>,
     user: AuthUser,
 ) -> Result<Json<BaseResponse<Vec<RetroRoomListItem>>>, AppError> {
-    let member_id = user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 정보입니다.".into()))?;
+    let member_id = user.user_id()?;
 
     let result = RetrospectService::list_retro_rooms(state, member_id).await?;
 
@@ -152,11 +140,7 @@ pub async fn update_retro_room_order(
 ) -> Result<Json<BaseResponse<()>>, AppError> {
     req.validate()?;
 
-    let member_id = user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 정보입니다.".into()))?;
+    let member_id = user.user_id()?;
 
     RetrospectService::update_retro_room_order(state, member_id, req).await?;
 
@@ -192,11 +176,7 @@ pub async fn update_retro_room_name(
 ) -> Result<Json<BaseResponse<UpdateRetroRoomNameResponse>>, AppError> {
     req.validate()?;
 
-    let member_id = user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 정보입니다.".into()))?;
+    let member_id = user.user_id()?;
 
     let result =
         RetrospectService::update_retro_room_name(state, member_id, retro_room_id, req).await?;
@@ -227,11 +207,7 @@ pub async fn delete_retro_room(
     user: AuthUser,
     Path(retro_room_id): Path<i64>,
 ) -> Result<Json<BaseResponse<DeleteRetroRoomResponse>>, AppError> {
-    let member_id = user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 정보입니다.".into()))?;
+    let member_id = user.user_id()?;
 
     let result = RetrospectService::delete_retro_room(state, member_id, retro_room_id).await?;
 
@@ -261,11 +237,7 @@ pub async fn list_retrospects(
     user: AuthUser,
     Path(retro_room_id): Path<i64>,
 ) -> Result<Json<BaseResponse<Vec<RetrospectListItem>>>, AppError> {
-    let member_id = user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 정보입니다.".into()))?;
+    let member_id = user.user_id()?;
 
     let result = RetrospectService::list_retrospects(state, member_id, retro_room_id).await?;
 

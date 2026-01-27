@@ -182,29 +182,25 @@ impl RetrospectService {
         state: AppState,
         member_id: i64,
     ) -> Result<Vec<RetroRoomListItem>, AppError> {
-        // member_retro_room에서 사용자가 참여 중인 룸 목록 조회
-        let member_rooms = MemberRetroRoom::find()
+        // JOIN을 사용하여 단일 쿼리로 member_retro_room과 retro_room을 함께 조회
+        let member_rooms_with_rooms = MemberRetroRoom::find()
             .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .find_also_related(RetroRoom)
             .order_by_asc(member_retro_room::Column::OrderIndex)
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let mut result = Vec::new();
-        for member_room in member_rooms {
-            let room = RetroRoom::find_by_id(member_room.retrospect_room_id)
-                .one(&state.db)
-                .await
-                .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
-
-            if let Some(room) = room {
-                result.push(RetroRoomListItem {
+        let result: Vec<RetroRoomListItem> = member_rooms_with_rooms
+            .into_iter()
+            .filter_map(|(member_room, room_opt)| {
+                room_opt.map(|room| RetroRoomListItem {
                     retro_room_id: room.retrospect_room_id,
                     retro_room_name: room.title,
                     order_index: member_room.order_index,
-                });
-            }
-        }
+                })
+            })
+            .collect();
 
         Ok(result)
     }
@@ -421,7 +417,7 @@ impl RetrospectService {
             .map(|r| RetrospectListItem {
                 retrospect_id: r.retrospect_id,
                 project_name: r.title,
-                retrospect_method: format!("{:?}", r.retrospect_method).to_uppercase(),
+                retrospect_method: r.retrospect_method.to_string(),
                 retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
                 retrospect_time: r.start_time.format("%H:%M").to_string(),
             })

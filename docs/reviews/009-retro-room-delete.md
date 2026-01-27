@@ -50,7 +50,7 @@
 5. 삭제 시간과 함께 응답 반환
 
 ### 삭제 순서 (Cascade)
-```
+```text
 1. member_retro_room (해당 룸의 모든 멤버 관계)
 2. retro_room (룸 자체)
 ```
