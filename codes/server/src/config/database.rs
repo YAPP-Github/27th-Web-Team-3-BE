@@ -17,7 +17,12 @@ pub async fn establish_connection(database_url: &str) -> Result<DatabaseConnecti
     let should_update_schema = env::var("DB_SCHEMA_UPDATE")
         .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
-        .unwrap_or(false);
+        .unwrap_or_else(|_| {
+            tracing::warn!(
+                "Invalid DB_SCHEMA_UPDATE value, defaulting to false. Use 'true' or 'false'."
+            );
+            false
+        });
 
     if should_update_schema {
         // Auto-create tables (Schema Sync)
