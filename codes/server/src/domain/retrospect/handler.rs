@@ -646,12 +646,7 @@ pub async fn analyze_retrospective_handler(
         ));
     }
 
-    // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::analyze_retrospective(state, user_id, retrospect_id).await?;
@@ -686,11 +681,7 @@ pub async fn search_retrospects(
     State(state): State<AppState>,
     Query(params): Query<SearchQueryParams>,
 ) -> Result<Json<BaseResponse<Vec<SearchRetrospectItem>>>, AppError> {
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let result = RetrospectService::search_retrospects(state, user_id, params).await?;
 
@@ -732,11 +723,7 @@ pub async fn export_retrospect(
         ));
     }
 
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let pdf_bytes = RetrospectService::export_retrospect(state, user_id, retrospect_id).await?;
 
@@ -920,11 +907,7 @@ pub async fn list_comments(
         ));
     }
 
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let result =
         RetrospectService::list_comments(state, user_id, response_id, query.cursor, size).await?;
@@ -970,11 +953,7 @@ pub async fn create_comment(
 
     req.validate()?;
 
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let result = RetrospectService::create_comment(state, user_id, response_id, req).await?;
 

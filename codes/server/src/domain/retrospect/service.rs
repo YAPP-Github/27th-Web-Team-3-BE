@@ -1225,7 +1225,10 @@ impl RetrospectService {
                 display_date,
                 title: retro.title.clone(),
                 retrospect_method: retro.retrospect_method.clone(),
-                member_count: *member_counts.get(&retro.retrospect_id).unwrap_or(&0),
+                member_count: member_counts
+                    .get(&retro.retrospect_id)
+                    .copied()
+                    .unwrap_or(0),
             };
 
             year_groups.entry(year).or_default().push(item);

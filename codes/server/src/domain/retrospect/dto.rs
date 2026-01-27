@@ -892,7 +892,7 @@ pub struct SuccessListCommentsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CreateCommentRequest {
     /// 댓글 내용 (최대 200자)
-    #[validate(length(min = 1, message = "댓글 내용은 필수입니다"))]
+    #[validate(length(min = 1, max = 200, message = "댓글은 1~200자여야 합니다."))]
     pub content: String,
 }
 
