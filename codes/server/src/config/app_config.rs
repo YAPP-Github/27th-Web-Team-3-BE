@@ -44,8 +44,18 @@ impl AppConfig {
         let kakao_client_id = env::var("KAKAO_CLIENT_ID").unwrap_or_default();
         let kakao_redirect_uri = env::var("KAKAO_REDIRECT_URI").unwrap_or_default();
 
-        let openai_api_key = env::var("OPENAI_API_KEY").unwrap_or_else(|_| "test-key".to_string());
-        let secret_key = env::var("SECRET_KEY").unwrap_or_else(|_| "test-secret".to_string());
+        let openai_api_key = env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
+            tracing::warn!(
+                "OPENAI_API_KEY 환경변수가 설정되지 않았습니다. 프로덕션 환경에서는 반드시 설정하세요."
+            );
+            "test-key".to_string()
+        });
+        let secret_key = env::var("SECRET_KEY").unwrap_or_else(|_| {
+            tracing::warn!(
+                "SECRET_KEY 환경변수가 설정되지 않았습니다. 프로덕션 환경에서는 반드시 설정하세요."
+            );
+            "test-secret".to_string()
+        });
 
         Ok(Self {
             server_port,

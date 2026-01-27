@@ -1063,12 +1063,10 @@ impl RetrospectService {
             ));
         }
 
-        let retrospect_room_id = retrospect_model.retrospect_room_id;
-
-        // 3. 팀 멤버십 확인 (팀에 속한 회고인지 확인)
-        let is_team_member = member_retro_room::Entity::find()
-            .filter(member_retro_room::Column::MemberId.eq(user_id))
-            .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+        // 3. 팀 멤버십 확인 (팀 기반 접근 제어)
+        let is_team_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -1078,6 +1076,8 @@ impl RetrospectService {
                 "해당 회고에 접근 권한이 없습니다.".to_string(),
             ));
         }
+
+        let retrospect_room_id = retrospect_model.retrospect_room_id;
 
         // 4. 월간 사용량 확인 (팀당 월 10회 제한)
         let kst_offset = chrono::Duration::hours(9);

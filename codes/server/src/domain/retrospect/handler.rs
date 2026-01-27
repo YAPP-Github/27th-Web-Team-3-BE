@@ -425,10 +425,12 @@ pub async fn get_storage(
     ),
     responses(
         (status = 200, description = "회고 분석 성공", body = SuccessAnalysisResponse),
+        (status = 400, description = "잘못된 Path Parameter", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 403, description = "월간 한도 초과 또는 접근 권한 없음", body = ErrorResponse),
-        (status = 404, description = "회고 없음 또는 데이터 부족", body = ErrorResponse),
+        (status = 404, description = "회고 없음", body = ErrorResponse),
         (status = 409, description = "이미 분석 완료된 회고", body = ErrorResponse),
+        (status = 422, description = "분석 데이터 부족", body = ErrorResponse),
         (status = 500, description = "AI 분석 실패", body = ErrorResponse)
     ),
     tag = "Retrospect"
