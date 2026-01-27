@@ -7,9 +7,6 @@
 - ORM: SeaORM 1.1 (MySQL)
 - Docs: Utoipa (Swagger UI)
 
-### 📚 문서
-- [API 명세서](docs/api-specs/README.md) - 전체 27개 API 스펙
-- [AI 협업 가이드](docs/ai-conventions/) - Rust 코딩 규칙 및 아키텍처
 
 ### 📋 Commit Message Convention
 |   Gitmoji   |    Tag     | Description |

@@ -1,5 +1,24 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+/// 회고 참여 상태 Enum
+#[derive(
+    Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, ToSchema,
+)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "RetrospectStatus")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RetrospectStatus {
+    /// 임시 저장 상태
+    #[sea_orm(string_value = "DRAFT")]
+    Draft,
+    /// 최종 제출 완료
+    #[sea_orm(string_value = "SUBMITTED")]
+    Submitted,
+    /// AI 분석 완료
+    #[sea_orm(string_value = "ANALYZED")]
+    Analyzed,
+}
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "member_retro")]
@@ -9,6 +28,8 @@ pub struct Model {
     pub personal_insight: Option<String>,
     pub member_id: i64,
     pub retrospect_id: i64,
+    pub status: RetrospectStatus,
+    pub submitted_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
