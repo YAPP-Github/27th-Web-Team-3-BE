@@ -7,7 +7,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub retrospect_room_id: i64,
     pub title: String,
-    pub invition_url: String, // Keeping schema spelling
+    pub invitation_url: String,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
