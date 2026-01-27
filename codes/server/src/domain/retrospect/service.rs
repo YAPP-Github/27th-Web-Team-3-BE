@@ -5,7 +5,7 @@ use genpdf::elements::{Break, Paragraph};
 use genpdf::style;
 use genpdf::Element;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
+    ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use tracing::{info, warn};
@@ -2311,6 +2311,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         let retrospect_model = retrospect_entity.ok_or_else(|| {
+            // FK 제약조건으로 인해 이 상황은 발생하지 않아야 함 (데이터 불일치)
             AppError::InternalError(
                 "회고 데이터 불일치: 답변에 연결된 회고가 존재하지 않습니다.".to_string(),
             )
@@ -2330,42 +2331,47 @@ impl RetrospectService {
             ));
         }
 
-        // 4. 기존 좋아요 확인
-        let existing_like = response_like::Entity::find()
-            .filter(response_like::Column::MemberId.eq(user_id))
-            .filter(response_like::Column::ResponseId.eq(response_id))
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        // 4. 트랜잭션으로 좋아요 토글 (Race Condition 방지)
+        let (is_liked, total_likes) = state
+            .db
+            .transaction::<_, (bool, u64), DbErr>(|txn| {
+                Box::pin(async move {
+                    // 기존 좋아요 확인
+                    let existing_like = response_like::Entity::find()
+                        .filter(response_like::Column::MemberId.eq(user_id))
+                        .filter(response_like::Column::ResponseId.eq(response_id))
+                        .one(txn)
+                        .await?;
 
-        let is_liked = match existing_like {
-            Some(like) => {
-                // 좋아요가 있으면 삭제 (취소)
-                response_like::Entity::delete_by_id(like.response_like_id)
-                    .exec(&state.db)
-                    .await
-                    .map_err(|e| AppError::InternalError(e.to_string()))?;
-                false
-            }
-            None => {
-                // 좋아요가 없으면 추가
-                let new_like = response_like::ActiveModel {
-                    member_id: Set(user_id),
-                    response_id: Set(response_id),
-                    ..Default::default()
-                };
-                new_like
-                    .insert(&state.db)
-                    .await
-                    .map_err(|e| AppError::InternalError(e.to_string()))?;
-                true
-            }
-        };
+                    let is_liked = match existing_like {
+                        Some(like) => {
+                            // 좋아요가 있으면 삭제 (취소)
+                            response_like::Entity::delete_by_id(like.response_like_id)
+                                .exec(txn)
+                                .await?;
+                            false
+                        }
+                        None => {
+                            // 좋아요가 없으면 추가
+                            let new_like = response_like::ActiveModel {
+                                member_id: Set(user_id),
+                                response_id: Set(response_id),
+                                ..Default::default()
+                            };
+                            new_like.insert(txn).await?;
+                            true
+                        }
+                    };
 
-        // 5. 총 좋아요 개수 조회
-        let total_likes = response_like::Entity::find()
-            .filter(response_like::Column::ResponseId.eq(response_id))
-            .count(&state.db)
+                    // 5. 총 좋아요 개수 조회
+                    let total_likes = response_like::Entity::find()
+                        .filter(response_like::Column::ResponseId.eq(response_id))
+                        .count(txn)
+                        .await?;
+
+                    Ok((is_liked, total_likes))
+                })
+            })
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 

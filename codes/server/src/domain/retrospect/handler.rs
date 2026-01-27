@@ -436,7 +436,6 @@ pub async fn analyze_retrospective_handler(
     )))
 }
 
-<<<<<<< HEAD
 /// 회고 검색 API (API-023)
 ///
 /// 사용자가 참여하는 모든 팀의 회고를 프로젝트명/회고명 기준으로 검색합니다.
