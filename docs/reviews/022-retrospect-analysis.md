@@ -18,8 +18,15 @@
 `codes/server/src/utils/error.rs`
 - `RetroAlreadyAnalyzed`: 이미 분석 완료된 회고 (RETRO4091, 409 Conflict)
 - `AiMonthlyLimitExceeded`: 월간 분석 한도 초과 (AI4031, 403 Forbidden)
-- `RetroInsufficientData`: 분석 데이터 부족 (RETRO4042, 404 Not Found)
+- `RetroInsufficientData`: 분석 데이터 부족 (RETRO4221, 422 Unprocessable Entity)
 - `AiAnalysisFailed`: AI 분석 실패 (AI5001, 500 Internal Server Error)
+- `AiConnectionFailed`: AI 연결 실패 (AI5002, 500)
+- `AiServiceUnavailable`: AI 서비스 불가 (AI5031, 503)
+- `AiGeneralError`: AI 일반 오류 (AI5003, 500)
+
+`codes/server/src/domain/ai/` (분석 전용 모듈)
+- `prompt.rs`: `AnalysisPrompt` — 시스템/사용자 프롬프트 생성
+- `service.rs`: `AiService` — OpenAI API 호출, JSON 파싱, 응답 검증
 
 ### 2.2 주요 로직
 
@@ -47,7 +54,7 @@
 6. **최소 데이터 기준 확인**:
    - **참여자 수**: `member_retro`에서 status가 SUBMITTED 또는 ANALYZED인 멤버 조회
    - **답변 수**: `response` 테이블에서 `content.trim()` 후 빈 문자열 아닌 답변 카운트
-   - 참여자 < 1명 또는 답변 < 3개면 `RETRO4042` 반환
+   - 참여자 < 1명 또는 답변 < 3개면 `RETRO4221` (422 Unprocessable Entity) 반환
 
 #### 2.2.2 데이터 수집
 7. **참여자 정보 조회**:
@@ -55,13 +62,15 @@
    - `member_id → nickname` 매핑으로 사용자 이름 구성
    - 다른 API(예: `get_retrospect_detail`)와 일관성 확보, PII(이메일) 노출 방지
 
-#### 2.2.3 AI 분석 (현재 Mock)
-8. **프롬프트 생성 및 AI 호출**:
-   - **TODO**: 실제 AI 서비스 연동 구현 필요
-   - 현재는 하드코딩된 Mock 데이터 반환:
-     - `team_insight`: 팀 전체 분석 메시지 (1개)
-     - `emotion_rank`: 감정 랭킹 (정확히 3개, rank/label/description/count)
-     - `personal_missions`: 사용자별 개인 미션 (사용자당 정확히 3개)
+#### 2.2.3 AI 분석
+8. **프롬프트 생성 및 AI 호출** (`domain/ai/` 모듈):
+   - **Input**: `MemberAnswerData[]` — 팀원별 `(userId, userName, answers: [(질문, 답변)])`
+   - **프롬프트**: `AnalysisPrompt::system_prompt()` (분석 규칙) + `AnalysisPrompt::user_prompt()` (팀원 답변 데이터)
+   - **AI 호출**: `AiService::call_openai()` → OpenAI gpt-4o-mini, 30초 타임아웃
+   - **Output**: `AnalysisResponse` JSON 파싱 후 검증
+     - `team_insight`: 팀 전체 분석 메시지 (1개, 상냥체)
+     - `emotion_rank`: 감정 랭킹 (정확히 3개, 2글자 키워드, count 내림차순)
+     - `personal_missions`: 사용자별 개인 미션 (사용자당 정확히 3개, 동사형 타이틀)
 
 #### 2.2.4 결과 저장 (트랜잭션)
 9. **트랜잭션 내 업데이트**:
@@ -81,7 +90,7 @@
 | TEAM4031 | 403 | 팀 접근 권한 없음 | 팀 멤버가 아닌 사용자가 분석 요청 |
 | AI4031 | 403 | 월간 분석 가능 횟수 초과 | 현재 월(KST) 팀의 분석 횟수 >= 10회 |
 | RETRO4041 | 404 | 존재하지 않는 회고 세션 | retrospectId가 DB에 없음 |
-| RETRO4042 | 404 | 분석 데이터 부족 | 참여자 < 1명 또는 답변 < 3개 |
+| RETRO4221 | 422 | 분석 데이터 부족 | 참여자 < 1명 또는 답변 < 3개 |
 | RETRO4091 | 409 | 이미 분석 완료된 회고 | team_insight가 이미 존재 |
 | AI5001 | 500 | AI 분석 실패 | AI 서비스 호출 실패 (현재는 사용되지 않음) |
 | COMMON500 | 500 | 서버 내부 오류 | DB 에러 등 |
@@ -102,6 +111,35 @@
 | Low | 미사용 member_response 조회 제거 | 불필요한 `member_response` DB 조회 및 HashMap 구성 코드 삭제. DB 호출 1건 감소 |
 | Low | AuthUser 패턴 일관성 | `AuthUser(claims)` 패턴을 다른 핸들러와 동일한 `user: AuthUser` + `user.0.sub` 패턴으로 통일 |
 
+### 3.2 리뷰 피드백 반영 — RefinePrompt 제거 (2026-01-27)
+
+**리뷰 피드백**: "프롬프트 자체가 분석과 방향성이 안 맞는 것 같습니다" (@catturtle123)
+
+**문제**: `domain/ai/` 모듈에 분석과 무관한 말투 정제(Refine) 코드가 혼재
+- RefinePrompt: Input(텍스트 1건 + ToneStyle) → Output(어투 변환 텍스트) — 개별 문장 말투 변환 용도
+- AnalysisPrompt: Input(팀원 전체 답변 데이터) → Output(인사이트 + 감정 + 미션 JSON) — 팀 종합 분석 용도
+
+**조치**: 분석 방향성과 맞지 않는 Refine 관련 코드 전체 제거
+
+| 파일 | 제거 내용 |
+|------|----------|
+| `domain/ai/dto.rs` | **파일 삭제** — ToneStyle, RefineRequest, RefineResponse |
+| `domain/ai/handler.rs` | **파일 삭제** — refine_retrospective 핸들러, 별도 AppState |
+| `prompt.rs` | RefinePrompt 구조체/impl/테스트 3개 제거 |
+| `service.rs` | refine_content, validate_secret_key, secret_key 필드, MockAiService 제거 |
+| `app_config.rs` | `secret_key` 필드 및 `SECRET_KEY` 환경변수 로딩 제거 |
+| `error.rs` | `InvalidSecretKey` variant 제거 |
+| `state.rs` | `#[allow(dead_code)]` 제거 (ai_service가 분석에서 실사용) |
+
+**결과**: `domain/ai/` → `prompt.rs`(AnalysisPrompt) + `service.rs`(분석 전용 AiService) 2파일만 유지
+
+### 3.3 에러코드 개선 (2026-01-27)
+
+| 변경 전 | 변경 후 | 사유 |
+|---------|---------|------|
+| `RETRO4042` (404 Not Found) | `RETRO4221` (422 Unprocessable Entity) | 회고는 존재하나 데이터 부족 → 422가 의미적으로 정확 |
+| `InvalidSecretKey` (AI4011, 401) | **제거** | Refine 전용이었으므로 불필요 |
+
 ## 4. 테스트 결과
 
 ### 4.1 단위 테스트
@@ -116,7 +154,7 @@
 - 이미 분석 완료 (409): team_insight이 이미 존재하는 회고에 재분석 시도
 - 팀 접근 권한 없음 (403): 다른 팀의 회고 분석 시도
 - 월간 한도 초과 (403): 동일 팀의 10회 분석 후 추가 요청
-- 데이터 부족 (404): 참여자 0명, 답변 2개 이하
+- 데이터 부족 (422): 참여자 0명, 답변 2개 이하
 - 분석 성공 (200): 정상 요청
 
 ## 5. 코드 리뷰 체크리스트
@@ -132,19 +170,28 @@
 ## 6. 변경 파일 목록
 | 파일 | 변경 유형 | 설명 |
 |------|----------|------|
-| `src/utils/error.rs` | 수정 | AI 관련 에러 variant 4개 추가 (RETRO4091, AI4031, RETRO4042, AI5001) |
+| `src/utils/error.rs` | 수정 | AI 관련 에러 variant 추가 (RETRO4091, AI4031, RETRO4221, AI5001 등) |
 | `src/domain/retrospect/dto.rs` | 수정 | AnalysisResponse, EmotionRankItem, PersonalMissionItem, MissionItem, SuccessAnalysisResponse 추가 |
 | `src/domain/retrospect/service.rs` | 수정 | analyze_retrospective 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | 수정 | analyze_retrospective_handler 추가 + utoipa 문서화 |
 | `src/main.rs` | 수정 | 라우트 등록 및 Swagger 스키마 추가 |
 | `src/state.rs` | 수정 | AppState에 ai_service 필드 추가 |
+| `src/config/app_config.rs` | 수정 | `OPENAI_API_KEY` 환경변수 추가, `secret_key` 제거 |
+| `src/domain/ai/prompt.rs` | 수정 | AnalysisPrompt만 유지 (RefinePrompt 제거) |
+| `src/domain/ai/service.rs` | 수정 | 분석 전용 AiService (refine 관련 코드 제거) |
+| `src/domain/ai/mod.rs` | 수정 | prompt, service 모듈만 노출 (dto, handler 제거) |
+| `src/domain/ai/dto.rs` | **삭제** | ToneStyle, RefineRequest, RefineResponse 등 정제 관련 DTO |
+| `src/domain/ai/handler.rs` | **삭제** | refine_retrospective 핸들러 및 별도 AppState |
 
 ## 7. 설계 결정 및 Trade-offs
 
-### 7.1 Mock AI 분석
-- **현재**: 하드코딩된 Mock 데이터 반환
-- **이유**: AI 서비스 연동 전에 API 구조 및 데이터 플로우 검증
-- **향후**: OpenAI API 호출로 대체 예정
+### 7.1 AI 분석 모듈 (domain/ai/)
+- **구조**: `prompt.rs`(AnalysisPrompt) + `service.rs`(AiService) — 분석 전용
+- **Input**: `MemberAnswerData[]` → `[{ userId, userName, answers: [(질문, 답변)] }]`
+- **AI 호출**: OpenAI gpt-4o-mini, temperature=0.7, max_tokens=4000, 30초 타임아웃
+- **Output**: `AnalysisResponse` JSON → teamInsight + emotionRank(3개) + personalMissions(사용자당 3개)
+- **프롬프트 규칙**: 상냥체(~어요), 2글자 감정 키워드, 동사형 미션 타이틀, count 내림차순
+- **응답 검증**: emotionRank 정확히 3개, 사용자별 missions 정확히 3개 검증 후 반환
 
 ### 7.2 월간 사용량 추적 방식
 - **방식**: `team_insight IS NOT NULL AND updated_at >= 이번달 시작` 카운트
