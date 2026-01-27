@@ -72,17 +72,29 @@ impl RetrospectService {
         // 2. 초대 코드 생성 (형식: INV-XXXX-XXXX) - 충돌 방지 retry 로직
         let mut invite_code = Self::generate_invite_code();
         const MAX_RETRY: u8 = 5;
+        let mut is_unique = false;
+
         for _ in 0..MAX_RETRY {
             let existing = RetroRoom::find()
                 .filter(retro_room::Column::InvitionUrl.eq(&invite_code))
                 .one(&state.db)
                 .await
                 .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
             if existing.is_none() {
+                is_unique = true;
                 break;
             }
             invite_code = Self::generate_invite_code();
         }
+
+        // MAX_RETRY 후에도 유니크한 코드를 생성하지 못한 경우 에러 반환
+        if !is_unique {
+            return Err(AppError::InternalError(
+                "초대 코드 생성에 실패했습니다. 잠시 후 다시 시도해주세요.".into(),
+            ));
+        }
+
         let now = Utc::now().naive_utc();
         let title = req.title.clone();
         let description = req.description;
