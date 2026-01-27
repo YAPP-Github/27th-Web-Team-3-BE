@@ -14,9 +14,10 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AppConfig;
 use crate::domain::auth::dto::{
-    EmailLoginRequest, EmailLoginResponse, SignupRequest, SignupResponse, SocialLoginRequest,
-    SocialLoginResponse, SuccessEmailLoginResponse, SuccessSignupResponse,
-    SuccessSocialLoginResponse,
+    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
+    SocialLoginRequest, SocialLoginResponse, SuccessEmailLoginResponse, SuccessLogoutResponse,
+    SuccessSignupResponse, SuccessSocialLoginResponse, SuccessTokenRefreshResponse,
+    TokenRefreshRequest, TokenRefreshResponse,
 };
 use crate::state::AppState;
 use crate::utils::{BaseResponse, ErrorResponse};
@@ -28,6 +29,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         health_check,
         domain::auth::handler::social_login,
         domain::auth::handler::signup,
+        domain::auth::handler::refresh_token,
+        domain::auth::handler::logout,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test
     ),
@@ -42,6 +45,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
             SignupRequest,
             SignupResponse,
             SuccessSignupResponse,
+            TokenRefreshRequest,
+            TokenRefreshResponse,
+            SuccessTokenRefreshResponse,
+            LogoutRequest,
+            SuccessLogoutResponse,
             EmailLoginRequest,
             EmailLoginResponse,
             SuccessEmailLoginResponse
@@ -118,6 +126,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/auth/signup",
             axum::routing::post(domain::auth::handler::signup),
+        )
+        // [API-003] 토큰 갱신
+        .route(
+            "/api/v1/auth/token/refresh",
+            axum::routing::post(domain::auth::handler::refresh_token),
+        )
+        // [API-004] 로그아웃
+        .route(
+            "/api/v1/auth/logout",
+            axum::routing::post(domain::auth::handler::logout),
         )
         // 테스트/개발용 API
         .route(

@@ -40,6 +40,15 @@ pub enum AppError {
 
     /// MEMBER4041: 리소스 없음 (404)
     NotFound(String),
+
+    /// AUTH4003: 이미 로그아웃되었거나 유효하지 않은 토큰 (400)
+    InvalidToken(String),
+
+    /// AUTH4004: 유효하지 않거나 만료된 Refresh Token (401)
+    InvalidRefreshToken(String),
+
+    /// AUTH4005: 로그아웃 처리된 토큰 (401)
+    LoggedOutToken(String),
 }
 
 impl AppError {
@@ -55,6 +64,9 @@ impl AppError {
             AppError::SocialAuthFailed(msg) => msg.clone(),
             AppError::Conflict(msg) => msg.clone(),
             AppError::NotFound(msg) => msg.clone(),
+            AppError::InvalidToken(msg) => msg.clone(),
+            AppError::InvalidRefreshToken(msg) => msg.clone(),
+            AppError::LoggedOutToken(msg) => msg.clone(),
         }
     }
 
@@ -70,6 +82,9 @@ impl AppError {
             AppError::SocialAuthFailed(_) => "AUTH4002",
             AppError::Conflict(_) => "MEMBER4091",
             AppError::NotFound(_) => "MEMBER4041",
+            AppError::InvalidToken(_) => "AUTH4003",
+            AppError::InvalidRefreshToken(_) => "AUTH4004",
+            AppError::LoggedOutToken(_) => "AUTH4005",
         }
     }
 
@@ -85,6 +100,9 @@ impl AppError {
             AppError::SocialAuthFailed(_) => StatusCode::UNAUTHORIZED,
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::InvalidToken(_) => StatusCode::BAD_REQUEST,
+            AppError::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
+            AppError::LoggedOutToken(_) => StatusCode::UNAUTHORIZED,
         }
     }
 }

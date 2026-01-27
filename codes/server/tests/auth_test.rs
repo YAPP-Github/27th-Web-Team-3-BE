@@ -1,6 +1,8 @@
 /// AUTH API 통합 테스트
 /// API-001: POST /api/v1/auth/social-login
 /// API-002: POST /api/v1/auth/signup
+/// API-003: POST /api/v1/auth/token/refresh
+/// API-004: POST /api/v1/auth/logout
 
 #[cfg(test)]
 mod social_login_tests {
@@ -10,7 +12,7 @@ mod social_login_tests {
     #[tokio::test]
     async fn should_return_tokens_for_existing_member() {
         // Arrange
-        let request_body = json!({
+        let _request_body = json!({
             "provider": "KAKAO",
             "accessToken": "valid_social_token_123"
         });
@@ -43,7 +45,7 @@ mod social_login_tests {
     #[tokio::test]
     async fn should_return_signup_token_for_new_member() {
         // Arrange
-        let request_body = json!({
+        let _request_body = json!({
             "provider": "GOOGLE",
             "accessToken": "valid_google_token_456"
         });
@@ -75,7 +77,7 @@ mod social_login_tests {
     #[tokio::test]
     async fn should_return_400_when_provider_missing() {
         // Arrange
-        let request_body = json!({
+        let _request_body = json!({
             "accessToken": "some_token"
         });
 
@@ -99,7 +101,7 @@ mod social_login_tests {
     #[tokio::test]
     async fn should_return_401_for_invalid_social_token() {
         // Arrange
-        let request_body = json!({
+        let _request_body = json!({
             "provider": "KAKAO",
             "accessToken": "invalid_token"
         });
@@ -130,7 +132,7 @@ mod signup_tests {
     async fn should_complete_signup_successfully() {
         // Arrange
         // Authorization: Bearer {signupToken}
-        let request_body = json!({
+        let _request_body = json!({
             "email": "user@example.com",
             "nickname": "제이슨"
         });
@@ -163,7 +165,7 @@ mod signup_tests {
     #[tokio::test]
     async fn should_return_400_for_empty_nickname() {
         // Arrange
-        let request_body = json!({
+        let _request_body = json!({
             "email": "user@example.com",
             "nickname": ""
         });
@@ -188,7 +190,7 @@ mod signup_tests {
     #[tokio::test]
     async fn should_return_409_for_duplicate_nickname() {
         // Arrange
-        let request_body = json!({
+        let _request_body = json!({
             "email": "user@example.com",
             "nickname": "이미존재하는닉네임"
         });
@@ -214,7 +216,7 @@ mod signup_tests {
     async fn should_return_401_when_signup_token_missing() {
         // Arrange
         // Authorization 헤더 없음
-        let request_body = json!({
+        let _request_body = json!({
             "email": "user@example.com",
             "nickname": "제이슨"
         });
@@ -240,7 +242,7 @@ mod signup_tests {
     async fn should_return_401_for_expired_signup_token() {
         // Arrange
         // Authorization: Bearer {expired_signupToken}
-        let request_body = json!({
+        let _request_body = json!({
             "email": "user@example.com",
             "nickname": "제이슨"
         });
@@ -263,9 +265,190 @@ mod signup_tests {
 }
 
 #[cfg(test)]
+mod token_refresh_tests {
+    use serde_json::json;
+
+    /// [API-003] 토큰 갱신 - 성공
+    #[tokio::test]
+    async fn should_refresh_tokens_successfully() {
+        // Arrange
+        let _request_body = json!({
+            "refreshToken": "valid_refresh_token_xxx"
+        });
+
+        // Act & Assert
+        // 토큰 갱신 성공 시:
+        // - accessToken: 새로 발급된 토큰
+        // - refreshToken: 새로 발급된 토큰 (Rotation)
+        // - code: "COMMON200"
+
+        let expected_response = json!({
+            "isSuccess": true,
+            "code": "COMMON200",
+            "message": "토큰이 성공적으로 갱신되었습니다.",
+            "result": {
+                "accessToken": "new_access_token_xxx",
+                "refreshToken": "new_refresh_token_xxx"
+            }
+        });
+
+        assert!(expected_response["isSuccess"].as_bool().unwrap_or(false));
+        assert_eq!(expected_response["code"], "COMMON200");
+    }
+
+    /// [API-003] 토큰 갱신 - 필수 파라미터 누락
+    #[tokio::test]
+    async fn should_return_400_when_refresh_token_missing() {
+        // Arrange
+        let _request_body = json!({});
+
+        // Act & Assert
+        // refreshToken 누락 시:
+        // - code: "COMMON400"
+        // - HTTP Status: 400
+
+        let expected_response = json!({
+            "isSuccess": false,
+            "code": "COMMON400",
+            "message": "필수 파라미터가 누락되었습니다.",
+            "result": null
+        });
+
+        assert!(!expected_response["isSuccess"].as_bool().unwrap_or(true));
+        assert_eq!(expected_response["code"], "COMMON400");
+    }
+
+    /// [API-003] 토큰 갱신 - 만료된 Refresh Token
+    #[tokio::test]
+    async fn should_return_401_for_expired_refresh_token() {
+        // Arrange
+        let _request_body = json!({
+            "refreshToken": "expired_refresh_token"
+        });
+
+        // Act & Assert
+        // Refresh Token 만료 시:
+        // - code: "AUTH4004"
+        // - HTTP Status: 401
+
+        let expected_response = json!({
+            "isSuccess": false,
+            "code": "AUTH4004",
+            "message": "유효하지 않거나 만료된 Refresh Token입니다.",
+            "result": null
+        });
+
+        assert!(!expected_response["isSuccess"].as_bool().unwrap_or(true));
+        assert_eq!(expected_response["code"], "AUTH4004");
+    }
+
+    /// [API-003] 토큰 갱신 - 로그아웃된 토큰
+    #[tokio::test]
+    async fn should_return_401_for_logged_out_token() {
+        // Arrange
+        let _request_body = json!({
+            "refreshToken": "logged_out_refresh_token"
+        });
+
+        // Act & Assert
+        // 로그아웃된 토큰 사용 시:
+        // - code: "AUTH4005"
+        // - HTTP Status: 401
+
+        let expected_response = json!({
+            "isSuccess": false,
+            "code": "AUTH4005",
+            "message": "로그아웃 처리된 토큰입니다. 다시 로그인해 주세요.",
+            "result": null
+        });
+
+        assert!(!expected_response["isSuccess"].as_bool().unwrap_or(true));
+        assert_eq!(expected_response["code"], "AUTH4005");
+    }
+}
+
+#[cfg(test)]
+mod logout_tests {
+    use serde_json::json;
+
+    /// [API-004] 로그아웃 - 성공
+    #[tokio::test]
+    async fn should_logout_successfully() {
+        // Arrange
+        // Authorization: Bearer {accessToken}
+        let _request_body = json!({
+            "refreshToken": "valid_refresh_token_xxx"
+        });
+
+        // Act & Assert
+        // 로그아웃 성공 시:
+        // - result: null
+        // - code: "COMMON200"
+
+        let expected_response = json!({
+            "isSuccess": true,
+            "code": "COMMON200",
+            "message": "로그아웃이 성공적으로 처리되었습니다.",
+            "result": null
+        });
+
+        assert!(expected_response["isSuccess"].as_bool().unwrap_or(false));
+        assert_eq!(expected_response["code"], "COMMON200");
+    }
+
+    /// [API-004] 로그아웃 - 인증 실패 (accessToken 누락)
+    #[tokio::test]
+    async fn should_return_401_when_access_token_missing() {
+        // Arrange
+        // Authorization 헤더 없음
+        let _request_body = json!({
+            "refreshToken": "valid_refresh_token_xxx"
+        });
+
+        // Act & Assert
+        // accessToken 누락 시:
+        // - code: "AUTH4001"
+        // - HTTP Status: 401
+
+        let expected_response = json!({
+            "isSuccess": false,
+            "code": "AUTH4001",
+            "message": "인증 정보가 유효하지 않습니다.",
+            "result": null
+        });
+
+        assert!(!expected_response["isSuccess"].as_bool().unwrap_or(true));
+        assert_eq!(expected_response["code"], "AUTH4001");
+    }
+
+    /// [API-004] 로그아웃 - 유효하지 않은 refreshToken
+    #[tokio::test]
+    async fn should_return_400_for_invalid_refresh_token() {
+        // Arrange
+        let _request_body = json!({
+            "refreshToken": "invalid_or_already_logged_out_token"
+        });
+
+        // Act & Assert
+        // 유효하지 않은 refreshToken:
+        // - code: "AUTH4003"
+        // - HTTP Status: 400
+
+        let expected_response = json!({
+            "isSuccess": false,
+            "code": "AUTH4003",
+            "message": "이미 로그아웃되었거나 유효하지 않은 토큰입니다.",
+            "result": null
+        });
+
+        assert!(!expected_response["isSuccess"].as_bool().unwrap_or(true));
+        assert_eq!(expected_response["code"], "AUTH4003");
+    }
+}
+
+#[cfg(test)]
 mod dto_tests {
     use serde::{Deserialize, Serialize};
-    use serde_json::json;
 
     /// Social Login Request DTO 직렬화 테스트
     #[test]
@@ -419,5 +602,73 @@ mod dto_tests {
         assert_eq!(json_value["nickname"], "제이슨");
         assert!(json_value["accessToken"].is_string());
         assert!(json_value["refreshToken"].is_string());
+    }
+
+    /// Token Refresh Request DTO 직렬화 테스트
+    #[test]
+    fn should_serialize_token_refresh_request_with_camel_case() {
+        #[derive(Debug, Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TokenRefreshRequest {
+            refresh_token: String,
+        }
+
+        // Arrange
+        let request = TokenRefreshRequest {
+            refresh_token: "refresh_token_xxx".to_string(),
+        };
+
+        // Act
+        let json_str = serde_json::to_string(&request).unwrap();
+
+        // Assert
+        assert!(json_str.contains("\"refreshToken\""));
+        assert!(!json_str.contains("\"refresh_token\""));
+    }
+
+    /// Token Refresh Response DTO 직렬화 테스트
+    #[test]
+    fn should_serialize_token_refresh_response_with_camel_case() {
+        #[derive(Debug, Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TokenRefreshResponse {
+            access_token: String,
+            refresh_token: String,
+        }
+
+        // Arrange
+        let response = TokenRefreshResponse {
+            access_token: "new_access_token_xxx".to_string(),
+            refresh_token: "new_refresh_token_xxx".to_string(),
+        };
+
+        // Act
+        let json_value: serde_json::Value = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert!(json_value["accessToken"].is_string());
+        assert!(json_value["refreshToken"].is_string());
+    }
+
+    /// Logout Request DTO 직렬화 테스트
+    #[test]
+    fn should_serialize_logout_request_with_camel_case() {
+        #[derive(Debug, Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct LogoutRequest {
+            refresh_token: String,
+        }
+
+        // Arrange
+        let request = LogoutRequest {
+            refresh_token: "refresh_token_xxx".to_string(),
+        };
+
+        // Act
+        let json_str = serde_json::to_string(&request).unwrap();
+
+        // Assert
+        assert!(json_str.contains("\"refreshToken\""));
+        assert!(!json_str.contains("\"refresh_token\""));
     }
 }

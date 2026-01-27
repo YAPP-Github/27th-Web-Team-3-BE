@@ -3,8 +3,8 @@ use reqwest::Client;
 use sea_orm::*;
 
 use super::dto::{
-    EmailLoginRequest, EmailLoginResponse, SignupRequest, SignupResponse, SocialLoginRequest,
-    SocialLoginResponse,
+    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
+    SocialLoginRequest, SocialLoginResponse, TokenRefreshRequest, TokenRefreshResponse,
 };
 use crate::domain::member::entity::member::{self, Entity as Member, SocialType};
 use crate::state::AppState;
@@ -188,6 +188,84 @@ impl AuthService {
             access_token: Some(access_token),
             refresh_token: Some(refresh_token),
         })
+    }
+
+    /// [API-003] 토큰 갱신
+    pub async fn refresh_token(
+        state: AppState,
+        req: TokenRefreshRequest,
+    ) -> Result<TokenRefreshResponse, AppError> {
+        // 1. Refresh Token 검증
+        let claims = decode_token(&req.refresh_token, &state.config.jwt_secret).map_err(|_| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        // 2. 토큰 타입 확인
+        if claims.token_type.as_deref() != Some("refresh") {
+            return Err(AppError::InvalidRefreshToken(
+                "유효하지 않거나 만료된 Refresh Token입니다.".into(),
+            ));
+        }
+
+        // 3. 회원 존재 여부 확인
+        let member_id: i64 = claims
+            .sub
+            .parse()
+            .map_err(|_| AppError::InvalidRefreshToken("잘못된 토큰 정보입니다.".into()))?;
+
+        let member = Member::find_by_id(member_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if member.is_none() {
+            return Err(AppError::InvalidRefreshToken(
+                "유효하지 않거나 만료된 Refresh Token입니다.".into(),
+            ));
+        }
+
+        // 4. 새 토큰 발급 (Refresh Token Rotation)
+        let new_access_token = encode_token(
+            member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.jwt_expiration,
+        )?;
+
+        let new_refresh_token = encode_refresh_token(
+            member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
+        Ok(TokenRefreshResponse {
+            access_token: new_access_token,
+            refresh_token: new_refresh_token,
+        })
+    }
+
+    /// [API-004] 로그아웃
+    pub async fn logout(
+        state: AppState,
+        req: LogoutRequest,
+        _user_id: i64,
+    ) -> Result<(), AppError> {
+        // 1. Refresh Token 검증 (형식만 확인)
+        let claims = decode_token(&req.refresh_token, &state.config.jwt_secret).map_err(|_| {
+            AppError::InvalidToken("이미 로그아웃되었거나 유효하지 않은 토큰입니다.".into())
+        })?;
+
+        // 2. 토큰 타입 확인
+        if claims.token_type.as_deref() != Some("refresh") {
+            return Err(AppError::InvalidToken(
+                "이미 로그아웃되었거나 유효하지 않은 토큰입니다.".into(),
+            ));
+        }
+
+        // 참고: 실제 프로덕션에서는 Redis 등을 사용하여 토큰 블랙리스트 관리 필요
+        // 현재는 JWT 검증만 수행하고 성공 응답 반환
+        // TODO: 토큰 블랙리스트 테이블 추가 후 무효화 처리
+
+        Ok(())
     }
 
     /// 하위 호환성을 위한 login 메서드 (deprecated)

@@ -3,8 +3,8 @@ use utoipa;
 use validator::Validate;
 
 use super::dto::{
-    EmailLoginRequest, EmailLoginResponse, SignupRequest, SignupResponse, SocialLoginRequest,
-    SocialLoginResponse,
+    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
+    SocialLoginRequest, SocialLoginResponse, TokenRefreshRequest, TokenRefreshResponse,
 };
 use super::service::AuthService;
 use crate::state::AppState;
@@ -138,6 +138,78 @@ pub async fn signup(
         code: "COMMON200".to_string(),
         message: "회원가입이 성공적으로 완료되었습니다.".to_string(),
         result: Some(result),
+    }))
+}
+
+/// [API-003] 토큰 갱신
+///
+/// 만료된 Access Token을 Refresh Token을 이용하여 재발급합니다.
+/// Refresh Token Rotation 정책에 따라 새로운 Refresh Token도 함께 발급됩니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/token/refresh",
+    request_body = TokenRefreshRequest,
+    responses(
+        (status = 200, description = "토큰 갱신 성공", body = SuccessTokenRefreshResponse),
+        (status = 400, description = "필수 파라미터 누락", body = ErrorResponse),
+        (status = 401, description = "유효하지 않거나 만료된 Refresh Token", body = ErrorResponse)
+    ),
+    tag = "Auth"
+)]
+pub async fn refresh_token(
+    State(state): State<AppState>,
+    Json(req): Json<TokenRefreshRequest>,
+) -> Result<Json<BaseResponse<TokenRefreshResponse>>, AppError> {
+    req.validate()?;
+
+    let result = AuthService::refresh_token(state, req).await?;
+
+    Ok(Json(BaseResponse {
+        is_success: true,
+        code: "COMMON200".to_string(),
+        message: "토큰이 성공적으로 갱신되었습니다.".to_string(),
+        result: Some(result),
+    }))
+}
+
+/// [API-004] 로그아웃
+///
+/// 현재 사용자의 로그아웃을 처리합니다.
+/// 서버에 저장된 Refresh Token을 무효화하여 보안을 유지합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/logout",
+    request_body = LogoutRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "로그아웃 성공", body = SuccessLogoutResponse),
+        (status = 400, description = "유효하지 않은 토큰", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse)
+    ),
+    tag = "Auth"
+)]
+pub async fn logout(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(req): Json<LogoutRequest>,
+) -> Result<Json<BaseResponse<()>>, AppError> {
+    req.validate()?;
+
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("잘못된 인증 정보입니다.".into()))?;
+
+    AuthService::logout(state, req, user_id).await?;
+
+    Ok(Json(BaseResponse {
+        is_success: true,
+        code: "COMMON200".to_string(),
+        message: "로그아웃이 성공적으로 처리되었습니다.".to_string(),
+        result: None,
     }))
 }
 

@@ -63,6 +63,38 @@ pub struct SignupResponse {
     pub refresh_token: String,
 }
 
+// --- [API-003] 토큰 갱신 ---
+
+/// [API-003] 토큰 갱신 요청 DTO
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenRefreshRequest {
+    /// 로그인 또는 회원가입 시 발급받은 Refresh Token
+    #[validate(length(min = 1, message = "refreshToken은 필수입니다"))]
+    pub refresh_token: String,
+}
+
+/// [API-003] 토큰 갱신 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenRefreshResponse {
+    /// 새로 발급된 Access Token
+    pub access_token: String,
+    /// 새로 발급된 Refresh Token
+    pub refresh_token: String,
+}
+
+// --- [API-004] 로그아웃 ---
+
+/// [API-004] 로그아웃 요청 DTO
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LogoutRequest {
+    /// 서버에서 무효화 처리할 Refresh Token
+    #[validate(length(min = 1, message = "refreshToken은 필수입니다"))]
+    pub refresh_token: String,
+}
+
 // --- 이메일 로그인 (테스트용) ---
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
@@ -112,6 +144,26 @@ pub struct SuccessEmailLoginResponse {
     pub code: String,
     pub message: String,
     pub result: EmailLoginResponse,
+}
+
+/// 토큰 갱신 성공 응답 (Swagger용)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessTokenRefreshResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: TokenRefreshResponse,
+}
+
+/// 로그아웃 성공 응답 (Swagger용)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessLogoutResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: Option<()>,
 }
 
 // --- 하위 호환성을 위한 별칭 ---
