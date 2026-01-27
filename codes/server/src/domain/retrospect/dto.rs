@@ -87,6 +87,7 @@ pub struct SuccessRetroRoomListResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetroRoomOrderItem {
+    #[validate(range(min = 1, message = "retroRoomId는 1 이상이어야 합니다."))]
     pub retro_room_id: i64,
     #[validate(range(min = 1, message = "orderIndex는 1 이상이어야 합니다."))]
     pub order_index: i32,

@@ -28,16 +28,16 @@ impl AppConfig {
             .parse()
             .map_err(|_| ConfigError::InvalidPort)?;
 
-        let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| {
-            if cfg!(debug_assertions) {
+        let jwt_secret = match env::var("JWT_SECRET") {
+            Ok(v) => v,
+            Err(_) if cfg!(debug_assertions) => {
                 tracing::warn!(
                     "JWT_SECRET 환경변수가 설정되지 않았습니다. 개발 환경에서 기본값을 사용합니다."
                 );
                 "secret".to_string()
-            } else {
-                panic!("JWT_SECRET 환경변수는 프로덕션 환경에서 필수입니다.")
             }
-        });
+            Err(_) => return Err(ConfigError::MissingJwtSecret),
+        };
 
         let jwt_expiration = env::var("JWT_EXPIRATION")
             .unwrap_or_else(|_| "1800".to_string()) // Default 30 min
@@ -86,7 +86,6 @@ pub enum ConfigError {
     InvalidPort,
     #[error("Invalid expiration time")]
     InvalidExpiration,
-    #[allow(dead_code)]
     #[error("JWT_SECRET environment variable is required in production")]
     MissingJwtSecret,
 }
