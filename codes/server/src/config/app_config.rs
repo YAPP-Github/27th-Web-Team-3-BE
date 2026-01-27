@@ -16,7 +16,6 @@ pub struct AppConfig {
 
     // AI Service
     pub openai_api_key: String,
-    pub secret_key: String,
 }
 
 impl AppConfig {
@@ -50,13 +49,6 @@ impl AppConfig {
             );
             "test-key".to_string()
         });
-        let secret_key = env::var("SECRET_KEY").unwrap_or_else(|_| {
-            tracing::warn!(
-                "SECRET_KEY 환경변수가 설정되지 않았습니다. 프로덕션 환경에서는 반드시 설정하세요."
-            );
-            "test-secret".to_string()
-        });
-
         Ok(Self {
             server_port,
             jwt_secret,
@@ -66,7 +58,6 @@ impl AppConfig {
             kakao_client_id,
             kakao_redirect_uri,
             openai_api_key,
-            secret_key,
         })
     }
 }

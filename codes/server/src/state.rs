@@ -6,6 +6,5 @@ use sea_orm::DatabaseConnection;
 pub struct AppState {
     pub db: DatabaseConnection,
     pub config: AppConfig,
-    #[allow(dead_code)]
     pub ai_service: AiService,
 }
