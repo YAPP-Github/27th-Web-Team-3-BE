@@ -260,7 +260,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         let room =
-            room.ok_or_else(|| AppError::NotFound("존재하지 않는 레트로룸입니다.".into()))?;
+            room.ok_or_else(|| AppError::NotFound("존재하지 않는 팀입니다.".into()))?;
 
         // 2. Owner 권한 확인
         let member_room = MemberRetroRoom::find()
@@ -271,12 +271,12 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         let member_room = member_room.ok_or_else(|| {
-            AppError::NoRoomPermission("레트로룸 이름을 변경할 권한이 없습니다.".into())
+            AppError::NoRoomPermission("팀 이름을 변경할 권한이 없습니다.".into())
         })?;
 
         if member_room.role != RoomRole::Owner {
             return Err(AppError::NoRoomPermission(
-                "레트로룸 이름을 변경할 권한이 없습니다.".into(),
+                "팀 이름을 변경할 권한이 없습니다.".into(),
             ));
         }
 
@@ -290,7 +290,7 @@ impl RetrospectService {
 
         if existing.is_some() {
             return Err(AppError::RetroRoomNameDuplicate(
-                "이미 사용 중인 레트로룸 이름입니다.".into(),
+                "이미 사용 중인 팀 이름입니다.".into(),
             ));
         }
 
@@ -324,7 +324,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         let room =
-            room.ok_or_else(|| AppError::NotFound("존재하지 않는 레트로룸입니다.".into()))?;
+            room.ok_or_else(|| AppError::NotFound("존재하지 않는 팀입니다.".into()))?;
 
         // 2. Owner 권한 확인
         let member_room = MemberRetroRoom::find()
@@ -335,11 +335,11 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         let member_room = member_room
-            .ok_or_else(|| AppError::NoPermission("레트로룸을 삭제할 권한이 없습니다.".into()))?;
+            .ok_or_else(|| AppError::NoPermission("팀을 삭제할 권한이 없습니다.".into()))?;
 
         if member_room.role != RoomRole::Owner {
             return Err(AppError::NoPermission(
-                "레트로룸을 삭제할 권한이 없습니다.".into(),
+                "팀을 삭제할 권한이 없습니다.".into(),
             ));
         }
 
@@ -362,7 +362,7 @@ impl RetrospectService {
                 })
             })
             .await
-            .map_err(|e| AppError::InternalError(format!("레트로룸 삭제 실패: {}", e)))?;
+            .map_err(|e| AppError::InternalError(format!("팀 삭제 실패: {}", e)))?;
 
         Ok(DeleteRetroRoomResponse {
             retro_room_id,
@@ -383,7 +383,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         if room.is_none() {
-            return Err(AppError::NotFound("존재하지 않는 레트로룸입니다.".into()));
+            return Err(AppError::NotFound("존재하지 않는 팀입니다.".into()));
         }
 
         // 2. 멤버 권한 확인
@@ -396,7 +396,7 @@ impl RetrospectService {
 
         if member_room.is_none() {
             return Err(AppError::NoPermission(
-                "해당 레트로룸에 접근 권한이 없습니다.".into(),
+                "해당 팀에 접근 권한이 없습니다.".into(),
             ));
         }
 

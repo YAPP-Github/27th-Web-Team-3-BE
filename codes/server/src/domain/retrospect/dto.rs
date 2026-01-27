@@ -104,7 +104,7 @@ pub struct SuccessEmptyResponse {
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRetroRoomNameRequest {
-    #[validate(length(min = 1, max = 20, message = "레트로룸 이름은 1~20자여야 합니다."))]
+    #[validate(length(min = 1, max = 20, message = "팀 이름은 1~20자여야 합니다."))]
     pub name: String,
 }
 
