@@ -311,11 +311,12 @@ impl RetrospectService {
                             .one(txn)
                             .await?;
 
-                        if let Some(mr) = member_room {
-                            let mut active_model: member_retro_room::ActiveModel = mr.into();
-                            active_model.order_index = Set(order_item.order_index);
-                            active_model.update(txn).await?;
-                        }
+                        let mr = member_room.ok_or(DbErr::RecordNotFound(
+                            "멤버십이 존재하지 않습니다.".to_string(),
+                        ))?;
+                        let mut active_model: member_retro_room::ActiveModel = mr.into();
+                        active_model.order_index = Set(order_item.order_index);
+                        active_model.update(txn).await?;
                     }
                     Ok(())
                 })
