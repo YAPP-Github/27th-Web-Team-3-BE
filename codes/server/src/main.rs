@@ -20,12 +20,12 @@ use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
     DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
-    RetrospectMemberItem, RetrospectQuestionItem, StorageRangeFilter, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
-    SuccessDraftSaveResponse, SuccessReferencesListResponse, SuccessRetrospectDetailResponse,
-    SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
-    TeamRetrospectListItem,
+    RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessCreateParticipantResponse,
+    SuccessCreateRetrospectResponse, SuccessDraftSaveResponse, SuccessReferencesListResponse,
+    SuccessRetrospectDetailResponse, SuccessSearchResponse, SuccessStorageResponse,
+    SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -46,7 +46,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::save_draft,
         domain::retrospect::handler::get_retrospect_detail,
         domain::retrospect::handler::submit_retrospect,
-        domain::retrospect::handler::get_storage
+        domain::retrospect::handler::get_storage,
+        domain::retrospect::handler::search_retrospects
     ),
     components(
         schemas(
@@ -84,7 +85,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
             RetrospectDetailResponse,
             RetrospectMemberItem,
             RetrospectQuestionItem,
-            SuccessRetrospectDetailResponse
+            SuccessRetrospectDetailResponse,
+            SearchRetrospectItem,
+            SuccessSearchResponse
         )
     ),
     tags(
@@ -177,6 +180,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/references",
             axum::routing::get(domain::retrospect::handler::list_references),
+        )
+        .route(
+            "/api/v1/retrospects/search",
+            axum::routing::get(domain::retrospect::handler::search_retrospects),
         )
         .route(
             "/api/v1/retrospects/storage",

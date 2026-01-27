@@ -67,6 +67,9 @@ pub enum AppError {
 
     /// RETRO4033: 이미 제출 완료 (403)
     RetroAlreadySubmitted(String),
+
+    /// SEARCH4001: 검색어 누락 또는 유효하지 않음 (400)
+    SearchKeywordInvalid(String),
 }
 
 impl AppError {
@@ -91,6 +94,7 @@ impl AppError {
             AppError::RetroAnswerTooLong(msg) => msg.clone(),
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
             AppError::RetroAlreadySubmitted(msg) => msg.clone(),
+            AppError::SearchKeywordInvalid(msg) => msg.clone(),
         }
     }
 
@@ -115,6 +119,7 @@ impl AppError {
             AppError::RetroAnswerTooLong(_) => "RETRO4003",
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
             AppError::RetroAlreadySubmitted(_) => "RETRO4033",
+            AppError::SearchKeywordInvalid(_) => "SEARCH4001",
         }
     }
 
@@ -139,6 +144,7 @@ impl AppError {
             AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
+            AppError::SearchKeywordInvalid(_) => StatusCode::BAD_REQUEST,
         }
     }
 }

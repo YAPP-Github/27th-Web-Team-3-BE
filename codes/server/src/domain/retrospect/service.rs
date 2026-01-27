@@ -26,9 +26,10 @@ use crate::utils::error::AppError;
 use super::dto::{
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
     DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
-    RetrospectMemberItem, RetrospectQuestionItem, StorageQueryParams, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, TeamRetrospectListItem, REFERENCE_URL_MAX_LENGTH,
+    RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem,
+    StorageQueryParams, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
+    REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -922,11 +923,8 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))? as i64
         };
 
-        // 8. 시작일 포맷 (UTC → KST, YYYY-MM-DD)
-        let kst_offset = chrono::Duration::hours(9);
-        let start_time = (retrospect_model.start_time + kst_offset)
-            .format("%Y-%m-%d")
-            .to_string();
+        // 8. 시작일 포맷 (start_time은 생성 시 KST로 저장되므로 변환 불필요)
+        let start_time = retrospect_model.start_time.format("%Y-%m-%d").to_string();
 
         Ok(RetrospectDetailResponse {
             team_id: retrospect_room_id,
@@ -938,6 +936,96 @@ impl RetrospectService {
             total_comment_count,
             questions,
         })
+    }
+
+    /// 검색 키워드 검증
+    fn validate_search_keyword(keyword: &str) -> Result<String, AppError> {
+        let trimmed = keyword.trim().to_string();
+
+        if trimmed.is_empty() {
+            return Err(AppError::SearchKeywordInvalid(
+                "검색어를 입력해주세요.".to_string(),
+            ));
+        }
+
+        if trimmed.chars().count() > 100 {
+            return Err(AppError::SearchKeywordInvalid(
+                "검색어는 최대 100자까지 입력 가능합니다.".to_string(),
+            ));
+        }
+
+        Ok(trimmed)
+    }
+
+    /// 회고 검색 (API-023)
+    pub async fn search_retrospects(
+        state: AppState,
+        user_id: i64,
+        params: SearchQueryParams,
+    ) -> Result<Vec<SearchRetrospectItem>, AppError> {
+        // 1. 키워드 검증
+        let keyword = Self::validate_search_keyword(&params.keyword)?;
+
+        info!(
+            user_id = user_id,
+            keyword = %keyword,
+            "회고 검색 요청"
+        );
+
+        // 2. 사용자가 속한 팀 목록 조회
+        let user_teams = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if user_teams.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let team_ids: Vec<i64> = user_teams.iter().map(|mt| mt.team_id).collect();
+
+        // 3. 팀 정보 조회 (팀명 매핑)
+        let teams = team::Entity::find()
+            .filter(team::Column::TeamId.is_in(team_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let team_map: HashMap<i64, String> =
+            teams.iter().map(|t| (t.team_id, t.name.clone())).collect();
+
+        // 4. 해당 팀들의 회고 중 키워드가 포함된 회고 검색 (동일 시간대 안정 정렬을 위해 ID 보조 정렬 추가)
+        let retrospects = retrospect::Entity::find()
+            .filter(retrospect::Column::TeamId.is_in(team_ids))
+            .filter(retrospect::Column::Title.contains(&keyword))
+            .order_by_desc(retrospect::Column::StartTime)
+            .order_by_desc(retrospect::Column::RetrospectId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 5. 응답 DTO 변환 (start_time은 생성 시 KST로 저장되므로 변환 불필요)
+        let items: Vec<SearchRetrospectItem> = retrospects
+            .iter()
+            .map(|r| SearchRetrospectItem {
+                retrospect_id: r.retrospect_id,
+                project_name: r.title.clone(),
+                team_name: team_map.get(&r.team_id).cloned().unwrap_or_default(),
+                retrospect_method: r.retrospect_method.clone(),
+                retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
+                retrospect_time: r.start_time.format("%H:%M").to_string(),
+            })
+            .collect();
+
+        info!(
+            user_id = user_id,
+            keyword = %keyword,
+            result_count = items.len(),
+            "회고 검색 완료"
+        );
+
+        Ok(items)
     }
 
     /// 임시 저장 답변 비즈니스 검증
@@ -1812,5 +1900,89 @@ mod tests {
         // Assert
         assert!(result.is_err());
         assert!(matches!(result, Err(AppError::RetroAnswersMissing(_))));
+    }
+
+    // ===== 검색 키워드 검증 테스트 (API-023) =====
+
+    #[test]
+    fn should_fail_when_keyword_is_empty() {
+        // Arrange
+        let keyword = "";
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(keyword);
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::SearchKeywordInvalid(_))));
+    }
+
+    #[test]
+    fn should_fail_when_keyword_exceeds_100_chars() {
+        // Arrange
+        let keyword = "가".repeat(101);
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(&keyword);
+
+        // Assert
+        assert!(result.is_err());
+        if let Err(AppError::SearchKeywordInvalid(msg)) = result {
+            assert!(msg.contains("100자"));
+        } else {
+            panic!("Expected SearchKeywordInvalid error");
+        }
+    }
+
+    #[test]
+    fn should_pass_when_keyword_is_exactly_100_chars() {
+        // Arrange
+        let keyword = "가".repeat(100);
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(&keyword);
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), keyword);
+    }
+
+    #[test]
+    fn should_fail_when_keyword_is_whitespace_only() {
+        // Arrange
+        let keyword = "   \t\n  ";
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(keyword);
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::SearchKeywordInvalid(_))));
+    }
+
+    #[test]
+    fn should_trim_keyword_with_leading_trailing_whitespace() {
+        // Arrange
+        let keyword = "  스프린트  ";
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(keyword);
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "스프린트");
+    }
+
+    #[test]
+    fn should_pass_valid_keyword() {
+        // Arrange
+        let keyword = "스프린트 회고";
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(keyword);
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "스프린트 회고");
     }
 }
