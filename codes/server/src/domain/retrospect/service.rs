@@ -71,8 +71,20 @@ impl RetrospectService {
             ));
         }
 
-        // 2. 초대 코드 생성 (형식: INV-XXXX-XXXX)
-        let invite_code = Self::generate_invite_code();
+        // 2. 초대 코드 생성 (형식: INV-XXXX-XXXX) - 충돌 방지 retry 로직
+        let mut invite_code = Self::generate_invite_code();
+        const MAX_RETRY: u8 = 5;
+        for _ in 0..MAX_RETRY {
+            let existing = RetroRoom::find()
+                .filter(retro_room::Column::InvitionUrl.eq(&invite_code))
+                .one(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+            if existing.is_none() {
+                break;
+            }
+            invite_code = Self::generate_invite_code();
+        }
         let now = Utc::now().naive_utc();
         let title = req.title.clone();
         let description = req.description;
@@ -211,6 +223,18 @@ impl RetrospectService {
         member_id: i64,
         req: UpdateRetroRoomOrderRequest,
     ) -> Result<(), AppError> {
+        // 중복 order_index 값 체크
+        let order_indices: HashSet<i32> = req
+            .retro_room_orders
+            .iter()
+            .map(|o| o.order_index)
+            .collect();
+        if order_indices.len() != req.retro_room_orders.len() {
+            return Err(AppError::InvalidOrderData(
+                "order_index 값이 중복되었습니다.".into(),
+            ));
+        }
+
         // 사용자가 참여 중인 룸 ID 목록 조회
         let member_rooms = MemberRetroRoom::find()
             .filter(member_retro_room::Column::MemberId.eq(member_id))

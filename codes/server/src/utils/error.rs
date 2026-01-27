@@ -387,6 +387,18 @@ impl From<ValidationErrors> for AppError {
             );
         }
 
+        // name 필드 (RetroRoom 이름) 검증 실패 시 RETRO4001 반환
+        if field_errors.contains_key("name") {
+            return AppError::RetroRoomNameTooLong("룸 이름은 1~20자여야 합니다.".to_string());
+        }
+
+        // retro_room_orders 필드 검증 실패 시 TEAM4004 반환
+        if field_errors.contains_key("retro_room_orders")
+            || field_errors.contains_key("order_index")
+        {
+            return AppError::InvalidOrderData("잘못된 순서 데이터입니다.".to_string());
+        }
+
         let messages: Vec<String> = field_errors
             .iter()
             .flat_map(|(field, errs)| {
