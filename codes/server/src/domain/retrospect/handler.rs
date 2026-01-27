@@ -1,7 +1,10 @@
 use axum::{
     extract::{Path, Query, State},
+    http::header,
+    response::IntoResponse,
     Json,
 };
+use chrono::Utc;
 use validator::Validate;
 
 use crate::state::AppState;
@@ -10,10 +13,10 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest,
-    CreateRetrospectResponse, DraftSaveRequest, DraftSaveResponse, ReferenceItem,
-    RetrospectDetailResponse, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
-    StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
+    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
+    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
 };
 use super::service::RetrospectService;
 
@@ -501,4 +504,71 @@ pub async fn search_retrospects(
         result,
         "검색을 성공했습니다.",
     )))
+}
+
+/// 회고 내보내기 API (API-021)
+///
+/// 특정 회고 세션의 전체 내용(팀 인사이트, 팀원별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드합니다.
+/// 성공 시 브라우저를 통해 파일 다운로드가 즉시 시작됩니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retrospects/{retrospectId}/export",
+    params(
+        ("retrospectId" = i64, Path, description = "내보낼 회고의 고유 식별자")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "PDF 파일 다운로드", content_type = "application/pdf"),
+        (status = 400, description = "잘못된 요청 (retrospectId 유효성 오류)", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고이거나 접근 권한 없음", body = ErrorResponse),
+        (status = 500, description = "PDF 생성 실패", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn export_retrospect(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(retrospect_id): Path<i64>,
+) -> Result<impl IntoResponse, AppError> {
+    // retrospectId 검증 (1 이상의 양수)
+    if retrospect_id < 1 {
+        return Err(AppError::BadRequest(
+            "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출 (PDF 바이트 생성)
+    let pdf_bytes = RetrospectService::export_retrospect(state, user_id, retrospect_id).await?;
+
+    // 동적 파일명 생성 (UTC 기준)
+    let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let filename = format!("retrospect_report_{}_{}.pdf", retrospect_id, timestamp);
+
+    // PDF 바이너리 응답 (Content-Type, Content-Disposition, Cache-Control 헤더 설정)
+    let headers = [
+        (
+            header::CONTENT_TYPE,
+            "application/pdf; charset=utf-8".to_string(),
+        ),
+        (
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename),
+        ),
+        (
+            header::CACHE_CONTROL,
+            "no-cache, no-store, must-revalidate".to_string(),
+        ),
+    ];
+
+    Ok((headers, pdf_bytes))
 }
