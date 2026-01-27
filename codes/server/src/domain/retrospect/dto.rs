@@ -493,7 +493,9 @@ pub struct SuccessAnalysisResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SearchQueryParams {
     /// 검색 키워드 (프로젝트명/회고명 기준, 1~100자, 필수)
-    pub keyword: String,
+    /// Option으로 선언하여 누락 시에도 핸들러가 실행되고
+    /// 서비스 레이어에서 SEARCH4001 에러를 반환합니다.
+    pub keyword: Option<String>,
 }
 
 /// 회고 검색 결과 아이템
@@ -1352,18 +1354,18 @@ mod tests {
         let params: SearchQueryParams = serde_json::from_str(json).unwrap();
 
         // Assert
-        assert_eq!(params.keyword, "스프린트");
+        assert_eq!(params.keyword, Some("스프린트".to_string()));
     }
 
     #[test]
-    fn should_fail_deserialize_search_query_params_without_keyword() {
+    fn should_deserialize_search_query_params_without_keyword() {
         // Arrange
         let json = r#"{}"#;
 
         // Act
-        let result: Result<SearchQueryParams, _> = serde_json::from_str(json);
+        let params: SearchQueryParams = serde_json::from_str(json).unwrap();
 
         // Assert
-        assert!(result.is_err());
+        assert!(params.keyword.is_none());
     }
 }

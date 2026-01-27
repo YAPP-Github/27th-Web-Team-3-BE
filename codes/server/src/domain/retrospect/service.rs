@@ -24,11 +24,11 @@ use crate::state::AppState;
 use crate::utils::error::AppError;
 
 use super::dto::{
-    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest,
-    CreateRetrospectResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem,
-    MissionItem, PersonalMissionItem, ReferenceItem, RetrospectDetailResponse,
-    RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem,
-    StorageQueryParams, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem, MissionItem,
+    PersonalMissionItem, ReferenceItem, RetrospectDetailResponse, RetrospectMemberItem,
+    RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
     SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
     REFERENCE_URL_MAX_LENGTH,
 };
@@ -940,8 +940,8 @@ impl RetrospectService {
     }
 
     /// 검색 키워드 검증
-    fn validate_search_keyword(keyword: &str) -> Result<String, AppError> {
-        let trimmed = keyword.trim().to_string();
+    fn validate_search_keyword(keyword: Option<&str>) -> Result<String, AppError> {
+        let trimmed = keyword.unwrap_or("").trim().to_string();
 
         if trimmed.is_empty() {
             return Err(AppError::SearchKeywordInvalid(
@@ -965,7 +965,7 @@ impl RetrospectService {
         params: SearchQueryParams,
     ) -> Result<Vec<SearchRetrospectItem>, AppError> {
         // 1. 키워드 검증
-        let keyword = Self::validate_search_keyword(&params.keyword)?;
+        let keyword = Self::validate_search_keyword(params.keyword.as_deref())?;
 
         info!(
             user_id = user_id,
@@ -2153,12 +2153,19 @@ mod tests {
     // ===== 검색 키워드 검증 테스트 (API-023) =====
 
     #[test]
-    fn should_fail_when_keyword_is_empty() {
-        // Arrange
-        let keyword = "";
+    fn should_fail_when_keyword_is_none() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(None);
 
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::SearchKeywordInvalid(_))));
+    }
+
+    #[test]
+    fn should_fail_when_keyword_is_empty() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some(""));
 
         // Assert
         assert!(result.is_err());
@@ -2171,7 +2178,7 @@ mod tests {
         let keyword = "가".repeat(101);
 
         // Act
-        let result = RetrospectService::validate_search_keyword(&keyword);
+        let result = RetrospectService::validate_search_keyword(Some(&keyword));
 
         // Assert
         assert!(result.is_err());
@@ -2188,7 +2195,7 @@ mod tests {
         let keyword = "가".repeat(100);
 
         // Act
-        let result = RetrospectService::validate_search_keyword(&keyword);
+        let result = RetrospectService::validate_search_keyword(Some(&keyword));
 
         // Assert
         assert!(result.is_ok());
@@ -2197,11 +2204,8 @@ mod tests {
 
     #[test]
     fn should_fail_when_keyword_is_whitespace_only() {
-        // Arrange
-        let keyword = "   \t\n  ";
-
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("   \t\n  "));
 
         // Assert
         assert!(result.is_err());
@@ -2210,11 +2214,8 @@ mod tests {
 
     #[test]
     fn should_trim_keyword_with_leading_trailing_whitespace() {
-        // Arrange
-        let keyword = "  스프린트  ";
-
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("  스프린트  "));
 
         // Assert
         assert!(result.is_ok());
@@ -2223,11 +2224,8 @@ mod tests {
 
     #[test]
     fn should_pass_valid_keyword() {
-        // Arrange
-        let keyword = "스프린트 회고";
-
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("스프린트 회고"));
 
         // Assert
         assert!(result.is_ok());
