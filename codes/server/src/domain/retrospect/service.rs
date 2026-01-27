@@ -181,7 +181,7 @@ impl RetrospectService {
             ));
         }
 
-        // 5. 멤버 추가
+        // 5. 멤버 추가 (DB unique constraint로 race condition 방지)
         let member_retro_room_active = member_retro_room::ActiveModel {
             member_id: Set(member_id),
             retrospect_room_id: Set(room.retrospect_room_id),
@@ -192,7 +192,18 @@ impl RetrospectService {
         member_retro_room_active
             .insert(&state.db)
             .await
-            .map_err(|e| AppError::InternalError(format!("멤버 추가 실패: {}", e)))?;
+            .map_err(|e| {
+                // Unique constraint violation 처리 (race condition 대비)
+                let err_str = e.to_string().to_lowercase();
+                if err_str.contains("duplicate")
+                    || err_str.contains("unique")
+                    || err_str.contains("constraint")
+                {
+                    AppError::AlreadyMember("이미 해당 회고 룸의 멤버입니다.".into())
+                } else {
+                    AppError::InternalError(format!("멤버 추가 실패: {}", e))
+                }
+            })?;
 
         Ok(JoinRetroRoomResponse {
             retro_room_id: room.retrospect_room_id,
