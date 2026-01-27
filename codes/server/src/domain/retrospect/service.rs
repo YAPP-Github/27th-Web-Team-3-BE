@@ -442,8 +442,8 @@ impl RetrospectService {
     }
 
     /// 회고 답변 조회 및 팀 멤버십 확인 헬퍼
-    /// 비멤버에게 답변 존재 여부를 노출하지 않도록
-    /// "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
+    /// - 답변이 존재하지 않으면 RES4041 (404) 반환
+    /// - 팀 멤버가 아니면 TEAM4031 (403) 반환
     async fn find_response_for_member(
         state: &AppState,
         user_id: i64,
@@ -492,6 +492,13 @@ impl RetrospectService {
         cursor: Option<i64>,
         size: i32,
     ) -> Result<ListCommentsResponse, AppError> {
+        // 0. size 범위 검증 (방어적 프로그래밍)
+        if !(1..=100).contains(&size) {
+            return Err(AppError::BadRequest(
+                "size는 1~100 범위의 정수여야 합니다.".to_string(),
+            ));
+        }
+
         // 1. 답변 조회 및 팀 멤버십 확인
         let _response_model = Self::find_response_for_member(&state, user_id, response_id).await?;
 
