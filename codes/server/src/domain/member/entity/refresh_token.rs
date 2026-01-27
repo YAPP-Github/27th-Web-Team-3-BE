@@ -7,6 +7,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub refresh_token_id: i64,
     pub member_id: i64,
+    #[sea_orm(unique)]
     pub token: String,
     pub expires_at: DateTime,
     pub created_at: DateTime,

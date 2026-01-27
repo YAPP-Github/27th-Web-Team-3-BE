@@ -317,11 +317,7 @@ impl AuthService {
     }
 
     /// [API-004] 로그아웃
-    pub async fn logout(
-        state: AppState,
-        req: LogoutRequest,
-        _user_id: i64,
-    ) -> Result<(), AppError> {
+    pub async fn logout(state: AppState, req: LogoutRequest, user_id: i64) -> Result<(), AppError> {
         // 1. Refresh Token JWT 검증
         let claims = decode_token(&req.refresh_token, &state.config.jwt_secret).map_err(|_| {
             AppError::InvalidToken("이미 로그아웃되었거나 유효하지 않은 토큰입니다.".into())
@@ -334,7 +330,15 @@ impl AuthService {
             ));
         }
 
-        // 3. DB에서 해당 Refresh Token 삭제
+        // 3. Access Token의 user_id와 Refresh Token의 sub 일치 확인
+        // 타인의 Refresh Token을 무효화하는 공격 방지
+        if claims.sub != user_id.to_string() {
+            return Err(AppError::InvalidToken(
+                "토큰 소유자가 일치하지 않습니다.".into(),
+            ));
+        }
+
+        // 4. DB에서 해당 Refresh Token 삭제
         let delete_result = RefreshToken::delete_many()
             .filter(refresh_token::Column::Token.eq(&req.refresh_token))
             .exec(&state.db)

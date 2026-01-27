@@ -1,6 +1,7 @@
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::error::AppError;
 
@@ -13,6 +14,9 @@ pub struct Claims {
     pub iat: usize,
     /// Expiration
     pub exp: usize,
+    /// JWT ID (토큰 고유 식별자)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jti: Option<String>,
     /// Email (for signup token)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
@@ -39,6 +43,7 @@ pub fn encode_token(
         sub,
         iat: Utc::now().timestamp() as usize,
         exp: expiration,
+        jti: None,
         email: None,
         token_type: Some("access".to_string()),
         provider: None,
@@ -53,6 +58,7 @@ pub fn encode_token(
 }
 
 /// Refresh Token 생성
+/// jti(JWT ID)를 포함하여 동일 시간에 발급되어도 고유한 토큰 보장
 pub fn encode_refresh_token(
     sub: String,
     secret: &str,
@@ -67,6 +73,7 @@ pub fn encode_refresh_token(
         sub,
         iat: Utc::now().timestamp() as usize,
         exp: expiration,
+        jti: Some(Uuid::new_v4().to_string()),
         email: None,
         token_type: Some("refresh".to_string()),
         provider: None,
@@ -96,6 +103,7 @@ pub fn encode_signup_token(
         sub: "".to_string(), // No user ID yet
         iat: Utc::now().timestamp() as usize,
         exp: expiration,
+        jti: None,
         email: Some(email),
         token_type: Some("signup".to_string()),
         provider: Some(provider),
