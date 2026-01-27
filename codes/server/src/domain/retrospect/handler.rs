@@ -15,7 +15,7 @@ use crate::utils::BaseResponse;
 use super::dto::{
     AnalysisResponse, CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
     CreateRetrospectRequest, CreateRetrospectResponse, DraftSaveRequest, DraftSaveResponse,
-    ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
+    LikeToggleResponse, ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
     ResponsesListResponse, ResponsesQueryParams, RetrospectDetailResponse, SearchQueryParams,
     SearchRetrospectItem, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
     SubmitRetrospectResponse, TeamRetrospectListItem,
@@ -436,6 +436,7 @@ pub async fn analyze_retrospective_handler(
     )))
 }
 
+<<<<<<< HEAD
 /// 회고 검색 API (API-023)
 ///
 /// 사용자가 참여하는 모든 팀의 회고를 프로젝트명/회고명 기준으로 검색합니다.
@@ -755,5 +756,55 @@ pub async fn create_comment(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "댓글이 성공적으로 등록되었습니다.",
+    )))
+}
+
+/// 회고 답변 좋아요 토글 API (API-025)
+///
+/// 특정 회고 답변에 좋아요를 등록하거나 취소합니다.
+/// 좋아요 미등록 상태에서 호출하면 등록, 등록 상태에서 호출하면 취소됩니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/responses/{responseId}/likes",
+    params(
+        ("responseId" = i64, Path, description = "좋아요를 처리할 대상 답변의 고유 ID")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "좋아요 상태가 성공적으로 업데이트되었습니다.", body = SuccessLikeToggleResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "팀 멤버가 아닌 유저가 좋아요 시도", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고 답변", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Response"
+)]
+pub async fn toggle_like(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(response_id): Path<i64>,
+) -> Result<Json<BaseResponse<LikeToggleResponse>>, AppError> {
+    // responseId 검증 (1 이상의 양수)
+    if response_id < 1 {
+        return Err(AppError::BadRequest(
+            "responseId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result = RetrospectService::toggle_like(state, user_id, response_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "좋아요 상태가 성공적으로 업데이트되었습니다.",
     )))
 }

@@ -2287,6 +2287,94 @@ impl RetrospectService {
             created_at: created_at_kst.format("%Y-%m-%dT%H:%M:%S").to_string(),
         })
     }
+
+    /// [API-025] 회고 답변 좋아요 토글
+    pub async fn toggle_like(
+        state: AppState,
+        user_id: i64,
+        response_id: i64,
+    ) -> Result<super::dto::LikeToggleResponse, AppError> {
+        // 1. 답변 존재 확인
+        let response_entity = response::Entity::find_by_id(response_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let response_model = response_entity.ok_or_else(|| {
+            AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
+        })?;
+
+        // 2. 회고 정보 조회하여 팀 멤버십 확인
+        let retrospect_entity = retrospect::Entity::find_by_id(response_model.retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let retrospect_model = retrospect_entity.ok_or_else(|| {
+            AppError::InternalError(
+                "회고 데이터 불일치: 답변에 연결된 회고가 존재하지 않습니다.".to_string(),
+            )
+        })?;
+
+        // 3. 팀 멤버십 확인
+        let is_team_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_team_member.is_none() {
+            return Err(AppError::TeamAccessDenied(
+                "해당 리소스에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 4. 기존 좋아요 확인
+        let existing_like = response_like::Entity::find()
+            .filter(response_like::Column::MemberId.eq(user_id))
+            .filter(response_like::Column::ResponseId.eq(response_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let is_liked = match existing_like {
+            Some(like) => {
+                // 좋아요가 있으면 삭제 (취소)
+                response_like::Entity::delete_by_id(like.response_like_id)
+                    .exec(&state.db)
+                    .await
+                    .map_err(|e| AppError::InternalError(e.to_string()))?;
+                false
+            }
+            None => {
+                // 좋아요가 없으면 추가
+                let new_like = response_like::ActiveModel {
+                    member_id: Set(user_id),
+                    response_id: Set(response_id),
+                    ..Default::default()
+                };
+                new_like
+                    .insert(&state.db)
+                    .await
+                    .map_err(|e| AppError::InternalError(e.to_string()))?;
+                true
+            }
+        };
+
+        // 5. 총 좋아요 개수 조회
+        let total_likes = response_like::Entity::find()
+            .filter(response_like::Column::ResponseId.eq(response_id))
+            .count(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        Ok(super::dto::LikeToggleResponse {
+            response_id,
+            is_liked,
+            total_likes: total_likes as i64,
+        })
+    }
 }
 
 #[cfg(test)]

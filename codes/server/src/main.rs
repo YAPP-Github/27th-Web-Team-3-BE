@@ -23,13 +23,14 @@ use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
-    DraftSaveRequest, DraftSaveResponse, EmotionRankItem, ListCommentsQuery, ListCommentsResponse,
-    MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem,
-    ResponsesListResponse, RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem,
-    SearchRetrospectItem, StorageRangeFilter, StorageResponse, StorageRetrospectItem,
-    StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
-    SuccessAnalysisResponse, SuccessCreateCommentResponse, SuccessCreateParticipantResponse,
-    SuccessCreateRetrospectResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
+    DraftSaveRequest, DraftSaveResponse, EmotionRankItem, LikeToggleResponse, ListCommentsQuery,
+    ListCommentsResponse, MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory,
+    ResponseListItem, ResponsesListResponse, RetrospectDetailResponse, RetrospectMemberItem,
+    RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter, StorageResponse,
+    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessCreateCommentResponse,
+    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
+    SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse, SuccessLikeToggleResponse,
     SuccessListCommentsResponse, SuccessReferencesListResponse, SuccessResponsesListResponse,
     SuccessRetrospectDetailResponse, SuccessSearchResponse, SuccessStorageResponse,
     SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
@@ -63,7 +64,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::export_retrospect,
         domain::retrospect::handler::delete_retrospect,
         domain::retrospect::handler::list_comments,
-        domain::retrospect::handler::create_comment
+        domain::retrospect::handler::create_comment,
+        domain::retrospect::handler::toggle_like
     ),
     components(
         schemas(
@@ -124,6 +126,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
             ResponseListItem,
             ResponsesListResponse,
             SuccessResponsesListResponse,
+            LikeToggleResponse,
+            SuccessLikeToggleResponse,
             ListCommentsQuery,
             CommentItem,
             ListCommentsResponse,
@@ -289,6 +293,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/v1/responses/:response_id/comments",
             axum::routing::get(domain::retrospect::handler::list_comments)
                 .post(domain::retrospect::handler::create_comment),
+        )
+        // [API-025] 회고 답변 좋아요 토글
+        .route(
+            "/api/v1/responses/:response_id/likes",
+            axum::routing::post(domain::retrospect::handler::toggle_like),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
