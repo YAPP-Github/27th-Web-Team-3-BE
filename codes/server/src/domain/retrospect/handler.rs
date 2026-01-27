@@ -14,13 +14,259 @@ use crate::utils::BaseResponse;
 
 use super::dto::{
     AnalysisResponse, CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
-    CreateRetrospectRequest, CreateRetrospectResponse, DraftSaveRequest, DraftSaveResponse,
-    ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
-    ResponsesListResponse, ResponsesQueryParams, RetrospectDetailResponse, SearchQueryParams,
-    SearchRetrospectItem, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, TeamRetrospectListItem,
+    CreateRetrospectRequest, CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest,
+    DraftSaveResponse, JoinRetroRoomRequest, JoinRetroRoomResponse, ListCommentsQuery,
+    ListCommentsResponse, ReferenceItem, ResponseCategory, ResponsesListResponse,
+    ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
+    RetrospectDetailResponse, RetrospectListItem, SearchQueryParams, SearchRetrospectItem,
+    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
 };
 use super::service::RetrospectService;
+
+// ============================================
+// RetroRoom Handlers (API-004 ~ API-010)
+// ============================================
+
+/// 회고 룸 생성 API
+///
+/// 새로운 회고 룸을 생성하고 생성자를 관리자로 설정합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/retro-rooms",
+    request_body = RetroRoomCreateRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "회고 룸 생성 성공", body = SuccessRetroRoomCreateResponse),
+        (status = 400, description = "잘못된 요청", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 409, description = "이름 중복", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn create_retro_room(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(req): Json<RetroRoomCreateRequest>,
+) -> Result<Json<BaseResponse<RetroRoomCreateResponse>>, AppError> {
+    req.validate()?;
+
+    let member_id = user.user_id()?;
+
+    let result = RetrospectService::create_retro_room(state, member_id, req).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 생성에 성공하였습니다.",
+    )))
+}
+
+/// 회고 룸 참여 API (초대 코드)
+///
+/// 초대 링크(코드)를 통해 회고 룸에 참여합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/retro-rooms/join",
+    request_body = JoinRetroRoomRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "회고 룸 참여 성공", body = SuccessJoinRetroRoomResponse),
+        (status = 400, description = "잘못된 초대 링크 또는 만료됨", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 룸", body = ErrorResponse),
+        (status = 409, description = "이미 참여 중", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn join_retro_room(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(req): Json<JoinRetroRoomRequest>,
+) -> Result<Json<BaseResponse<JoinRetroRoomResponse>>, AppError> {
+    req.validate()?;
+
+    let member_id = user.user_id()?;
+
+    let result = RetrospectService::join_retro_room(state, member_id, req).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 참여에 성공하였습니다.",
+    )))
+}
+
+/// API-006: 참여 중인 레트로룸 목록 조회
+///
+/// 현재 로그인한 사용자가 참여 중인 모든 레트로룸 목록을 조회합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retro-rooms",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "레트로룸 목록 조회 성공", body = SuccessRetroRoomListResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn list_retro_rooms(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Result<Json<BaseResponse<Vec<RetroRoomListItem>>>, AppError> {
+    let member_id = user.user_id()?;
+
+    let result = RetrospectService::list_retro_rooms(state, member_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "참여 중인 회고방 목록 조회를 성공했습니다.",
+    )))
+}
+
+/// API-007: 레트로룸 순서 변경
+///
+/// 드래그 앤 드롭으로 변경된 레트로룸들의 정렬 순서를 서버에 일괄 저장합니다.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/retro-rooms/order",
+    request_body = UpdateRetroRoomOrderRequest,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "순서 변경 성공", body = SuccessEmptyResponse),
+        (status = 400, description = "잘못된 순서 데이터", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn update_retro_room_order(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(req): Json<UpdateRetroRoomOrderRequest>,
+) -> Result<Json<BaseResponse<()>>, AppError> {
+    req.validate()?;
+
+    let member_id = user.user_id()?;
+
+    RetrospectService::update_retro_room_order(state, member_id, req).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        (),
+        "회고방 순서가 성공적으로 변경되었습니다.",
+    )))
+}
+
+/// API-008: 레트로룸 이름 변경
+///
+/// 기존 레트로룸의 이름을 새로운 이름으로 변경합니다. (Owner만 가능)
+#[utoipa::path(
+    patch,
+    path = "/api/v1/retro-rooms/{retro_room_id}/name",
+    request_body = UpdateRetroRoomNameRequest,
+    params(
+        ("retro_room_id" = i64, Path, description = "레트로룸 ID")
+    ),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "이름 변경 성공", body = SuccessUpdateRetroRoomNameResponse),
+        (status = 400, description = "이름 길이 초과", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 404, description = "룸 없음", body = ErrorResponse),
+        (status = 409, description = "이름 중복", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn update_retro_room_name(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(retro_room_id): Path<i64>,
+    Json(req): Json<UpdateRetroRoomNameRequest>,
+) -> Result<Json<BaseResponse<UpdateRetroRoomNameResponse>>, AppError> {
+    req.validate()?;
+
+    let member_id = user.user_id()?;
+
+    let result =
+        RetrospectService::update_retro_room_name(state, member_id, retro_room_id, req).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 이름 변경에 성공하였습니다.",
+    )))
+}
+
+/// API-009: 레트로룸 삭제
+///
+/// 레트로룸을 완전히 삭제합니다. (Owner만 가능)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/retro-rooms/{retro_room_id}",
+    params(
+        ("retro_room_id" = i64, Path, description = "레트로룸 ID")
+    ),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "삭제 성공", body = SuccessDeleteRetroRoomResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 404, description = "룸 없음", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn delete_retro_room(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(retro_room_id): Path<i64>,
+) -> Result<Json<BaseResponse<DeleteRetroRoomResponse>>, AppError> {
+    let member_id = user.user_id()?;
+
+    let result = RetrospectService::delete_retro_room(state, member_id, retro_room_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 삭제에 성공하였습니다.",
+    )))
+}
+
+/// API-010: 레트로룸 내 회고 목록 조회
+///
+/// 특정 레트로룸에 속한 모든 회고 목록을 조회합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retro-rooms/{retro_room_id}/retrospects",
+    params(
+        ("retro_room_id" = i64, Path, description = "레트로룸 ID")
+    ),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "회고 목록 조회 성공", body = SuccessRetrospectListResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 404, description = "룸 없음", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn list_retrospects(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(retro_room_id): Path<i64>,
+) -> Result<Json<BaseResponse<Vec<RetrospectListItem>>>, AppError> {
+    let member_id = user.user_id()?;
+
+    let result = RetrospectService::list_retrospects(state, member_id, retro_room_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 내 전체 회고 목록 조회를 성공했습니다.",
+    )))
+}
+
+// ============================================
+// Retrospect Handlers
+// ============================================
 
 /// 회고 생성 API
 ///
@@ -37,8 +283,8 @@ use super::service::RetrospectService;
         (status = 200, description = "회고가 성공적으로 생성되었습니다.", body = SuccessCreateRetrospectResponse),
         (status = 400, description = "잘못된 요청 (프로젝트 이름 길이 초과, 날짜 형식 오류, URL 형식 오류 등)", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "팀 접근 권한 없음", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 팀", body = ErrorResponse),
+        (status = 403, description = "회고방 접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고방", body = ErrorResponse),
         (status = 500, description = "서버 내부 오류", body = ErrorResponse)
     ),
     tag = "Retrospect"
@@ -63,57 +309,10 @@ pub async fn create_retrospect(
     )))
 }
 
-/// 팀 회고 목록 조회 API (API-010)
-///
-/// 특정 팀에 속한 모든 회고 목록을 조회합니다.
-/// 과거, 오늘, 예정된 회고 데이터가 모두 포함되며 최신순으로 정렬됩니다.
-#[utoipa::path(
-    get,
-    path = "/api/v1/teams/{teamId}/retrospects",
-    params(
-        ("teamId" = i64, Path, description = "조회를 원하는 팀의 고유 ID")
-    ),
-    security(
-        ("bearer_auth" = [])
-    ),
-    responses(
-        (status = 200, description = "팀 내 전체 회고 목록 조회를 성공했습니다.", body = SuccessTeamRetrospectListResponse),
-        (status = 400, description = "잘못된 요청 (team_id는 1 이상이어야 합니다.)", body = ErrorResponse),
-        (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "팀 접근 권한 없음", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 팀", body = ErrorResponse),
-        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
-    ),
-    tag = "Retrospect"
-)]
-pub async fn list_team_retrospects(
-    user: AuthUser,
-    State(state): State<AppState>,
-    Path(team_id): Path<i64>,
-) -> Result<Json<BaseResponse<Vec<TeamRetrospectListItem>>>, AppError> {
-    // teamId 검증 (1 이상의 양수)
-    if team_id < 1 {
-        return Err(AppError::BadRequest(
-            "팀 ID는 1 이상이어야 합니다.".to_string(),
-        ));
-    }
-
-    // 사용자 ID 추출
-    let user_id = user.user_id()?;
-
-    // 서비스 호출
-    let result = RetrospectService::list_team_retrospects(state, user_id, team_id).await?;
-
-    Ok(Json(BaseResponse::success_with_message(
-        result,
-        "팀 내 전체 회고 목록 조회를 성공했습니다.",
-    )))
-}
-
 /// 회고 참석자 등록 API (API-014)
 ///
 /// 진행 예정인 회고에 참석자로 등록합니다.
-/// JWT의 유저 정보를 기반으로 참석을 처리하며, 해당 회고가 속한 팀의 멤버만 참석이 가능합니다.
+/// JWT의 유저 정보를 기반으로 참석을 처리하며, 해당 회고가 속한 회고방의 멤버만 참석이 가능합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/retrospects/{retrospectId}/participants",
@@ -385,7 +584,7 @@ pub async fn get_storage(
 
 /// 회고 분석 API (API-022)
 ///
-/// 특정 회고 세션에 쌓인 모든 팀원의 답변을 종합 분석하여 AI 인사이트, 감정 통계, 맞춤형 미션을 생성합니다.
+/// 특정 회고 세션에 쌓인 모든 회고방 멤버의 답변을 종합 분석하여 AI 인사이트, 감정 통계, 맞춤형 미션을 생성합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/retrospects/{retrospectId}/analysis",
@@ -420,12 +619,7 @@ pub async fn analyze_retrospective_handler(
         ));
     }
 
-    // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::analyze_retrospective(state, user_id, retrospect_id).await?;
@@ -438,7 +632,7 @@ pub async fn analyze_retrospective_handler(
 
 /// 회고 검색 API (API-023)
 ///
-/// 사용자가 참여하는 모든 팀의 회고를 프로젝트명/회고명 기준으로 검색합니다.
+/// 사용자가 참여하는 모든 회고방의 회고를 프로젝트명/회고명 기준으로 검색합니다.
 /// 결과는 회고 날짜 내림차순(최신순), 동일 날짜인 경우 회고 시간 내림차순으로 정렬됩니다.
 #[utoipa::path(
     get,
@@ -460,11 +654,7 @@ pub async fn search_retrospects(
     State(state): State<AppState>,
     Query(params): Query<SearchQueryParams>,
 ) -> Result<Json<BaseResponse<Vec<SearchRetrospectItem>>>, AppError> {
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let result = RetrospectService::search_retrospects(state, user_id, params).await?;
 
@@ -476,7 +666,7 @@ pub async fn search_retrospects(
 
 /// 회고 내보내기 API (API-021)
 ///
-/// 특정 회고 세션의 전체 내용(팀 인사이트, 팀원별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드합니다.
+/// 특정 회고 세션의 전체 내용(회고방 인사이트, 멤버별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드합니다.
 #[utoipa::path(
     get,
     path = "/api/v1/retrospects/{retrospectId}/export",
@@ -506,11 +696,7 @@ pub async fn export_retrospect(
         ));
     }
 
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let pdf_bytes = RetrospectService::export_retrospect(state, user_id, retrospect_id).await?;
 
@@ -694,11 +880,7 @@ pub async fn list_comments(
         ));
     }
 
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let result =
         RetrospectService::list_comments(state, user_id, response_id, query.cursor, size).await?;
@@ -744,11 +926,7 @@ pub async fn create_comment(
 
     req.validate()?;
 
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     let result = RetrospectService::create_comment(state, user_id, response_id, req).await?;
 

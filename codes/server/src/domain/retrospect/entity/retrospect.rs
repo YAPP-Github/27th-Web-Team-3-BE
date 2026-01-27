@@ -27,6 +27,19 @@ pub enum RetrospectMethod {
     Free,
 }
 
+impl std::fmt::Display for RetrospectMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            RetrospectMethod::Kpt => "KPT",
+            RetrospectMethod::FourL => "FOUR_L",
+            RetrospectMethod::FiveF => "FIVE_F",
+            RetrospectMethod::Pmi => "PMI",
+            RetrospectMethod::Free => "FREE",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 impl RetrospectMethod {
     /// 회고 방식에 따른 기본 질문 목록을 반환합니다.
     pub fn default_questions(&self) -> Vec<&'static str> {
@@ -92,17 +105,9 @@ pub enum Relation {
         from = "Column::RetrospectRoomId",
         to = "super::retro_room::Column::RetrospectRoomId",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     RetroRoom,
-    #[sea_orm(
-        belongs_to = "crate::domain::team::entity::team::Entity",
-        from = "Column::TeamId",
-        to = "crate::domain::team::entity::team::Column::TeamId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Team,
     #[sea_orm(has_many = "super::response::Entity")]
     Response,
     #[sea_orm(has_many = "crate::domain::member::entity::member_retro::Entity")]
@@ -114,12 +119,6 @@ pub enum Relation {
 impl Related<super::retro_room::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::RetroRoom.def()
-    }
-}
-
-impl Related<crate::domain::team::entity::team::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Team.def()
     }
 }
 

@@ -3,7 +3,6 @@ use crate::domain::{
     retrospect::entity::{
         response, response_comment, response_like, retro_reference, retro_room, retrospect,
     },
-    team::entity::{member_team, team},
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr, Schema, Statement};
 use std::env;
@@ -17,7 +16,12 @@ pub async fn establish_connection(database_url: &str) -> Result<DatabaseConnecti
     let should_update_schema = env::var("DB_SCHEMA_UPDATE")
         .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
-        .unwrap_or(false);
+        .unwrap_or_else(|_| {
+            tracing::warn!(
+                "Invalid DB_SCHEMA_UPDATE value, defaulting to false. Use 'true' or 'false'."
+            );
+            false
+        });
 
     if should_update_schema {
         // Auto-create tables (Schema Sync)
@@ -41,11 +45,9 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
     // 1. Independent Entities
     create_table_if_not_exists(db, &schema, member::Entity).await?;
     create_table_if_not_exists(db, &schema, retro_room::Entity).await?;
-    create_table_if_not_exists(db, &schema, team::Entity).await?;
 
     // 2. Dependent Entities (Level 1)
     create_table_if_not_exists(db, &schema, retrospect::Entity).await?;
-    create_table_if_not_exists(db, &schema, member_team::Entity).await?;
     create_table_if_not_exists(db, &schema, refresh_token::Entity).await?;
 
     // 3. Dependent Entities (Level 2)
