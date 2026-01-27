@@ -1,5 +1,5 @@
 use axum::{
-    extract::rejection::JsonRejection,
+    extract::rejection::{JsonRejection, QueryRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -49,6 +49,63 @@ pub enum AppError {
 
     /// AUTH4005: 로그아웃 처리된 토큰 (401)
     LoggedOutToken(String),
+
+    /// RETRO4001: 프로젝트 이름 길이 유효성 검사 실패 (400)
+    RetroProjectNameInvalid(String),
+
+    /// RETRO4005: 유효하지 않은 회고 방식 (400)
+    RetroMethodInvalid(String),
+
+    /// RETRO4006: 유효하지 않은 URL 형식 (400)
+    RetroUrlInvalid(String),
+
+    /// TEAM4031: 팀 접근 권한 없음 (403)
+    TeamAccessDenied(String),
+
+    /// TEAM4041: 존재하지 않는 팀 (404)
+    TeamNotFound(String),
+
+    /// RETRO4041: 존재하지 않는 회고 (404)
+    RetrospectNotFound(String),
+
+    /// RETRO4091: 중복 참석 (409)
+    ParticipantDuplicate(String),
+
+    /// RETRO4002: 과거 회고 참석 불가 / 답변 누락 (400)
+    RetrospectAlreadyStarted(String),
+
+    /// RETRO4002: 답변 누락 (400)
+    RetroAnswersMissing(String),
+
+    /// RETRO4003: 답변 길이 초과 (400)
+    RetroAnswerTooLong(String),
+
+    /// RETRO4007: 공백만 입력 (400)
+    RetroAnswerWhitespaceOnly(String),
+
+    /// RETRO4033: 이미 제출 완료 (403)
+    RetroAlreadySubmitted(String),
+
+    /// RETRO4091: 이미 분석 완료된 회고 (409)
+    RetroAlreadyAnalyzed(String),
+
+    /// AI4031: 월간 분석 가능 횟수 초과 (403)
+    AiMonthlyLimitExceeded(String),
+
+    /// RETRO4221: 분석할 회고 답변 데이터 부족 (422)
+    RetroInsufficientData(String),
+
+    /// AI5001: 데이터 종합 분석 중 오류 (500)
+    AiAnalysisFailed(String),
+
+    /// AI5002: AI 연결 실패 (500)
+    AiConnectionFailed(String),
+
+    /// AI5031: AI 서비스 일시적 오류 (503)
+    AiServiceUnavailable(String),
+
+    /// AI5003: AI 일반 오류 (500)
+    AiGeneralError(String),
 }
 
 impl AppError {
@@ -67,6 +124,25 @@ impl AppError {
             AppError::InvalidToken(msg) => msg.clone(),
             AppError::InvalidRefreshToken(msg) => msg.clone(),
             AppError::LoggedOutToken(msg) => msg.clone(),
+            AppError::RetroProjectNameInvalid(msg) => msg.clone(),
+            AppError::RetroMethodInvalid(msg) => msg.clone(),
+            AppError::RetroUrlInvalid(msg) => msg.clone(),
+            AppError::TeamAccessDenied(msg) => msg.clone(),
+            AppError::TeamNotFound(msg) => msg.clone(),
+            AppError::RetrospectNotFound(msg) => msg.clone(),
+            AppError::ParticipantDuplicate(msg) => msg.clone(),
+            AppError::RetrospectAlreadyStarted(msg) => msg.clone(),
+            AppError::RetroAnswersMissing(msg) => msg.clone(),
+            AppError::RetroAnswerTooLong(msg) => msg.clone(),
+            AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
+            AppError::RetroAlreadySubmitted(msg) => msg.clone(),
+            AppError::RetroAlreadyAnalyzed(msg) => msg.clone(),
+            AppError::AiMonthlyLimitExceeded(msg) => msg.clone(),
+            AppError::RetroInsufficientData(msg) => msg.clone(),
+            AppError::AiAnalysisFailed(msg) => msg.clone(),
+            AppError::AiConnectionFailed(msg) => msg.clone(),
+            AppError::AiServiceUnavailable(msg) => msg.clone(),
+            AppError::AiGeneralError(msg) => msg.clone(),
         }
     }
 
@@ -85,6 +161,25 @@ impl AppError {
             AppError::InvalidToken(_) => "AUTH4003",
             AppError::InvalidRefreshToken(_) => "AUTH4004",
             AppError::LoggedOutToken(_) => "AUTH4005",
+            AppError::RetroProjectNameInvalid(_) => "RETRO4001",
+            AppError::RetroMethodInvalid(_) => "RETRO4005",
+            AppError::RetroUrlInvalid(_) => "RETRO4006",
+            AppError::TeamAccessDenied(_) => "TEAM4031",
+            AppError::TeamNotFound(_) => "TEAM4041",
+            AppError::RetrospectNotFound(_) => "RETRO4041",
+            AppError::ParticipantDuplicate(_) => "RETRO4091",
+            AppError::RetrospectAlreadyStarted(_) => "RETRO4002",
+            AppError::RetroAnswersMissing(_) => "RETRO4002",
+            AppError::RetroAnswerTooLong(_) => "RETRO4003",
+            AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
+            AppError::RetroAlreadySubmitted(_) => "RETRO4033",
+            AppError::RetroAlreadyAnalyzed(_) => "RETRO4091",
+            AppError::AiMonthlyLimitExceeded(_) => "AI4031",
+            AppError::RetroInsufficientData(_) => "RETRO4221",
+            AppError::AiAnalysisFailed(_) => "AI5001",
+            AppError::AiConnectionFailed(_) => "AI5002",
+            AppError::AiServiceUnavailable(_) => "AI5031",
+            AppError::AiGeneralError(_) => "AI5003",
         }
     }
 
@@ -103,6 +198,25 @@ impl AppError {
             AppError::InvalidToken(_) => StatusCode::BAD_REQUEST,
             AppError::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
             AppError::LoggedOutToken(_) => StatusCode::UNAUTHORIZED,
+            AppError::RetroProjectNameInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroMethodInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroUrlInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
+            AppError::TeamNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
+            AppError::RetrospectAlreadyStarted(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroAnswersMissing(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
+            AppError::RetroAlreadyAnalyzed(_) => StatusCode::CONFLICT,
+            AppError::AiMonthlyLimitExceeded(_) => StatusCode::FORBIDDEN,
+            AppError::RetroInsufficientData(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            AppError::AiAnalysisFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -118,6 +232,18 @@ impl IntoResponse for AppError {
             AppError::InternalError(msg) => {
                 error!("Internal Server Error: {}", msg);
             }
+            AppError::AiAnalysisFailed(msg) => {
+                error!("AI Analysis Failed: {}", msg);
+            }
+            AppError::AiConnectionFailed(msg) => {
+                error!("AI Connection Failed: {}", msg);
+            }
+            AppError::AiServiceUnavailable(msg) => {
+                error!("AI Service Unavailable: {}", msg);
+            }
+            AppError::AiGeneralError(msg) => {
+                error!("AI General Error: {}", msg);
+            }
             _ => {
                 error!("Error [{}]: {}", error_code, message);
             }
@@ -132,15 +258,37 @@ impl IntoResponse for AppError {
 /// JsonRejection을 AppError로 변환
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
-        AppError::JsonParseFailed(rejection.to_string())
+        let message = rejection.to_string();
+
+        // retrospectMethod 필드의 enum 파싱 실패 감지
+        if message.contains("retrospectMethod") && message.contains("unknown variant") {
+            return AppError::RetroMethodInvalid("유효하지 않은 회고 방식입니다.".to_string());
+        }
+
+        AppError::JsonParseFailed(message)
+    }
+}
+
+/// QueryRejection을 AppError로 변환
+impl From<QueryRejection> for AppError {
+    fn from(rejection: QueryRejection) -> Self {
+        AppError::BadRequest(rejection.to_string())
     }
 }
 
 /// ValidationErrors를 AppError로 변환
 impl From<ValidationErrors> for AppError {
     fn from(errors: ValidationErrors) -> Self {
-        let messages: Vec<String> = errors
-            .field_errors()
+        let field_errors = errors.field_errors();
+
+        // project_name 필드 검증 실패 시 RETRO4001 반환
+        if field_errors.contains_key("project_name") {
+            return AppError::RetroProjectNameInvalid(
+                "프로젝트 이름은 1자 이상 20자 이하여야 합니다.".to_string(),
+            );
+        }
+
+        let messages: Vec<String> = field_errors
             .iter()
             .flat_map(|(field, errs)| {
                 errs.iter().map(move |e| {
