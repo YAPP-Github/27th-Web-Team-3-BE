@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, Set, TransactionTrait,
@@ -24,8 +24,8 @@ use crate::state::AppState;
 use crate::utils::error::AppError;
 
 use super::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
-    DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
+    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    DraftItem, DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
     RetrospectMemberItem, RetrospectQuestionItem, StorageQueryParams, StorageResponse,
     StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
     SubmitRetrospectResponse, TeamRetrospectListItem, REFERENCE_URL_MAX_LENGTH,
@@ -1025,6 +1025,262 @@ impl RetrospectService {
         }
 
         Ok(())
+    }
+
+    /// 회고 분석 (API-022)
+    pub async fn analyze_retrospective(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<AnalysisResponse, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            "회고 분석 요청"
+        );
+
+        // 1. retrospect_id 검증 (1 이상)
+        if retrospect_id < 1 {
+            return Err(AppError::BadRequest(
+                "유효하지 않은 회고 ID입니다.".to_string(),
+            ));
+        }
+
+        // 2. 회고 존재 확인 → RETRO4041
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::RetrospectNotFound("존재하지 않는 회고 세션입니다.".to_string())
+            })?;
+
+        // 2-1. 이미 분석 완료 여부 확인 (재분석 방지)
+        if retrospect_model.team_insight.is_some() {
+            return Err(AppError::RetroAlreadyAnalyzed(
+                "이미 분석이 완료된 회고입니다.".to_string(),
+            ));
+        }
+
+        // 3. 팀 멤버십 확인 (팀 기반 접근 제어)
+        let is_team_member = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_team_member.is_none() {
+            return Err(AppError::TeamAccessDenied(
+                "해당 회고에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        let retrospect_room_id = retrospect_model.retrospect_room_id;
+
+        // 4. 월간 사용량 확인 (팀당 월 10회 제한)
+        let kst_offset = chrono::Duration::hours(9);
+        let now_kst = Utc::now().naive_utc() + kst_offset;
+        let current_month_start =
+            chrono::NaiveDate::from_ymd_opt(now_kst.year(), now_kst.month(), 1)
+                .ok_or_else(|| AppError::InternalError("날짜 계산 오류".to_string()))?
+                .and_hms_opt(0, 0, 0)
+                .ok_or_else(|| AppError::InternalError("시간 계산 오류".to_string()))?
+                - kst_offset; // UTC로 변환
+
+        // 현재 월에 team_insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
+        let monthly_analysis_count = retrospect::Entity::find()
+            .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
+            .filter(retrospect::Column::TeamInsight.is_not_null())
+            .filter(retrospect::Column::UpdatedAt.gte(current_month_start))
+            .count(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            as i32;
+
+        if monthly_analysis_count >= 10 {
+            return Err(AppError::AiMonthlyLimitExceeded(
+                "월간 분석 가능 횟수를 초과하였습니다.".to_string(),
+            ));
+        }
+
+        // 5. 최소 데이터 기준 확인
+        // 5-1. 제출 완료 참여자 수 (member_retro에서 status = SUBMITTED 또는 ANALYZED)
+        let submitted_members = member_retro::Entity::find()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .filter(
+                member_retro::Column::Status
+                    .is_in([RetrospectStatus::Submitted, RetrospectStatus::Analyzed]),
+            )
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if submitted_members.is_empty() {
+            return Err(AppError::RetroInsufficientData(
+                "분석할 회고 답변 데이터가 부족합니다.".to_string(),
+            ));
+        }
+
+        // 5-2. 답변 수 확인 (content != "" 카운트)
+        let all_responses = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let answer_count = all_responses
+            .iter()
+            .filter(|r| !r.content.trim().is_empty())
+            .count();
+
+        if answer_count < 3 {
+            return Err(AppError::RetroInsufficientData(
+                "분석할 회고 답변 데이터가 부족합니다.".to_string(),
+            ));
+        }
+
+        // 6. 참여자 목록 조회 (member_retro + member 조인)
+        let member_ids: Vec<i64> = submitted_members.iter().map(|mr| mr.member_id).collect();
+
+        let members = if member_ids.is_empty() {
+            vec![]
+        } else {
+            member::Entity::find()
+                .filter(member::Column::MemberId.is_in(member_ids))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+        };
+
+        // member_id -> nickname 매핑
+        let member_map: HashMap<i64, String> = members
+            .iter()
+            .map(|m| (m.member_id, m.nickname.clone()))
+            .collect();
+
+        // 7. 각 멤버의 답변 데이터 수집 (AI 프롬프트 입력용)
+        use crate::domain::ai::prompt::MemberAnswerData;
+
+        // member_response 테이블에서 멤버별 response_id 매핑 조회
+        let all_member_responses = member_response::Entity::find()
+            .filter(
+                member_response::Column::MemberId.is_in(
+                    submitted_members
+                        .iter()
+                        .map(|mr| mr.member_id)
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // response_id -> response 매핑
+        let response_map: HashMap<i64, &response::Model> =
+            all_responses.iter().map(|r| (r.response_id, r)).collect();
+
+        // member_id -> Vec<response_id> 매핑
+        let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
+        for mr in &all_member_responses {
+            member_response_map
+                .entry(mr.member_id)
+                .or_default()
+                .push(mr.response_id);
+        }
+
+        let mut members_data: Vec<MemberAnswerData> = Vec::new();
+        for mr in &submitted_members {
+            let username = member_map
+                .get(&mr.member_id)
+                .cloned()
+                .unwrap_or_else(|| format!("사용자{}", mr.member_id));
+
+            let response_ids = member_response_map
+                .get(&mr.member_id)
+                .cloned()
+                .unwrap_or_default();
+
+            let mut answers: Vec<(String, String)> = Vec::new();
+            for rid in &response_ids {
+                if let Some(resp) = response_map.get(rid) {
+                    if resp.retrospect_id == retrospect_id {
+                        answers.push((resp.question.clone(), resp.content.clone()));
+                    }
+                }
+            }
+
+            members_data.push(MemberAnswerData {
+                user_id: mr.member_id,
+                user_name: username,
+                answers,
+            });
+        }
+
+        info!(
+            "AI 분석 호출 준비 완료 (response_count={}, member_count={})",
+            all_responses.len(),
+            members_data.len()
+        );
+
+        // 8. AI 서비스 호출
+        let mut analysis = state
+            .ai_service
+            .analyze_retrospective(&members_data)
+            .await?;
+
+        // personalMissions의 userId 오름차순 정렬
+        analysis.personal_missions.sort_by_key(|pm| pm.user_id);
+
+        let team_insight = analysis.team_insight.clone();
+        let personal_missions = &analysis.personal_missions;
+
+        // 9. 트랜잭션으로 결과 저장
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 9-1. retrospects.team_insight 업데이트
+        let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
+        retrospect_active.team_insight = Set(Some(team_insight.clone()));
+        retrospect_active.updated_at = Set(Utc::now().naive_utc());
+        retrospect_active
+            .update(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 9-2. 각 member_retro.personal_insight 업데이트 + status = ANALYZED
+        for mr in &submitted_members {
+            // personal_missions에서 해당 member_id의 미션 찾기
+            let personal_insight = personal_missions
+                .iter()
+                .find(|pm| pm.user_id == mr.member_id)
+                .map(|pm| {
+                    pm.missions
+                        .iter()
+                        .map(|m| format!("{}: {}", m.mission_title, m.mission_desc))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                });
+
+            let mut mr_active: member_retro::ActiveModel = mr.clone().into();
+            mr_active.personal_insight = Set(personal_insight);
+            mr_active.status = Set(RetrospectStatus::Analyzed);
+            mr_active
+                .update(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        info!(retrospect_id = retrospect_id, "회고 분석 완료");
+
+        Ok(analysis)
     }
 }
 
