@@ -860,7 +860,14 @@ impl RetrospectService {
 
         let member_map: HashMap<i64, String> = members
             .iter()
-            .map(|m| (m.member_id, m.nickname.clone()))
+            .map(|m| {
+                let nickname = m
+                    .nickname
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "Unknown".to_string());
+                (m.member_id, nickname)
+            })
             .collect();
 
         // member_retro 순서 유지 (참석 등록일 기준 오름차순)
@@ -1079,7 +1086,7 @@ impl RetrospectService {
 
         let member_map: HashMap<i64, String> = members
             .iter()
-            .map(|m| (m.member_id, m.nickname.clone()))
+            .map(|m| (m.member_id, m.nickname.clone().unwrap_or_default()))
             .collect();
 
         // 4. 질문/답변 조회
@@ -1696,10 +1703,17 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))?
         };
 
-        // member_id -> nickname 매핑
+        // member_id -> nickname 매핑 (빈 닉네임은 "Unknown"으로 fallback)
         let member_map: HashMap<i64, String> = members
             .iter()
-            .map(|m| (m.member_id, m.nickname.clone()))
+            .map(|m| {
+                let nickname = m
+                    .nickname
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "Unknown".to_string());
+                (m.member_id, nickname)
+            })
             .collect();
 
         // 7. 각 멤버의 답변 데이터 수집 (AI 프롬프트 입력용)
@@ -2051,7 +2065,7 @@ impl RetrospectService {
                 let member_id = response_to_member.get(&r.response_id).copied();
                 let user_name = member_id
                     .and_then(|mid| member_map.get(&mid))
-                    .map(|m| m.nickname.clone())
+                    .and_then(|m| m.nickname.clone())
                     .unwrap_or_default();
 
                 ResponseListItem {
