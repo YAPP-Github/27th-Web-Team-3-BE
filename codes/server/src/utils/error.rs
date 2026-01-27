@@ -88,6 +88,9 @@ pub enum AppError {
 
     /// AI5003: AI 일반 오류 (500)
     AiGeneralError(String),
+
+    /// SEARCH4001: 검색어 누락 또는 유효하지 않음 (400)
+    SearchKeywordInvalid(String),
 }
 
 impl AppError {
@@ -119,6 +122,7 @@ impl AppError {
             AppError::AiConnectionFailed(msg) => msg.clone(),
             AppError::AiServiceUnavailable(msg) => msg.clone(),
             AppError::AiGeneralError(msg) => msg.clone(),
+            AppError::SearchKeywordInvalid(msg) => msg.clone(),
         }
     }
 
@@ -150,6 +154,7 @@ impl AppError {
             AppError::AiConnectionFailed(_) => "AI5002",
             AppError::AiServiceUnavailable(_) => "AI5031",
             AppError::AiGeneralError(_) => "AI5003",
+            AppError::SearchKeywordInvalid(_) => "SEARCH4001",
         }
     }
 
@@ -181,6 +186,7 @@ impl AppError {
             AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::SearchKeywordInvalid(_) => StatusCode::BAD_REQUEST,
         }
     }
 }

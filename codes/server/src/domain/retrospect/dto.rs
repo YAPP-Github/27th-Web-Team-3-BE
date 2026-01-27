@@ -484,6 +484,48 @@ pub struct SuccessAnalysisResponse {
     pub result: AnalysisResponse,
 }
 
+// ============================================
+// API-023: 회고 검색 DTO
+// ============================================
+
+/// 회고 검색 쿼리 파라미터
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchQueryParams {
+    /// 검색 키워드 (프로젝트명/회고명 기준, 1~100자, 필수)
+    /// Option으로 선언하여 누락 시에도 핸들러가 실행되고
+    /// 서비스 레이어에서 SEARCH4001 에러를 반환합니다.
+    pub keyword: Option<String>,
+}
+
+/// 회고 검색 결과 아이템
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchRetrospectItem {
+    /// 회고 고유 식별자
+    pub retrospect_id: i64,
+    /// 프로젝트 이름
+    pub project_name: String,
+    /// 팀 이름
+    pub team_name: String,
+    /// 회고 방식
+    pub retrospect_method: RetrospectMethod,
+    /// 회고 날짜 (YYYY-MM-DD)
+    pub retrospect_date: String,
+    /// 회고 시간 (HH:mm)
+    pub retrospect_time: String,
+}
+
+/// Swagger용 회고 검색 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessSearchResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: Vec<SearchRetrospectItem>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1195,5 +1237,135 @@ mod tests {
         // Assert
         assert_eq!(json["index"], 3);
         assert_eq!(json["content"], "테스트 질문입니다");
+    }
+
+    // ========================================
+    // API-023: SearchRetrospectItem 직렬화 테스트
+    // ========================================
+
+    #[test]
+    fn should_serialize_search_retrospect_item_in_camel_case() {
+        // Arrange
+        let item = SearchRetrospectItem {
+            retrospect_id: 42,
+            project_name: "스프린트 회고".to_string(),
+            team_name: "팀A".to_string(),
+            retrospect_method: RetrospectMethod::Kpt,
+            retrospect_date: "2026-01-24".to_string(),
+            retrospect_time: "14:30".to_string(),
+        };
+
+        // Act
+        let json = serde_json::to_value(&item).unwrap();
+
+        // Assert
+        assert_eq!(json["retrospectId"], 42);
+        assert_eq!(json["projectName"], "스프린트 회고");
+        assert_eq!(json["teamName"], "팀A");
+        assert_eq!(json["retrospectMethod"], "KPT");
+        assert_eq!(json["retrospectDate"], "2026-01-24");
+        assert_eq!(json["retrospectTime"], "14:30");
+        // snake_case 키가 없는지 확인
+        assert!(json.get("retrospect_id").is_none());
+        assert!(json.get("project_name").is_none());
+        assert!(json.get("team_name").is_none());
+        assert!(json.get("retrospect_method").is_none());
+        assert!(json.get("retrospect_date").is_none());
+        assert!(json.get("retrospect_time").is_none());
+    }
+
+    #[test]
+    fn should_serialize_search_response_with_all_retrospect_methods() {
+        // Arrange & Act & Assert
+        let methods = vec![
+            (RetrospectMethod::Kpt, "KPT"),
+            (RetrospectMethod::FourL, "FOUR_L"),
+            (RetrospectMethod::FiveF, "FIVE_F"),
+            (RetrospectMethod::Pmi, "PMI"),
+            (RetrospectMethod::Free, "FREE"),
+        ];
+
+        for (method, expected) in methods {
+            let item = SearchRetrospectItem {
+                retrospect_id: 1,
+                project_name: "테스트".to_string(),
+                team_name: "팀".to_string(),
+                retrospect_method: method,
+                retrospect_date: "2026-01-01".to_string(),
+                retrospect_time: "10:00".to_string(),
+            };
+
+            let json = serde_json::to_value(&item).unwrap();
+            assert_eq!(json["retrospectMethod"], expected);
+        }
+    }
+
+    #[test]
+    fn should_serialize_success_search_response_in_camel_case() {
+        // Arrange
+        let response = SuccessSearchResponse {
+            is_success: true,
+            code: "COMMON200".to_string(),
+            message: "검색을 성공했습니다.".to_string(),
+            result: vec![SearchRetrospectItem {
+                retrospect_id: 1,
+                project_name: "테스트 프로젝트".to_string(),
+                team_name: "팀A".to_string(),
+                retrospect_method: RetrospectMethod::Kpt,
+                retrospect_date: "2026-01-24".to_string(),
+                retrospect_time: "14:00".to_string(),
+            }],
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["isSuccess"], true);
+        assert_eq!(json["code"], "COMMON200");
+        assert_eq!(json["result"].as_array().unwrap().len(), 1);
+        assert_eq!(json["result"][0]["retrospectId"], 1);
+        assert_eq!(json["result"][0]["projectName"], "테스트 프로젝트");
+    }
+
+    #[test]
+    fn should_serialize_empty_search_response() {
+        // Arrange
+        let response = SuccessSearchResponse {
+            is_success: true,
+            code: "COMMON200".to_string(),
+            message: "검색을 성공했습니다.".to_string(),
+            result: vec![],
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["result"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn should_deserialize_search_query_params_with_keyword() {
+        // Arrange
+        let json = r#"{"keyword": "스프린트"}"#;
+
+        // Act
+        let params: SearchQueryParams = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(params.keyword, Some("스프린트".to_string()));
+    }
+
+    #[test]
+    fn should_deserialize_search_query_params_without_keyword() {
+        // Arrange
+        let json = r#"{}"#;
+
+        // Act
+        let params: SearchQueryParams = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert!(params.keyword.is_none());
     }
 }
