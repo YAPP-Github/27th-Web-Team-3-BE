@@ -612,8 +612,8 @@ impl std::str::FromStr for ResponseCategory {
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
 pub struct ResponsesQueryParams {
-    /// 조회 필터 (ALL, QUESTION_1~QUESTION_5) — 문자열로 수신하여 핸들러에서 직접 파싱
-    pub category: Option<String>,
+    /// 조회 필터 (ALL, QUESTION_1~QUESTION_5) — 필수 파라미터
+    pub category: String,
     /// 마지막으로 조회된 답변 ID (커서)
     pub cursor: Option<i64>,
     /// 페이지당 조회 개수 (1~100, 기본값: 10)
@@ -1773,7 +1773,7 @@ mod tests {
         let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
 
         // Assert
-        assert_eq!(params.category.as_deref(), Some("ALL"));
+        assert_eq!(params.category, "ALL");
         assert_eq!(params.cursor, Some(100));
         assert_eq!(params.size, Some(20));
     }
@@ -1787,23 +1787,21 @@ mod tests {
         let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
 
         // Assert
-        assert_eq!(params.category.as_deref(), Some("QUESTION_1"));
+        assert_eq!(params.category, "QUESTION_1");
         assert!(params.cursor.is_none());
         assert!(params.size.is_none());
     }
 
     #[test]
-    fn should_deserialize_responses_query_params_without_optional_fields() {
-        // Arrange
+    fn should_fail_deserialize_responses_query_params_without_category() {
+        // Arrange — category는 필수 필드이므로 역직렬화 실패
         let json = r#"{}"#;
 
         // Act
-        let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
+        let result: Result<ResponsesQueryParams, _> = serde_json::from_str(json);
 
         // Assert
-        assert!(params.category.is_none());
-        assert!(params.cursor.is_none());
-        assert!(params.size.is_none());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1815,7 +1813,7 @@ mod tests {
         let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
 
         // Assert — 핸들러에서 파싱 시 실패하도록 문자열로 전달됨
-        assert_eq!(params.category.as_deref(), Some("INVALID"));
+        assert_eq!(params.category, "INVALID");
     }
 
     // ========================================
@@ -1825,12 +1823,30 @@ mod tests {
     #[test]
     fn should_parse_valid_category_from_str() {
         // Assert
-        assert_eq!("ALL".parse::<ResponseCategory>().unwrap(), ResponseCategory::All);
-        assert_eq!("QUESTION_1".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question1);
-        assert_eq!("QUESTION_2".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question2);
-        assert_eq!("QUESTION_3".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question3);
-        assert_eq!("QUESTION_4".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question4);
-        assert_eq!("QUESTION_5".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question5);
+        assert_eq!(
+            "ALL".parse::<ResponseCategory>().unwrap(),
+            ResponseCategory::All
+        );
+        assert_eq!(
+            "QUESTION_1".parse::<ResponseCategory>().unwrap(),
+            ResponseCategory::Question1
+        );
+        assert_eq!(
+            "QUESTION_2".parse::<ResponseCategory>().unwrap(),
+            ResponseCategory::Question2
+        );
+        assert_eq!(
+            "QUESTION_3".parse::<ResponseCategory>().unwrap(),
+            ResponseCategory::Question3
+        );
+        assert_eq!(
+            "QUESTION_4".parse::<ResponseCategory>().unwrap(),
+            ResponseCategory::Question4
+        );
+        assert_eq!(
+            "QUESTION_5".parse::<ResponseCategory>().unwrap(),
+            ResponseCategory::Question5
+        );
     }
 
     #[test]

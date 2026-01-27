@@ -579,11 +579,8 @@ pub async fn list_responses(
         ));
     }
 
-    // category 필수 파라미터 검증 및 파싱
-    let category_str = params.category.as_deref().ok_or_else(|| {
-        AppError::RetroCategoryInvalid("유효하지 않은 카테고리 값입니다.".to_string())
-    })?;
-    let category: ResponseCategory = category_str.parse().map_err(|_| {
+    // category 파싱 및 검증
+    let category: ResponseCategory = params.category.parse().map_err(|_| {
         AppError::RetroCategoryInvalid("유효하지 않은 카테고리 값입니다.".to_string())
     })?;
 

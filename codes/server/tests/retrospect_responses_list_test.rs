@@ -791,5 +791,8 @@ async fn api020_should_return_responses_sorted_by_response_id_descending() {
     assert!(responses.len() >= 2);
     let first_id = responses[0]["responseId"].as_i64().unwrap();
     let second_id = responses[1]["responseId"].as_i64().unwrap();
-    assert!(first_id > second_id, "응답은 responseId 내림차순이어야 합니다");
+    assert!(
+        first_id > second_id,
+        "응답은 responseId 내림차순이어야 합니다"
+    );
 }
