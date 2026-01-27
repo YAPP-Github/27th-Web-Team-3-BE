@@ -30,7 +30,26 @@ pub enum AppError {
     Unauthorized(String),
 
     /// COMMON403: 권한 없음 (403)
+    #[allow(dead_code)]
     Forbidden(String),
+
+    /// AUTH4002: 유효하지 않은 소셜 토큰 (401)
+    SocialAuthFailed(String),
+
+    /// MEMBER4091: 리소스 충돌 (409)
+    Conflict(String),
+
+    /// MEMBER4041: 리소스 없음 (404)
+    NotFound(String),
+
+    /// AUTH4003: 이미 로그아웃되었거나 유효하지 않은 토큰 (400)
+    InvalidToken(String),
+
+    /// AUTH4004: 유효하지 않거나 만료된 Refresh Token (401)
+    InvalidRefreshToken(String),
+
+    /// AUTH4005: 로그아웃 처리된 토큰 (401)
+    LoggedOutToken(String),
 
     /// RETRO4001: 프로젝트 이름 길이 유효성 검사 실패 (400)
     RetroProjectNameInvalid(String),
@@ -94,6 +113,21 @@ pub enum AppError {
 
     /// AI5003: AI 일반 오류 (500)
     AiGeneralError(String),
+
+    /// SEARCH4001: 검색어 누락 또는 유효하지 않음 (400)
+    SearchKeywordInvalid(String),
+
+    /// COMMON500: PDF 생성 실패 (500)
+    PdfGenerationFailed(String),
+
+    /// RETRO4004: 유효하지 않은 카테고리 값 (400)
+    RetroCategoryInvalid(String),
+
+    /// RETRO4031: 회고 삭제 권한 없음 (403)
+    /// TODO: 현재 미사용. retrospects.created_by / member_team.role 스키마 추가 후
+    /// 팀 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
+    #[allow(dead_code)]
+    RetroDeleteAccessDenied(String),
 }
 
 impl AppError {
@@ -104,8 +138,14 @@ impl AppError {
             AppError::ValidationError(msg) => format!("잘못된 요청입니다: {}", msg),
             AppError::InternalError(_) => "서버 에러, 관리자에게 문의 바랍니다.".to_string(),
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
-            AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
+            AppError::Unauthorized(msg) => msg.clone(),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
+            AppError::SocialAuthFailed(msg) => msg.clone(),
+            AppError::Conflict(msg) => msg.clone(),
+            AppError::NotFound(msg) => msg.clone(),
+            AppError::InvalidToken(msg) => msg.clone(),
+            AppError::InvalidRefreshToken(msg) => msg.clone(),
+            AppError::LoggedOutToken(msg) => msg.clone(),
             AppError::RetroProjectNameInvalid(msg) => msg.clone(),
             AppError::RetroMethodInvalid(msg) => msg.clone(),
             AppError::RetroUrlInvalid(msg) => msg.clone(),
@@ -127,6 +167,10 @@ impl AppError {
             AppError::AiConnectionFailed(msg) => msg.clone(),
             AppError::AiServiceUnavailable(msg) => msg.clone(),
             AppError::AiGeneralError(msg) => msg.clone(),
+            AppError::SearchKeywordInvalid(msg) => msg.clone(),
+            AppError::RetroCategoryInvalid(msg) => msg.clone(),
+            AppError::PdfGenerationFailed(_) => "PDF 생성 중 서버 에러가 발생했습니다.".to_string(),
+            AppError::RetroDeleteAccessDenied(msg) => msg.clone(),
         }
     }
 
@@ -139,6 +183,12 @@ impl AppError {
             AppError::JsonParseFailed(_) => "COMMON400",
             AppError::Unauthorized(_) => "AUTH4001",
             AppError::Forbidden(_) => "COMMON403",
+            AppError::SocialAuthFailed(_) => "AUTH4002",
+            AppError::Conflict(_) => "MEMBER4091",
+            AppError::NotFound(_) => "MEMBER4041",
+            AppError::InvalidToken(_) => "AUTH4003",
+            AppError::InvalidRefreshToken(_) => "AUTH4004",
+            AppError::LoggedOutToken(_) => "AUTH4005",
             AppError::RetroProjectNameInvalid(_) => "RETRO4001",
             AppError::RetroMethodInvalid(_) => "RETRO4005",
             AppError::RetroUrlInvalid(_) => "RETRO4006",
@@ -160,6 +210,10 @@ impl AppError {
             AppError::AiConnectionFailed(_) => "AI5002",
             AppError::AiServiceUnavailable(_) => "AI5031",
             AppError::AiGeneralError(_) => "AI5003",
+            AppError::SearchKeywordInvalid(_) => "SEARCH4001",
+            AppError::RetroCategoryInvalid(_) => "RETRO4004",
+            AppError::PdfGenerationFailed(_) => "COMMON500",
+            AppError::RetroDeleteAccessDenied(_) => "RETRO4031",
         }
     }
 
@@ -172,6 +226,12 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::SocialAuthFailed(_) => StatusCode::UNAUTHORIZED,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::InvalidToken(_) => StatusCode::BAD_REQUEST,
+            AppError::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
+            AppError::LoggedOutToken(_) => StatusCode::UNAUTHORIZED,
             AppError::RetroProjectNameInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::RetroMethodInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::RetroUrlInvalid(_) => StatusCode::BAD_REQUEST,
@@ -193,6 +253,10 @@ impl AppError {
             AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::SearchKeywordInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroCategoryInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::PdfGenerationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::RetroDeleteAccessDenied(_) => StatusCode::FORBIDDEN,
         }
     }
 }
@@ -219,6 +283,9 @@ impl IntoResponse for AppError {
             }
             AppError::AiGeneralError(msg) => {
                 error!("AI General Error: {}", msg);
+            }
+            AppError::PdfGenerationFailed(msg) => {
+                error!("PDF Generation Failed: {}", msg);
             }
             _ => {
                 error!("Error [{}]: {}", error_code, message);

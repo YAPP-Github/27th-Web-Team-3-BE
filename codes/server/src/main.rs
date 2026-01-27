@@ -14,21 +14,25 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AppConfig;
 use crate::domain::auth::dto::{
-    EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse,
+    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
+    SocialLoginRequest, SocialLoginResponse, SuccessEmailLoginResponse, SuccessLogoutResponse,
+    SuccessSignupResponse, SuccessSocialLoginResponse, SuccessTokenRefreshResponse,
+    TokenRefreshRequest, TokenRefreshResponse,
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
     CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
     DraftSaveRequest, DraftSaveResponse, EmotionRankItem, ListCommentsQuery, ListCommentsResponse,
-    MissionItem, PersonalMissionItem, ReferenceItem, RetrospectDetailResponse,
-    RetrospectMemberItem, RetrospectQuestionItem, StorageRangeFilter, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessCreateCommentResponse,
-    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse, SuccessDraftSaveResponse,
-    SuccessListCommentsResponse, SuccessReferencesListResponse, SuccessRetrospectDetailResponse,
-    SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
-    TeamRetrospectListItem,
+    MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem,
+    ResponsesListResponse, RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem,
+    SearchRetrospectItem, StorageRangeFilter, StorageResponse, StorageRetrospectItem,
+    StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    SuccessAnalysisResponse, SuccessCreateCommentResponse, SuccessCreateParticipantResponse,
+    SuccessCreateRetrospectResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
+    SuccessListCommentsResponse, SuccessReferencesListResponse, SuccessResponsesListResponse,
+    SuccessRetrospectDetailResponse, SuccessSearchResponse, SuccessStorageResponse,
+    SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -39,7 +43,10 @@ use crate::utils::{BaseResponse, ErrorResponse};
 #[openapi(
     paths(
         health_check,
-        domain::auth::handler::login,
+        domain::auth::handler::social_login,
+        domain::auth::handler::signup,
+        domain::auth::handler::refresh_token,
+        domain::auth::handler::logout,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
         domain::retrospect::handler::create_retrospect,
@@ -51,6 +58,10 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::submit_retrospect,
         domain::retrospect::handler::get_storage,
         domain::retrospect::handler::analyze_retrospective_handler,
+        domain::retrospect::handler::search_retrospects,
+        domain::retrospect::handler::list_responses,
+        domain::retrospect::handler::export_retrospect,
+        domain::retrospect::handler::delete_retrospect,
         domain::retrospect::handler::list_comments,
         domain::retrospect::handler::create_comment
     ),
@@ -59,10 +70,20 @@ use crate::utils::{BaseResponse, ErrorResponse};
             ErrorResponse,
             HealthResponse,
             SuccessHealthResponse,
-            LoginRequest,
-            LoginResponse,
+            SocialLoginRequest,
+            SocialLoginResponse,
+            SuccessSocialLoginResponse,
+            SignupRequest,
+            SignupResponse,
+            SuccessSignupResponse,
+            TokenRefreshRequest,
+            TokenRefreshResponse,
+            SuccessTokenRefreshResponse,
+            LogoutRequest,
+            SuccessLogoutResponse,
             EmailLoginRequest,
-            SuccessLoginResponse,
+            EmailLoginResponse,
+            SuccessEmailLoginResponse,
             CreateRetrospectRequest,
             CreateRetrospectResponse,
             SuccessCreateRetrospectResponse,
@@ -96,6 +117,13 @@ use crate::utils::{BaseResponse, ErrorResponse};
             MissionItem,
             PersonalMissionItem,
             SuccessAnalysisResponse,
+            SearchRetrospectItem,
+            SuccessSearchResponse,
+            SuccessDeleteRetrospectResponse,
+            ResponseCategory,
+            ResponseListItem,
+            ResponsesListResponse,
+            SuccessResponsesListResponse,
             ListCommentsQuery,
             CommentItem,
             ListCommentsResponse,
@@ -173,10 +201,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 라우터 구성
     let app = Router::new()
         .route("/health", get(health_check))
+        // [API-001] 소셜 로그인
         .route(
-            "/api/auth/login",
-            axum::routing::post(domain::auth::handler::login),
+            "/api/v1/auth/social-login",
+            axum::routing::post(domain::auth::handler::social_login),
         )
+        // [API-002] 회원가입
+        .route(
+            "/api/v1/auth/signup",
+            axum::routing::post(domain::auth::handler::signup),
+        )
+        // [API-003] 토큰 갱신
+        .route(
+            "/api/v1/auth/token/refresh",
+            axum::routing::post(domain::auth::handler::refresh_token),
+        )
+        // [API-004] 로그아웃
+        .route(
+            "/api/v1/auth/logout",
+            axum::routing::post(domain::auth::handler::logout),
+        )
+        // 테스트/개발용 API
         .route(
             "/api/auth/login/email",
             axum::routing::post(domain::auth::handler::login_by_email),
@@ -185,6 +230,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/auth/test",
             axum::routing::get(domain::auth::handler::auth_test),
         )
+        // 하위 호환성을 위한 구 엔드포인트 (deprecated)
+        .route("/api/auth/login", {
+            #[allow(deprecated)]
+            axum::routing::post(domain::auth::handler::login)
+        })
+        // Retrospect API
         .route(
             "/api/v1/retrospects",
             axum::routing::post(domain::retrospect::handler::create_retrospect),
@@ -202,12 +253,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::get(domain::retrospect::handler::list_references),
         )
         .route(
+            "/api/v1/retrospects/search",
+            axum::routing::get(domain::retrospect::handler::search_retrospects),
+        )
+        .route(
             "/api/v1/retrospects/storage",
             axum::routing::get(domain::retrospect::handler::get_storage),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id",
-            axum::routing::get(domain::retrospect::handler::get_retrospect_detail),
+            axum::routing::get(domain::retrospect::handler::get_retrospect_detail)
+                .delete(domain::retrospect::handler::delete_retrospect),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/drafts",
@@ -220,6 +276,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/analysis",
             axum::routing::post(domain::retrospect::handler::analyze_retrospective_handler),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/responses",
+            axum::routing::get(domain::retrospect::handler::list_responses),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/export",
+            axum::routing::get(domain::retrospect::handler::export_retrospect),
         )
         .route(
             "/api/v1/responses/:response_id/comments",

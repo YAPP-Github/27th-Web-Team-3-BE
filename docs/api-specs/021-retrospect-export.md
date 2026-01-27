@@ -97,24 +97,15 @@ retrospect_report_{retrospectId}_{timestamp}.pdf
 }
 ```
 
-### 403 Forbidden - 접근 권한 없음
+### 404 Not Found - 회고 없음 또는 접근 권한 없음
 
-```json
-{
-  "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "해당 리소스에 접근 권한이 없습니다.",
-  "result": null
-}
-```
-
-### 404 Not Found - 회고 없음
+> 보안 정책: 비멤버에게 회고 존재 여부를 노출하지 않기 위해 "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리합니다.
 
 ```json
 {
   "isSuccess": false,
   "code": "RETRO4041",
-  "message": "존재하지 않는 회고 세션입니다.",
+  "message": "존재하지 않는 회고이거나 접근 권한이 없습니다.",
   "result": null
 }
 ```
@@ -136,8 +127,7 @@ retrospect_report_{retrospectId}_{timestamp}.pdf
 |------|-------------|-------------|---------|
 | COMMON400 | 400 | 잘못된 요청 (형식 오류) | retrospectId가 숫자가 아니거나 음수인 경우 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | Authorization 헤더 누락 또는 토큰 만료/불유효 |
-| TEAM4031 | 403 | 팀 멤버가 아닌 유저가 접근 시도 | 현재 유저가 회고 세션의 팀에 속하지 않음 |
-| RETRO4041 | 404 | 존재하지 않는 회고 세션 | 해당 ID의 회고 세션이 데이터베이스에 없음 |
+| RETRO4041 | 404 | 존재하지 않는 회고이거나 접근 권한 없음 | 해당 ID의 회고 세션이 없거나 팀 멤버가 아닌 경우 |
 | COMMON500 | 500 | PDF 생성 중 서버 에러 | PDF 라이브러리 오류 또는 서버 파일 시스템 문제 |
 
 ## 사용 예시

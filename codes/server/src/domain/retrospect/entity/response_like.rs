@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "response_like")]
 pub struct Model {
-    #[sea_orm(primary_key, column_name = "repsonse_like_id")]
+    #[sea_orm(primary_key)]
     pub response_like_id: i64,
     pub member_id: i64,
     pub response_id: i64,
