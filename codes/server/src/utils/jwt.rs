@@ -19,6 +19,9 @@ pub struct Claims {
     /// Token Type (access, refresh, signup)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token_type: Option<String>,
+    /// Social Provider (for signup token: KAKAO, GOOGLE)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 /// JWT 토큰 생성 (Access Token)
@@ -38,6 +41,7 @@ pub fn encode_token(
         exp: expiration,
         email: None,
         token_type: Some("access".to_string()),
+        provider: None,
     };
 
     encode(
@@ -65,6 +69,7 @@ pub fn encode_refresh_token(
         exp: expiration,
         email: None,
         token_type: Some("refresh".to_string()),
+        provider: None,
     };
 
     encode(
@@ -78,6 +83,7 @@ pub fn encode_refresh_token(
 /// Signup Token 생성
 pub fn encode_signup_token(
     email: String,
+    provider: String,
     secret: &str,
     expiration_seconds: i64,
 ) -> Result<String, AppError> {
@@ -92,6 +98,7 @@ pub fn encode_signup_token(
         exp: expiration,
         email: Some(email),
         token_type: Some("signup".to_string()),
+        provider: Some(provider),
     };
 
     encode(

@@ -62,9 +62,14 @@ impl AuthService {
                 })
             }
             None => {
-                // 신규 회원: Signup Token 발급
+                // 신규 회원: Signup Token 발급 (provider 정보 포함)
+                let provider_str = match req.provider {
+                    SocialType::Kakao => "KAKAO",
+                    SocialType::Google => "GOOGLE",
+                };
                 let signup_token = encode_signup_token(
                     social_info.email.clone(),
+                    provider_str.to_string(),
                     &state.config.jwt_secret,
                     state.config.signup_token_expiration,
                 )?;
@@ -107,7 +112,18 @@ impl AuthService {
             ));
         }
 
-        // 4. 닉네임 중복 확인
+        // 4. provider 정보 추출
+        let social_type = match claims.provider.as_deref() {
+            Some("KAKAO") => SocialType::Kakao,
+            Some("GOOGLE") => SocialType::Google,
+            _ => {
+                return Err(AppError::Unauthorized(
+                    "토큰에 유효한 provider 정보가 없습니다.".into(),
+                ))
+            }
+        };
+
+        // 5. 닉네임 중복 확인
         let existing_nickname = Member::find()
             .filter(member::Column::Nickname.eq(&req.nickname))
             .one(&state.db)
@@ -118,11 +134,11 @@ impl AuthService {
             return Err(AppError::Conflict("이미 사용 중인 닉네임입니다.".into()));
         }
 
-        // 5. 회원 생성
+        // 6. 회원 생성
         let active_model = member::ActiveModel {
             email: Set(req.email),
             nickname: Set(Some(req.nickname.clone())),
-            social_type: Set(SocialType::Kakao), // TODO: signupToken에 provider 정보 포함 필요
+            social_type: Set(social_type),
             insight_count: Set(0),
             created_at: Set(Utc::now().naive_utc()),
             updated_at: Set(Utc::now().naive_utc()),
@@ -134,7 +150,7 @@ impl AuthService {
             .await
             .map_err(|e| AppError::InternalError(format!("회원가입 실패: {}", e)))?;
 
-        // 6. JWT 토큰 발급
+        // 7. JWT 토큰 발급
         let access_token = encode_token(
             new_member.member_id.to_string(),
             &state.config.jwt_secret,

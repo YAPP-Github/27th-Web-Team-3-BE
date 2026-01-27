@@ -147,10 +147,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::get(domain::auth::handler::auth_test),
         )
         // 하위 호환성을 위한 구 엔드포인트 (deprecated)
-        .route(
-            "/api/auth/login",
-            axum::routing::post(domain::auth::handler::login),
-        )
+        .route("/api/auth/login", {
+            #[allow(deprecated)]
+            axum::routing::post(domain::auth::handler::login)
+        })
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

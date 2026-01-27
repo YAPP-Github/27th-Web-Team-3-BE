@@ -214,7 +214,7 @@ pub async fn logout(
 }
 
 // 하위 호환성을 위한 별칭
-#[allow(deprecated)]
+#[deprecated(note = "Use social_login instead")]
 pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<SocialLoginRequest>,
