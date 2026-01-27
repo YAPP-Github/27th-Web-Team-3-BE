@@ -33,13 +33,25 @@ pub enum AppError {
     #[allow(dead_code)]
     Forbidden(String),
 
-    // ============== RetroRoom 관련 에러 (feat/team-generate) ==============
+    /// AUTH4002: 유효하지 않은 소셜 토큰 (401)
+    SocialAuthFailed(String),
+
     /// COMMON409: 중복된 자원 (409)
     Conflict(String),
 
     /// RETRO4041: 회고 룸 없음 (404)
     NotFound(String),
 
+    /// AUTH4003: 이미 로그아웃되었거나 유효하지 않은 토큰 (400)
+    InvalidToken(String),
+
+    /// AUTH4004: 유효하지 않거나 만료된 Refresh Token (401)
+    InvalidRefreshToken(String),
+
+    /// AUTH4005: 로그아웃 처리된 토큰 (401)
+    LoggedOutToken(String),
+
+    // ============== RetroRoom 관련 에러 ==============
     /// RETRO4002: 유효하지 않은 초대 링크 (400)
     InvalidInviteLink(String),
 
@@ -64,7 +76,7 @@ pub enum AppError {
     /// ROOM4031: 권한 없음 - 이름 변경 (403)
     NoRoomPermission(String),
 
-    // ============== Retrospect 관련 에러 (dev) ==============
+    // ============== Retrospect 관련 에러 ==============
     /// RETRO4001: 프로젝트 이름 길이 유효성 검사 실패 (400)
     RetroProjectNameInvalid(String),
 
@@ -88,6 +100,12 @@ pub enum AppError {
 
     /// RETRO4002: 과거 회고 참석 불가 / 답변 누락 (400)
     RetrospectAlreadyStarted(String),
+
+    /// RES4041: 존재하지 않는 회고 답변 (404)
+    ResponseNotFound(String),
+
+    /// RES4001: 댓글 길이 초과 (400)
+    CommentTooLong(String),
 
     /// RETRO4002: 답변 누락 (400)
     RetroAnswersMissing(String),
@@ -146,11 +164,15 @@ impl AppError {
             AppError::ValidationError(msg) => format!("잘못된 요청입니다: {}", msg),
             AppError::InternalError(_) => "서버 에러, 관리자에게 문의 바랍니다.".to_string(),
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
-            AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
+            AppError::Unauthorized(msg) => msg.clone(),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
-            // RetroRoom 관련
-            AppError::Conflict(msg) => format!("중복된 요청입니다: {}", msg),
+            AppError::SocialAuthFailed(msg) => msg.clone(),
+            AppError::Conflict(msg) => msg.clone(),
             AppError::NotFound(msg) => msg.clone(),
+            AppError::InvalidToken(msg) => msg.clone(),
+            AppError::InvalidRefreshToken(msg) => msg.clone(),
+            AppError::LoggedOutToken(msg) => msg.clone(),
+            // RetroRoom 관련
             AppError::InvalidInviteLink(msg) => msg.clone(),
             AppError::ExpiredInviteLink(msg) => msg.clone(),
             AppError::RetroRoomNameTooLong(msg) => msg.clone(),
@@ -168,6 +190,8 @@ impl AppError {
             AppError::RetrospectNotFound(msg) => msg.clone(),
             AppError::ParticipantDuplicate(msg) => msg.clone(),
             AppError::RetrospectAlreadyStarted(msg) => msg.clone(),
+            AppError::ResponseNotFound(msg) => msg.clone(),
+            AppError::CommentTooLong(msg) => msg.clone(),
             AppError::RetroAnswersMissing(msg) => msg.clone(),
             AppError::RetroAnswerTooLong(msg) => msg.clone(),
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
@@ -195,9 +219,13 @@ impl AppError {
             AppError::JsonParseFailed(_) => "COMMON400",
             AppError::Unauthorized(_) => "AUTH4001",
             AppError::Forbidden(_) => "COMMON403",
-            // RetroRoom 관련
+            AppError::SocialAuthFailed(_) => "AUTH4002",
             AppError::Conflict(_) => "COMMON409",
-            AppError::NotFound(_) => "RETRO4041",
+            AppError::NotFound(_) => "COMMON404",
+            AppError::InvalidToken(_) => "AUTH4003",
+            AppError::InvalidRefreshToken(_) => "AUTH4004",
+            AppError::LoggedOutToken(_) => "AUTH4005",
+            // RetroRoom 관련
             AppError::InvalidInviteLink(_) => "RETRO4002",
             AppError::ExpiredInviteLink(_) => "RETRO4003",
             AppError::RetroRoomNameTooLong(_) => "RETRO4001",
@@ -215,6 +243,8 @@ impl AppError {
             AppError::RetrospectNotFound(_) => "RETRO4041",
             AppError::ParticipantDuplicate(_) => "RETRO4091",
             AppError::RetrospectAlreadyStarted(_) => "RETRO4002",
+            AppError::ResponseNotFound(_) => "RES4041",
+            AppError::CommentTooLong(_) => "RES4001",
             AppError::RetroAnswersMissing(_) => "RETRO4002",
             AppError::RetroAnswerTooLong(_) => "RETRO4003",
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
@@ -242,9 +272,13 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
-            // RetroRoom 관련
+            AppError::SocialAuthFailed(_) => StatusCode::UNAUTHORIZED,
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::InvalidToken(_) => StatusCode::BAD_REQUEST,
+            AppError::InvalidRefreshToken(_) => StatusCode::UNAUTHORIZED,
+            AppError::LoggedOutToken(_) => StatusCode::UNAUTHORIZED,
+            // RetroRoom 관련
             AppError::InvalidInviteLink(_) => StatusCode::BAD_REQUEST,
             AppError::ExpiredInviteLink(_) => StatusCode::BAD_REQUEST,
             AppError::RetroRoomNameTooLong(_) => StatusCode::BAD_REQUEST,
@@ -262,6 +296,8 @@ impl AppError {
             AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
             AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
             AppError::RetrospectAlreadyStarted(_) => StatusCode::BAD_REQUEST,
+            AppError::ResponseNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::CommentTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswersMissing(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,

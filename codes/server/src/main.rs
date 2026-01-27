@@ -14,26 +14,31 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AppConfig;
 use crate::domain::auth::dto::{
-    EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse,
+    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
+    SocialLoginRequest, SocialLoginResponse, SuccessEmailLoginResponse, SuccessLogoutResponse,
+    SuccessSignupResponse, SuccessSocialLoginResponse, SuccessTokenRefreshResponse,
+    TokenRefreshRequest, TokenRefreshResponse,
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
-    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
     DeleteRetroRoomResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem,
-    JoinRetroRoomRequest, JoinRetroRoomResponse, MissionItem, PersonalMissionItem, ReferenceItem,
-    ResponseCategory, ResponseListItem, ResponsesListResponse, RetroRoomCreateRequest,
-    RetroRoomCreateResponse, RetroRoomListItem, RetroRoomOrderItem, RetrospectDetailResponse,
-    RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem,
-    StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessAnalysisResponse,
+    JoinRetroRoomRequest, JoinRetroRoomResponse, ListCommentsQuery, ListCommentsResponse,
+    MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem,
+    ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
+    RetroRoomOrderItem, RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem,
+    RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter, StorageResponse,
+    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessCreateCommentResponse,
     SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
     SuccessDeleteRetroRoomResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
-    SuccessEmptyResponse, SuccessJoinRetroRoomResponse, SuccessReferencesListResponse,
-    SuccessResponsesListResponse, SuccessRetroRoomCreateResponse, SuccessRetroRoomListResponse,
-    SuccessRetrospectDetailResponse, SuccessRetrospectListResponse, SuccessSearchResponse,
-    SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
-    SuccessUpdateRetroRoomNameResponse, TeamRetrospectListItem, UpdateRetroRoomNameRequest,
-    UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
+    SuccessEmptyResponse, SuccessJoinRetroRoomResponse, SuccessListCommentsResponse,
+    SuccessReferencesListResponse, SuccessResponsesListResponse, SuccessRetroRoomCreateResponse,
+    SuccessRetroRoomListResponse, SuccessRetrospectDetailResponse, SuccessRetrospectListResponse,
+    SuccessSearchResponse, SuccessStorageResponse, SuccessSubmitRetrospectResponse,
+    SuccessTeamRetrospectListResponse, SuccessUpdateRetroRoomNameResponse, TeamRetrospectListItem,
+    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -44,7 +49,10 @@ use crate::utils::{BaseResponse, ErrorResponse};
 #[openapi(
     paths(
         health_check,
-        domain::auth::handler::login,
+        domain::auth::handler::social_login,
+        domain::auth::handler::signup,
+        domain::auth::handler::refresh_token,
+        domain::auth::handler::logout,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
         // RetroRoom APIs
@@ -68,17 +76,29 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::search_retrospects,
         domain::retrospect::handler::list_responses,
         domain::retrospect::handler::export_retrospect,
-        domain::retrospect::handler::delete_retrospect
+        domain::retrospect::handler::delete_retrospect,
+        domain::retrospect::handler::list_comments,
+        domain::retrospect::handler::create_comment
     ),
     components(
         schemas(
             ErrorResponse,
             HealthResponse,
             SuccessHealthResponse,
-            LoginRequest,
-            LoginResponse,
+            SocialLoginRequest,
+            SocialLoginResponse,
+            SuccessSocialLoginResponse,
+            SignupRequest,
+            SignupResponse,
+            SuccessSignupResponse,
+            TokenRefreshRequest,
+            TokenRefreshResponse,
+            SuccessTokenRefreshResponse,
+            LogoutRequest,
+            SuccessLogoutResponse,
             EmailLoginRequest,
-            SuccessLoginResponse,
+            EmailLoginResponse,
+            SuccessEmailLoginResponse,
             // RetroRoom DTOs
             RetroRoomCreateRequest,
             RetroRoomCreateResponse,
@@ -138,14 +158,22 @@ use crate::utils::{BaseResponse, ErrorResponse};
             ResponseCategory,
             ResponseListItem,
             ResponsesListResponse,
-            SuccessResponsesListResponse
+            SuccessResponsesListResponse,
+            ListCommentsQuery,
+            CommentItem,
+            ListCommentsResponse,
+            SuccessListCommentsResponse,
+            CreateCommentRequest,
+            CreateCommentResponse,
+            SuccessCreateCommentResponse
         )
     ),
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
         (name = "RetroRoom", description = "회고 룸(팀) 관리 API"),
-        (name = "Retrospect", description = "회고 API")
+        (name = "Retrospect", description = "회고 API"),
+        (name = "Response", description = "회고 답변 API")
     ),
     modifiers(&SecurityAddon),
     info(
@@ -209,10 +237,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 라우터 구성
     let app = Router::new()
         .route("/health", get(health_check))
+        // [API-001] 소셜 로그인
         .route(
-            "/api/auth/login",
-            axum::routing::post(domain::auth::handler::login),
+            "/api/v1/auth/social-login",
+            axum::routing::post(domain::auth::handler::social_login),
         )
+        // [API-002] 회원가입
+        .route(
+            "/api/v1/auth/signup",
+            axum::routing::post(domain::auth::handler::signup),
+        )
+        // [API-003] 토큰 갱신
+        .route(
+            "/api/v1/auth/token/refresh",
+            axum::routing::post(domain::auth::handler::refresh_token),
+        )
+        // [API-004] 로그아웃
+        .route(
+            "/api/v1/auth/logout",
+            axum::routing::post(domain::auth::handler::logout),
+        )
+        // 테스트/개발용 API
         .route(
             "/api/auth/login/email",
             axum::routing::post(domain::auth::handler::login_by_email),
@@ -221,6 +266,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/auth/test",
             axum::routing::get(domain::auth::handler::auth_test),
         )
+        // 하위 호환성을 위한 구 엔드포인트 (deprecated)
+        .route("/api/auth/login", {
+            #[allow(deprecated)]
+            axum::routing::post(domain::auth::handler::login)
+        })
         // RetroRoom routes
         .route(
             "/api/v1/retro-rooms",
@@ -247,7 +297,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/v1/retro-rooms/:retro_room_id/retrospects",
             axum::routing::get(domain::retrospect::handler::list_retrospects),
         )
-        // Retrospect routes
+        // Retrospect API
         .route(
             "/api/v1/retrospects",
             axum::routing::post(domain::retrospect::handler::create_retrospect),
@@ -296,6 +346,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/export",
             axum::routing::get(domain::retrospect::handler::export_retrospect),
+        )
+        .route(
+            "/api/v1/responses/:response_id/comments",
+            axum::routing::get(domain::retrospect::handler::list_comments)
+                .post(domain::retrospect::handler::create_comment),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)

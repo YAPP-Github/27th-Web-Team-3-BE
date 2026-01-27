@@ -820,6 +820,48 @@ pub struct ResponsesListResponse {
     pub next_cursor: Option<i64>,
 }
 
+// ============================================
+// API-026: 회고 답변 댓글 목록 조회 DTO
+// ============================================
+
+/// 댓글 목록 조회 쿼리 파라미터
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCommentsQuery {
+    /// 마지막으로 조회된 댓글 ID (첫 요청 시 생략)
+    pub cursor: Option<i64>,
+    /// 페이지당 조회 개수 (기본값: 20, 최대: 100)
+    pub size: Option<i32>,
+}
+
+/// 댓글 아이템 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentItem {
+    /// 댓글 고유 식별자
+    pub comment_id: i64,
+    /// 작성자 고유 ID
+    pub member_id: i64,
+    /// 작성자 이름(닉네임)
+    pub user_name: String,
+    /// 댓글 내용
+    pub content: String,
+    /// 작성 일시 (yyyy-MM-ddTHH:mm:ss 형식)
+    pub created_at: String,
+}
+
+/// 댓글 목록 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCommentsResponse {
+    /// 댓글 리스트 (최신 순서대로 정렬)
+    pub comments: Vec<CommentItem>,
+    /// 다음 페이지 존재 여부
+    pub has_next: bool,
+    /// 다음 조회를 위한 커서 ID (마지막 페이지면 null)
+    pub next_cursor: Option<i64>,
+}
+
 /// Swagger용 답변 카테고리별 조회 성공 응답 타입
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -828,6 +870,53 @@ pub struct SuccessResponsesListResponse {
     pub code: String,
     pub message: String,
     pub result: ResponsesListResponse,
+}
+
+/// Swagger용 댓글 목록 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessListCommentsResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: ListCommentsResponse,
+}
+
+// ============================================
+// API-027: 회고 답변 댓글 작성 DTO
+// ============================================
+
+/// 댓글 작성 요청 DTO
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCommentRequest {
+    /// 댓글 내용 (최대 200자)
+    #[validate(length(min = 1, message = "댓글 내용은 필수입니다"))]
+    pub content: String,
+}
+
+/// 댓글 작성 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCommentResponse {
+    /// 생성된 댓글의 고유 ID
+    pub comment_id: i64,
+    /// 부모 답변의 ID
+    pub response_id: i64,
+    /// 서버가 저장한 댓글 내용
+    pub content: String,
+    /// 작성 일시 (yyyy-MM-ddTHH:mm:ss 형식)
+    pub created_at: String,
+}
+
+/// Swagger용 댓글 작성 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessCreateCommentResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: CreateCommentResponse,
 }
 
 #[cfg(test)]
