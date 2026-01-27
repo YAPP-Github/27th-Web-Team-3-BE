@@ -94,6 +94,9 @@ pub enum AppError {
 
     /// SEARCH4001: 검색어 누락 또는 유효하지 않음 (400)
     SearchKeywordInvalid(String),
+
+    /// COMMON500: PDF 생성 실패 (500)
+    PdfGenerationFailed(String),
 }
 
 impl AppError {
@@ -127,6 +130,7 @@ impl AppError {
             AppError::AiServiceUnavailable(msg) => msg.clone(),
             AppError::AiGeneralError(msg) => msg.clone(),
             AppError::SearchKeywordInvalid(msg) => msg.clone(),
+            AppError::PdfGenerationFailed(_) => "PDF 생성 중 서버 에러가 발생했습니다.".to_string(),
         }
     }
 
@@ -160,6 +164,7 @@ impl AppError {
             AppError::AiServiceUnavailable(_) => "AI5031",
             AppError::AiGeneralError(_) => "AI5003",
             AppError::SearchKeywordInvalid(_) => "SEARCH4001",
+            AppError::PdfGenerationFailed(_) => "COMMON500",
         }
     }
 
@@ -193,6 +198,7 @@ impl AppError {
             AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::SearchKeywordInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::PdfGenerationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -219,6 +225,9 @@ impl IntoResponse for AppError {
             }
             AppError::AiGeneralError(msg) => {
                 error!("AI General Error: {}", msg);
+            }
+            AppError::PdfGenerationFailed(msg) => {
+                error!("PDF Generation Failed: {}", msg);
             }
             _ => {
                 error!("Error [{}]: {}", error_code, message);
