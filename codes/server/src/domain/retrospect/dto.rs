@@ -427,7 +427,7 @@ pub struct SuccessRetrospectDetailResponse {
 // ============================================
 
 /// 감정 랭킹 아이템
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EmotionRankItem {
     /// 순위 (1부터 시작, 감정 빈도 기준 내림차순)
@@ -441,7 +441,7 @@ pub struct EmotionRankItem {
 }
 
 /// 개인 미션 아이템
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MissionItem {
     /// 개인 미션 제목 (예: "감정 표현 적극적으로 하기")
@@ -451,7 +451,7 @@ pub struct MissionItem {
 }
 
 /// 사용자별 개인 미션 아이템
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalMissionItem {
     /// 사용자 고유 ID
@@ -463,7 +463,7 @@ pub struct PersonalMissionItem {
 }
 
 /// 회고 분석 응답 데이터
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisResponse {
     /// 팀 전체를 위한 AI 분석 메시지
@@ -493,7 +493,9 @@ pub struct SuccessAnalysisResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SearchQueryParams {
     /// 검색 키워드 (프로젝트명/회고명 기준, 1~100자, 필수)
-    pub keyword: String,
+    /// Option으로 선언하여 누락 시에도 핸들러가 실행되고
+    /// 서비스 레이어에서 SEARCH4001 에러를 반환합니다.
+    pub keyword: Option<String>,
 }
 
 /// 회고 검색 결과 아이템
@@ -1352,18 +1354,18 @@ mod tests {
         let params: SearchQueryParams = serde_json::from_str(json).unwrap();
 
         // Assert
-        assert_eq!(params.keyword, "스프린트");
+        assert_eq!(params.keyword, Some("스프린트".to_string()));
     }
 
     #[test]
-    fn should_fail_deserialize_search_query_params_without_keyword() {
+    fn should_deserialize_search_query_params_without_keyword() {
         // Arrange
         let json = r#"{}"#;
 
         // Act
-        let result: Result<SearchQueryParams, _> = serde_json::from_str(json);
+        let params: SearchQueryParams = serde_json::from_str(json).unwrap();
 
         // Assert
-        assert!(result.is_err());
+        assert!(params.keyword.is_none());
     }
 }

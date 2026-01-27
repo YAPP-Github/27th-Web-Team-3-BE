@@ -68,9 +68,6 @@ pub enum AppError {
     /// RETRO4033: 이미 제출 완료 (403)
     RetroAlreadySubmitted(String),
 
-    /// AI4011: 유효하지 않은 비밀 키 (401)
-    InvalidSecretKey(String),
-
     /// RETRO4091: 이미 분석 완료된 회고 (409)
     RetroAlreadyAnalyzed(String),
 
@@ -122,7 +119,6 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
             AppError::RetroAlreadySubmitted(msg) => msg.clone(),
             AppError::RetroAlreadyAnalyzed(msg) => msg.clone(),
-            AppError::InvalidSecretKey(msg) => msg.clone(),
             AppError::AiMonthlyLimitExceeded(msg) => msg.clone(),
             AppError::RetroInsufficientData(msg) => msg.clone(),
             AppError::AiAnalysisFailed(msg) => msg.clone(),
@@ -156,7 +152,6 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
             AppError::RetroAlreadySubmitted(_) => "RETRO4033",
             AppError::RetroAlreadyAnalyzed(_) => "RETRO4091",
-            AppError::InvalidSecretKey(_) => "AI4011",
             AppError::AiMonthlyLimitExceeded(_) => "AI4031",
             AppError::RetroInsufficientData(_) => "RETRO4221",
             AppError::AiAnalysisFailed(_) => "AI5001",
@@ -190,7 +185,6 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
             AppError::RetroAlreadyAnalyzed(_) => StatusCode::CONFLICT,
-            AppError::InvalidSecretKey(_) => StatusCode::UNAUTHORIZED,
             AppError::AiMonthlyLimitExceeded(_) => StatusCode::FORBIDDEN,
             AppError::RetroInsufficientData(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::AiAnalysisFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,

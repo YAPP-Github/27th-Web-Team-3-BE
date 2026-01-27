@@ -28,8 +28,8 @@ use crate::utils::error::AppError;
 
 use super::dto::{
     AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem, MissionItem,
-    PersonalMissionItem, ReferenceItem, RetrospectDetailResponse, RetrospectMemberItem,
+    DraftItem, DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
+    RetrospectMemberItem,
     RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
     StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
     SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
@@ -943,8 +943,8 @@ impl RetrospectService {
     }
 
     /// 검색 키워드 검증
-    fn validate_search_keyword(keyword: &str) -> Result<String, AppError> {
-        let trimmed = keyword.trim().to_string();
+    fn validate_search_keyword(keyword: Option<&str>) -> Result<String, AppError> {
+        let trimmed = keyword.unwrap_or("").trim().to_string();
 
         if trimmed.is_empty() {
             return Err(AppError::SearchKeywordInvalid(
@@ -968,7 +968,7 @@ impl RetrospectService {
         params: SearchQueryParams,
     ) -> Result<Vec<SearchRetrospectItem>, AppError> {
         // 1. 키워드 검증
-        let keyword = Self::validate_search_keyword(&params.keyword)?;
+        let keyword = Self::validate_search_keyword(params.keyword.as_deref())?;
 
         info!(
             user_id = user_id,
@@ -1552,77 +1552,90 @@ impl RetrospectService {
             .map(|m| (m.member_id, m.nickname.clone()))
             .collect();
 
-        // 7. AI API 호출을 위한 프롬프트 생성
-        // TODO: 실제 AI 서비스 호출 구현
-        // 지금은 Mock 데이터 반환
+        // 7. 각 멤버의 답변 데이터 수집 (AI 프롬프트 입력용)
+        use crate::domain::ai::prompt::MemberAnswerData;
+
+        // member_response 테이블에서 멤버별 response_id 매핑 조회
+        let all_member_responses = member_response::Entity::find()
+            .filter(
+                member_response::Column::MemberId.is_in(
+                    submitted_members
+                        .iter()
+                        .map(|mr| mr.member_id)
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // response_id -> response 매핑
+        let response_map: HashMap<i64, &response::Model> =
+            all_responses.iter().map(|r| (r.response_id, r)).collect();
+
+        // member_id -> Vec<response_id> 매핑
+        let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
+        for mr in &all_member_responses {
+            member_response_map
+                .entry(mr.member_id)
+                .or_default()
+                .push(mr.response_id);
+        }
+
+        let mut members_data: Vec<MemberAnswerData> = Vec::new();
+        for mr in &submitted_members {
+            let username = member_map
+                .get(&mr.member_id)
+                .cloned()
+                .unwrap_or_else(|| format!("사용자{}", mr.member_id));
+
+            let response_ids = member_response_map
+                .get(&mr.member_id)
+                .cloned()
+                .unwrap_or_default();
+
+            let mut answers: Vec<(String, String)> = Vec::new();
+            for rid in &response_ids {
+                if let Some(resp) = response_map.get(rid) {
+                    if resp.retrospect_id == retrospect_id {
+                        answers.push((resp.question.clone(), resp.content.clone()));
+                    }
+                }
+            }
+
+            members_data.push(MemberAnswerData {
+                user_id: mr.member_id,
+                user_name: username,
+                answers,
+            });
+        }
+
         info!(
             "AI 분석 호출 준비 완료 (response_count={}, member_count={})",
             all_responses.len(),
-            members.len()
+            members_data.len()
         );
 
-        // Mock 응답 생성 (실제 구현 시 AI 서비스 호출로 대체)
-        let team_insight =
-            "이번 회고에서 팀은 목표 의식은 분명했지만, 에너지 관리 측면에서 아쉬움이 있었습니다."
-                .to_string();
+        // 8. AI 서비스 호출
+        let mut analysis = state
+            .ai_service
+            .analyze_retrospective(&members_data)
+            .await?;
 
-        let emotion_rank = vec![
-            EmotionRankItem {
-                rank: 1,
-                label: "피로".to_string(),
-                description: "짧은 스프린트로 인해 팀 전반에 피로도가 높게 나타났습니다."
-                    .to_string(),
-                count: 6,
-            },
-            EmotionRankItem {
-                rank: 2,
-                label: "뿌듯".to_string(),
-                description: "목표 달성에 대한 성취감을 느끼는 팀원이 많았습니다.".to_string(),
-                count: 4,
-            },
-            EmotionRankItem {
-                rank: 3,
-                label: "불안".to_string(),
-                description: "다음 스프린트에 대한 부담감을 가진 팀원들이 있었습니다.".to_string(),
-                count: 2,
-            },
-        ];
+        // personalMissions의 userId 오름차순 정렬
+        analysis.personal_missions.sort_by_key(|pm| pm.user_id);
 
-        let mut personal_missions = Vec::new();
-        for mr in &submitted_members {
-            if let Some(username) = member_map.get(&mr.member_id) {
-                personal_missions.push(PersonalMissionItem {
-                    user_id: mr.member_id,
-                    user_name: username.clone(),
-                    missions: vec![
-                        MissionItem {
-                            mission_title: "감정 표현 적극적으로 하기".to_string(),
-                            mission_desc: "활발한 협업은 좋았으나 감정 공유를 늘리면 팀 응집력이 더 높아질 것입니다.".to_string(),
-                        },
-                        MissionItem {
-                            mission_title: "스프린트 분량 조절하기".to_string(),
-                            mission_desc: "작은 PR 단위로 나누어 업무를 분배하면 효율적인 리뷰가 가능합니다.".to_string(),
-                        },
-                        MissionItem {
-                            mission_title: "피드백 즉각 공유하기".to_string(),
-                            mission_desc: "즉각적인 응답과 활발한 코드 리뷰로 협업 속도를 높여보세요.".to_string(),
-                        },
-                    ],
-                });
-            }
-        }
+        let team_insight = analysis.team_insight.clone();
+        let personal_missions = &analysis.personal_missions;
 
-        // userId 오름차순 정렬
-        personal_missions.sort_by_key(|pm| pm.user_id);
-
-        // 8. 트랜잭션으로 결과 저장
+        // 9. 트랜잭션으로 결과 저장
         let txn = state
             .db
             .begin()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 8-1. retrospects.team_insight 업데이트
+        // 9-1. retrospects.team_insight 업데이트
         let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
         retrospect_active.team_insight = Set(Some(team_insight.clone()));
         retrospect_active.updated_at = Set(Utc::now().naive_utc());
@@ -1631,7 +1644,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 8-2. 각 member_retro.personal_insight 업데이트 + status = ANALYZED
+        // 9-2. 각 member_retro.personal_insight 업데이트 + status = ANALYZED
         for mr in &submitted_members {
             // personal_missions에서 해당 member_id의 미션 찾기
             let personal_insight = personal_missions
@@ -1660,11 +1673,7 @@ impl RetrospectService {
 
         info!(retrospect_id = retrospect_id, "회고 분석 완료");
 
-        Ok(AnalysisResponse {
-            team_insight,
-            emotion_rank,
-            personal_missions,
-        })
+        Ok(analysis)
     }
 }
 
@@ -2457,12 +2466,19 @@ mod tests {
     // ===== 검색 키워드 검증 테스트 (API-023) =====
 
     #[test]
-    fn should_fail_when_keyword_is_empty() {
-        // Arrange
-        let keyword = "";
+    fn should_fail_when_keyword_is_none() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(None);
 
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::SearchKeywordInvalid(_))));
+    }
+
+    #[test]
+    fn should_fail_when_keyword_is_empty() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some(""));
 
         // Assert
         assert!(result.is_err());
@@ -2475,7 +2491,7 @@ mod tests {
         let keyword = "가".repeat(101);
 
         // Act
-        let result = RetrospectService::validate_search_keyword(&keyword);
+        let result = RetrospectService::validate_search_keyword(Some(&keyword));
 
         // Assert
         assert!(result.is_err());
@@ -2492,7 +2508,7 @@ mod tests {
         let keyword = "가".repeat(100);
 
         // Act
-        let result = RetrospectService::validate_search_keyword(&keyword);
+        let result = RetrospectService::validate_search_keyword(Some(&keyword));
 
         // Assert
         assert!(result.is_ok());
@@ -2501,11 +2517,8 @@ mod tests {
 
     #[test]
     fn should_fail_when_keyword_is_whitespace_only() {
-        // Arrange
-        let keyword = "   \t\n  ";
-
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("   \t\n  "));
 
         // Assert
         assert!(result.is_err());
@@ -2514,11 +2527,8 @@ mod tests {
 
     #[test]
     fn should_trim_keyword_with_leading_trailing_whitespace() {
-        // Arrange
-        let keyword = "  스프린트  ";
-
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("  스프린트  "));
 
         // Assert
         assert!(result.is_ok());
@@ -2527,11 +2537,8 @@ mod tests {
 
     #[test]
     fn should_pass_valid_keyword() {
-        // Arrange
-        let keyword = "스프린트 회고";
-
-        // Act
-        let result = RetrospectService::validate_search_keyword(keyword);
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("스프린트 회고"));
 
         // Assert
         assert!(result.is_ok());
