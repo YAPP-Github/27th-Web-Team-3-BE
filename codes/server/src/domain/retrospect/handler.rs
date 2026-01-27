@@ -572,3 +572,53 @@ pub async fn export_retrospect(
 
     Ok((headers, pdf_bytes))
 }
+
+/// 회고 삭제 API (API-013)
+///
+/// 특정 회고 세션과 연관된 모든 데이터(답변, 댓글, 좋아요, AI 분석 결과)를 영구 삭제합니다.
+/// 해당 팀의 멤버만 삭제가 가능합니다.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/retrospects/{retrospectId}",
+    params(
+        ("retrospectId" = i64, Path, description = "삭제할 회고의 고유 식별자")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "회고가 성공적으로 삭제되었습니다.", body = SuccessDeleteRetrospectResponse),
+        (status = 400, description = "잘못된 Path Parameter", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고이거나 접근 권한 없음 (보안상 404로 통합)", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn delete_retrospect(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(retrospect_id): Path<i64>,
+) -> Result<Json<BaseResponse<()>>, AppError> {
+    // retrospectId 검증 (1 이상의 양수)
+    if retrospect_id < 1 {
+        return Err(AppError::BadRequest(
+            "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    RetrospectService::delete_retrospect(state, user_id, retrospect_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        (),
+        "회고가 성공적으로 삭제되었습니다.",
+    )))
+}

@@ -24,9 +24,10 @@ use crate::domain::retrospect::dto::{
     RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter, StorageResponse,
     StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
     SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessCreateParticipantResponse,
-    SuccessCreateRetrospectResponse, SuccessDraftSaveResponse, SuccessReferencesListResponse,
-    SuccessRetrospectDetailResponse, SuccessSearchResponse, SuccessStorageResponse,
-    SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
+    SuccessCreateRetrospectResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
+    SuccessReferencesListResponse, SuccessRetrospectDetailResponse, SuccessSearchResponse,
+    SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
+    TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -50,7 +51,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::get_storage,
         domain::retrospect::handler::analyze_retrospective_handler,
         domain::retrospect::handler::search_retrospects,
-        domain::retrospect::handler::export_retrospect
+        domain::retrospect::handler::export_retrospect,
+        domain::retrospect::handler::delete_retrospect
     ),
     components(
         schemas(
@@ -95,7 +97,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
             PersonalMissionItem,
             SuccessAnalysisResponse,
             SearchRetrospectItem,
-            SuccessSearchResponse
+            SuccessSearchResponse,
+            SuccessDeleteRetrospectResponse
         )
     ),
     tags(
@@ -203,7 +206,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route(
             "/api/v1/retrospects/:retrospect_id",
-            axum::routing::get(domain::retrospect::handler::get_retrospect_detail),
+            axum::routing::get(domain::retrospect::handler::get_retrospect_detail)
+                .delete(domain::retrospect::handler::delete_retrospect),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/drafts",

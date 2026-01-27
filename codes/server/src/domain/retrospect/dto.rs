@@ -423,6 +423,20 @@ pub struct SuccessRetrospectDetailResponse {
 }
 
 // ============================================
+// API-013: 회고 삭제 DTO
+// ============================================
+
+/// Swagger용 회고 삭제 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessDeleteRetrospectResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: Option<()>,
+}
+
+// ============================================
 // API-022: 회고 분석 DTO
 // ============================================
 
