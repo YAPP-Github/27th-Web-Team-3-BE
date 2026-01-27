@@ -3,7 +3,6 @@
 /// API-002: POST /api/v1/auth/signup
 /// API-003: POST /api/v1/auth/token/refresh
 /// API-004: POST /api/v1/auth/logout
-
 use axum::{
     body::Body,
     http::{header, Method, Request, StatusCode},
@@ -34,9 +33,7 @@ async fn health_handler() -> axum::Json<Value> {
     }))
 }
 
-async fn social_login_handler(
-    body: Option<axum::Json<Value>>,
-) -> (StatusCode, axum::Json<Value>) {
+async fn social_login_handler(body: Option<axum::Json<Value>>) -> (StatusCode, axum::Json<Value>) {
     let body = match body {
         Some(b) => b.0,
         None => {

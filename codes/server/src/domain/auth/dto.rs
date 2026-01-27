@@ -63,7 +63,10 @@ pub struct SignupRequest {
     /// 사용자 닉네임 (1~20자, 특수문자 제외)
     #[validate(
         length(min = 1, max = 20, message = "닉네임은 1~20자 이내로 입력해야 합니다"),
-        custom(function = "validate_nickname", message = "닉네임에 특수문자를 사용할 수 없습니다")
+        custom(
+            function = "validate_nickname",
+            message = "닉네임에 특수문자를 사용할 수 없습니다"
+        )
     )]
     pub nickname: String,
 }
