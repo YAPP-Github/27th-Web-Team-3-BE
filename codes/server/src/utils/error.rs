@@ -12,7 +12,6 @@ use super::response::ErrorResponse;
 /// 애플리케이션 전역 에러 타입
 /// API 명세에 정의된 에러 코드를 사용합니다.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum AppError {
     /// COMMON400: 잘못된 요청 (400)
     BadRequest(String),
@@ -30,6 +29,7 @@ pub enum AppError {
     Unauthorized(String),
 
     /// COMMON403: 권한 없음 (403)
+    #[allow(dead_code)]
     Forbidden(String),
 
     /// RETRO4001: 프로젝트 이름 길이 유효성 검사 실패 (400)
@@ -101,6 +101,7 @@ pub enum AppError {
     /// RETRO4031: 회고 삭제 권한 없음 (403)
     /// TODO: 현재 미사용. retrospects.created_by / member_team.role 스키마 추가 후
     /// 팀 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
+    #[allow(dead_code)]
     RetroDeleteAccessDenied(String),
 }
 

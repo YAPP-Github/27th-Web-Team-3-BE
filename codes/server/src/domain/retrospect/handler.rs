@@ -50,11 +50,7 @@ pub async fn create_retrospect(
     req.validate()?;
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::create_retrospect(state, user_id, req).await?;
@@ -101,11 +97,7 @@ pub async fn list_team_retrospects(
     }
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::list_team_retrospects(state, user_id, team_id).await?;
@@ -152,11 +144,7 @@ pub async fn create_participant(
     }
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::create_participant(state, user_id, retrospect_id).await?;
@@ -202,11 +190,7 @@ pub async fn list_references(
     }
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::list_references(state, user_id, retrospect_id).await?;
@@ -255,11 +239,7 @@ pub async fn save_draft(
     }
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::save_draft(state, user_id, retrospect_id, req).await?;
@@ -305,11 +285,7 @@ pub async fn get_retrospect_detail(
     }
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::get_retrospect_detail(state, user_id, retrospect_id).await?;
@@ -358,11 +334,7 @@ pub async fn submit_retrospect(
     }
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::submit_retrospect(state, user_id, retrospect_id, req).await?;
@@ -398,11 +370,7 @@ pub async fn get_storage(
     Query(params): Query<StorageQueryParams>,
 ) -> Result<Json<BaseResponse<StorageResponse>>, AppError> {
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     let result = RetrospectService::get_storage(state, user_id, params).await?;
@@ -608,11 +576,7 @@ pub async fn delete_retrospect(
     }
 
     // 사용자 ID 추출
-    let user_id: i64 = user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+    let user_id = user.user_id()?;
 
     // 서비스 호출
     RetrospectService::delete_retrospect(state, user_id, retrospect_id).await?;
