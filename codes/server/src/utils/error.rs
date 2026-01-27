@@ -67,6 +67,27 @@ pub enum AppError {
 
     /// RETRO4033: 이미 제출 완료 (403)
     RetroAlreadySubmitted(String),
+
+    /// RETRO4091: 이미 분석 완료된 회고 (409)
+    RetroAlreadyAnalyzed(String),
+
+    /// AI4031: 월간 분석 가능 횟수 초과 (403)
+    AiMonthlyLimitExceeded(String),
+
+    /// RETRO4221: 분석할 회고 답변 데이터 부족 (422)
+    RetroInsufficientData(String),
+
+    /// AI5001: 데이터 종합 분석 중 오류 (500)
+    AiAnalysisFailed(String),
+
+    /// AI5002: AI 연결 실패 (500)
+    AiConnectionFailed(String),
+
+    /// AI5031: AI 서비스 일시적 오류 (503)
+    AiServiceUnavailable(String),
+
+    /// AI5003: AI 일반 오류 (500)
+    AiGeneralError(String),
 }
 
 impl AppError {
@@ -91,6 +112,13 @@ impl AppError {
             AppError::RetroAnswerTooLong(msg) => msg.clone(),
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
             AppError::RetroAlreadySubmitted(msg) => msg.clone(),
+            AppError::RetroAlreadyAnalyzed(msg) => msg.clone(),
+            AppError::AiMonthlyLimitExceeded(msg) => msg.clone(),
+            AppError::RetroInsufficientData(msg) => msg.clone(),
+            AppError::AiAnalysisFailed(msg) => msg.clone(),
+            AppError::AiConnectionFailed(msg) => msg.clone(),
+            AppError::AiServiceUnavailable(msg) => msg.clone(),
+            AppError::AiGeneralError(msg) => msg.clone(),
         }
     }
 
@@ -115,6 +143,13 @@ impl AppError {
             AppError::RetroAnswerTooLong(_) => "RETRO4003",
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
             AppError::RetroAlreadySubmitted(_) => "RETRO4033",
+            AppError::RetroAlreadyAnalyzed(_) => "RETRO4091",
+            AppError::AiMonthlyLimitExceeded(_) => "AI4031",
+            AppError::RetroInsufficientData(_) => "RETRO4221",
+            AppError::AiAnalysisFailed(_) => "AI5001",
+            AppError::AiConnectionFailed(_) => "AI5002",
+            AppError::AiServiceUnavailable(_) => "AI5031",
+            AppError::AiGeneralError(_) => "AI5003",
         }
     }
 
@@ -139,6 +174,13 @@ impl AppError {
             AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
+            AppError::RetroAlreadyAnalyzed(_) => StatusCode::CONFLICT,
+            AppError::AiMonthlyLimitExceeded(_) => StatusCode::FORBIDDEN,
+            AppError::RetroInsufficientData(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            AppError::AiAnalysisFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -153,6 +195,18 @@ impl IntoResponse for AppError {
         match &self {
             AppError::InternalError(msg) => {
                 error!("Internal Server Error: {}", msg);
+            }
+            AppError::AiAnalysisFailed(msg) => {
+                error!("AI Analysis Failed: {}", msg);
+            }
+            AppError::AiConnectionFailed(msg) => {
+                error!("AI Connection Failed: {}", msg);
+            }
+            AppError::AiServiceUnavailable(msg) => {
+                error!("AI Service Unavailable: {}", msg);
+            }
+            AppError::AiGeneralError(msg) => {
+                error!("AI General Error: {}", msg);
             }
             _ => {
                 error!("Error [{}]: {}", error_code, message);

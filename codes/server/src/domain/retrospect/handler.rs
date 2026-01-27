@@ -10,9 +10,10 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftSaveRequest,
-    DraftSaveResponse, ReferenceItem, RetrospectDetailResponse, StorageQueryParams,
-    StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
+    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
+    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    TeamRetrospectListItem,
 };
 use super::service::RetrospectService;
 
@@ -406,5 +407,58 @@ pub async fn get_storage(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "보관함 조회를 성공했습니다.",
+    )))
+}
+
+/// 회고 분석 API (API-022)
+///
+/// 특정 회고 세션에 쌓인 모든 팀원의 답변을 종합 분석하여 AI 인사이트, 감정 통계, 맞춤형 미션을 생성합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/retrospects/{retrospectId}/analysis",
+    params(
+        ("retrospectId" = i64, Path, description = "분석할 회고 ID")
+    ),
+    request_body = (),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "회고 분석 성공", body = SuccessAnalysisResponse),
+        (status = 400, description = "잘못된 Path Parameter", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "월간 한도 초과 또는 접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "회고 없음", body = ErrorResponse),
+        (status = 409, description = "이미 분석 완료된 회고", body = ErrorResponse),
+        (status = 422, description = "분석 데이터 부족", body = ErrorResponse),
+        (status = 500, description = "AI 분석 실패", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn analyze_retrospective_handler(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(retrospect_id): Path<i64>,
+) -> Result<Json<BaseResponse<AnalysisResponse>>, AppError> {
+    // retrospectId 검증 (1 이상의 양수)
+    if retrospect_id < 1 {
+        return Err(AppError::BadRequest(
+            "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result = RetrospectService::analyze_retrospective(state, user_id, retrospect_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고 분석이 성공적으로 완료되었습니다.",
     )))
 }

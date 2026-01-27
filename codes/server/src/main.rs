@@ -18,11 +18,12 @@ use crate::domain::auth::dto::{
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
-    DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
-    RetrospectMemberItem, RetrospectQuestionItem, StorageRangeFilter, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
+    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem, MissionItem,
+    PersonalMissionItem, ReferenceItem, RetrospectDetailResponse, RetrospectMemberItem,
+    RetrospectQuestionItem, StorageRangeFilter, StorageResponse, StorageRetrospectItem,
+    StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    SuccessAnalysisResponse, SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
     SuccessDraftSaveResponse, SuccessReferencesListResponse, SuccessRetrospectDetailResponse,
     SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
     TeamRetrospectListItem,
@@ -46,7 +47,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::save_draft,
         domain::retrospect::handler::get_retrospect_detail,
         domain::retrospect::handler::submit_retrospect,
-        domain::retrospect::handler::get_storage
+        domain::retrospect::handler::get_storage,
+        domain::retrospect::handler::analyze_retrospective_handler
     ),
     components(
         schemas(
@@ -84,7 +86,12 @@ use crate::utils::{BaseResponse, ErrorResponse};
             RetrospectDetailResponse,
             RetrospectMemberItem,
             RetrospectQuestionItem,
-            SuccessRetrospectDetailResponse
+            SuccessRetrospectDetailResponse,
+            AnalysisResponse,
+            EmotionRankItem,
+            MissionItem,
+            PersonalMissionItem,
+            SuccessAnalysisResponse
         )
     ),
     tags(
@@ -135,10 +142,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = crate::config::establish_connection(&database_url).await?;
 
+    // AI 서비스 초기화
+    let ai_service = domain::ai::service::AiService::new(&config);
+
     // 애플리케이션 상태 생성
     let app_state = AppState {
         db,
         config: config.clone(),
+        ai_service,
     };
 
     // CORS 설정
@@ -193,6 +204,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/submit",
             axum::routing::post(domain::retrospect::handler::submit_retrospect),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/analysis",
+            axum::routing::post(domain::retrospect::handler::analyze_retrospective_handler),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
