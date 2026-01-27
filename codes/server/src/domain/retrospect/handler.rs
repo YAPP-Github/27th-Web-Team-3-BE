@@ -12,8 +12,8 @@ use crate::utils::BaseResponse;
 use super::dto::{
     AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest,
     CreateRetrospectResponse, DraftSaveRequest, DraftSaveResponse, ReferenceItem,
-    RetrospectDetailResponse, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, TeamRetrospectListItem,
+    RetrospectDetailResponse, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
+    StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
 };
 use super::service::RetrospectService;
 
@@ -460,5 +460,45 @@ pub async fn analyze_retrospective_handler(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "회고 분석이 성공적으로 완료되었습니다.",
+    )))
+}
+
+/// 회고 검색 API (API-023)
+///
+/// 사용자가 참여하는 모든 팀의 회고를 프로젝트명/회고명 기준으로 검색합니다.
+/// 결과는 회고 날짜 내림차순(최신순), 동일 날짜인 경우 회고 시간 내림차순으로 정렬됩니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retrospects/search",
+    params(SearchQueryParams),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "검색을 성공했습니다.", body = SuccessSearchResponse),
+        (status = 400, description = "검색어 누락 또는 유효하지 않음", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn search_retrospects(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Query(params): Query<SearchQueryParams>,
+) -> Result<Json<BaseResponse<Vec<SearchRetrospectItem>>>, AppError> {
+    // 사용자 ID 추출
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    // 서비스 호출
+    let result = RetrospectService::search_retrospects(state, user_id, params).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "검색을 성공했습니다.",
     )))
 }
