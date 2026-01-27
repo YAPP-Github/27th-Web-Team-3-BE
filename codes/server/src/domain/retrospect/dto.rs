@@ -427,7 +427,7 @@ pub struct SuccessRetrospectDetailResponse {
 // ============================================
 
 /// 감정 랭킹 아이템
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EmotionRankItem {
     /// 순위 (1부터 시작, 감정 빈도 기준 내림차순)
@@ -441,7 +441,7 @@ pub struct EmotionRankItem {
 }
 
 /// 개인 미션 아이템
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MissionItem {
     /// 개인 미션 제목 (예: "감정 표현 적극적으로 하기")
@@ -451,7 +451,7 @@ pub struct MissionItem {
 }
 
 /// 사용자별 개인 미션 아이템
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalMissionItem {
     /// 사용자 고유 ID
@@ -463,7 +463,7 @@ pub struct PersonalMissionItem {
 }
 
 /// 회고 분석 응답 데이터
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisResponse {
     /// 팀 전체를 위한 AI 분석 메시지
