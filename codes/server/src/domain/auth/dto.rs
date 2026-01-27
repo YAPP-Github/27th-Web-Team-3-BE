@@ -1,8 +1,24 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use validator::Validate;
+use validator::{Validate, ValidationError};
 
 use crate::domain::member::entity::member::SocialType;
+
+/// 닉네임 유효성 검증 (특수문자 제외)
+/// 한글, 영문, 숫자만 허용
+fn validate_nickname(nickname: &str) -> Result<(), ValidationError> {
+    for c in nickname.chars() {
+        if !c.is_alphanumeric() && !is_korean(c) {
+            return Err(ValidationError::new("nickname_invalid_chars"));
+        }
+    }
+    Ok(())
+}
+
+/// 한글 문자 여부 확인 (가-힣, ㄱ-ㅎ, ㅏ-ㅣ)
+fn is_korean(c: char) -> bool {
+    matches!(c, '\u{AC00}'..='\u{D7A3}' | '\u{3131}'..='\u{314E}' | '\u{314F}'..='\u{3163}')
+}
 
 /// [API-001] 소셜 로그인 요청 DTO
 #[derive(Debug, Deserialize, Validate, ToSchema)]
@@ -45,7 +61,10 @@ pub struct SignupRequest {
     pub email: String,
 
     /// 사용자 닉네임 (1~20자, 특수문자 제외)
-    #[validate(length(min = 1, max = 20, message = "닉네임은 1~20자 이내로 입력해야 합니다"))]
+    #[validate(
+        length(min = 1, max = 20, message = "닉네임은 1~20자 이내로 입력해야 합니다"),
+        custom(function = "validate_nickname", message = "닉네임에 특수문자를 사용할 수 없습니다")
+    )]
     pub nickname: String,
 }
 
