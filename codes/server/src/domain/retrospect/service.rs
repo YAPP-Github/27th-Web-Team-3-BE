@@ -191,27 +191,57 @@ impl RetrospectService {
             ));
         }
 
-        // 2. 각 룸에 대해 권한 체크 및 업데이트
-        for order_item in &req.retro_room_orders {
-            // 사용자가 해당 룸의 멤버인지 확인
-            let member_room = MemberRetroRoom::find()
-                .filter(member_retro_room::Column::MemberId.eq(member_id))
-                .filter(member_retro_room::Column::RetrospectRoomId.eq(order_item.retro_room_id))
-                .one(&state.db)
-                .await
-                .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+        // 2. 권한 체크: 모든 룸에 대해 사용자가 멤버인지 먼저 확인
+        let room_ids: Vec<i64> = req
+            .retro_room_orders
+            .iter()
+            .map(|o| o.retro_room_id)
+            .collect();
 
-            let member_room = member_room
-                .ok_or_else(|| AppError::NoPermission("순서를 변경할 권한이 없습니다.".into()))?;
+        let member_rooms = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.is_in(room_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-            // 순서 업데이트
-            let mut active_model: member_retro_room::ActiveModel = member_room.into();
-            active_model.order_index = Set(order_item.order_index);
-            active_model
-                .update(&state.db)
-                .await
-                .map_err(|e| AppError::InternalError(format!("순서 업데이트 실패: {}", e)))?;
+        // 요청된 모든 룸에 대해 멤버십이 있는지 확인
+        if member_rooms.len() != req.retro_room_orders.len() {
+            return Err(AppError::NoPermission(
+                "순서를 변경할 권한이 없습니다.".into(),
+            ));
         }
+
+        // 3. 트랜잭션으로 모든 순서 업데이트를 원자적으로 처리
+        let orders = req.retro_room_orders.clone();
+        state
+            .db
+            .transaction::<_, (), DbErr>(|txn| {
+                Box::pin(async move {
+                    for order_item in orders {
+                        // member_retro_room 조회
+                        let member_room = MemberRetroRoom::find()
+                            .filter(member_retro_room::Column::MemberId.eq(member_id))
+                            .filter(
+                                member_retro_room::Column::RetrospectRoomId
+                                    .eq(order_item.retro_room_id),
+                            )
+                            .one(txn)
+                            .await?
+                            .ok_or(DbErr::RecordNotFound(
+                                "member_retro_room not found".to_string(),
+                            ))?;
+
+                        // 순서 업데이트
+                        let mut active_model: member_retro_room::ActiveModel = member_room.into();
+                        active_model.order_index = Set(order_item.order_index);
+                        active_model.update(txn).await?;
+                    }
+                    Ok(())
+                })
+            })
+            .await
+            .map_err(|e| AppError::InternalError(format!("순서 업데이트 실패: {}", e)))?;
 
         Ok(())
     }

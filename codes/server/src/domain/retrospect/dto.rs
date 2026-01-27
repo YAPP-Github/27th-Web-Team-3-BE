@@ -74,7 +74,7 @@ pub struct SuccessRetroRoomListResponse {
 
 // ============== API-007: 레트로룸 순서 변경 ==============
 
-#[derive(Debug, Serialize, Deserialize, Validate, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetroRoomOrderItem {
     pub retro_room_id: i64,
