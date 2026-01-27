@@ -21,17 +21,18 @@ use crate::domain::auth::dto::{
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
-    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem, MissionItem,
-    PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
-    RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem,
-    StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessAnalysisResponse,
-    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
-    SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse, SuccessReferencesListResponse,
-    SuccessResponsesListResponse, SuccessRetrospectDetailResponse, SuccessSearchResponse,
-    SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
-    TeamRetrospectListItem,
+    AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
+    DraftSaveRequest, DraftSaveResponse, EmotionRankItem, ListCommentsQuery, ListCommentsResponse,
+    MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem,
+    ResponsesListResponse, RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem,
+    SearchRetrospectItem, StorageRangeFilter, StorageResponse, StorageRetrospectItem,
+    StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    SuccessAnalysisResponse, SuccessCreateCommentResponse, SuccessCreateParticipantResponse,
+    SuccessCreateRetrospectResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
+    SuccessListCommentsResponse, SuccessReferencesListResponse, SuccessResponsesListResponse,
+    SuccessRetrospectDetailResponse, SuccessSearchResponse, SuccessStorageResponse,
+    SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -60,7 +61,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::search_retrospects,
         domain::retrospect::handler::list_responses,
         domain::retrospect::handler::export_retrospect,
-        domain::retrospect::handler::delete_retrospect
+        domain::retrospect::handler::delete_retrospect,
+        domain::retrospect::handler::list_comments,
+        domain::retrospect::handler::create_comment
     ),
     components(
         schemas(
@@ -120,13 +123,21 @@ use crate::utils::{BaseResponse, ErrorResponse};
             ResponseCategory,
             ResponseListItem,
             ResponsesListResponse,
-            SuccessResponsesListResponse
+            SuccessResponsesListResponse,
+            ListCommentsQuery,
+            CommentItem,
+            ListCommentsResponse,
+            SuccessListCommentsResponse,
+            CreateCommentRequest,
+            CreateCommentResponse,
+            SuccessCreateCommentResponse
         )
     ),
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
-        (name = "Retrospect", description = "회고 API")
+        (name = "Retrospect", description = "회고 API"),
+        (name = "Response", description = "회고 답변 API")
     ),
     modifiers(&SecurityAddon),
     info(
@@ -273,6 +284,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/export",
             axum::routing::get(domain::retrospect::handler::export_retrospect),
+        )
+        .route(
+            "/api/v1/responses/:response_id/comments",
+            axum::routing::get(domain::retrospect::handler::list_comments)
+                .post(domain::retrospect::handler::create_comment),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)

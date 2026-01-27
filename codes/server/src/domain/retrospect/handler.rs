@@ -13,11 +13,12 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DraftSaveRequest, DraftSaveResponse, ReferenceItem, ResponseCategory, ResponsesListResponse,
-    ResponsesQueryParams, RetrospectDetailResponse, SearchQueryParams, SearchRetrospectItem,
-    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
-    TeamRetrospectListItem,
+    AnalysisResponse, CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
+    CreateRetrospectRequest, CreateRetrospectResponse, DraftSaveRequest, DraftSaveResponse,
+    ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
+    ResponsesListResponse, ResponsesQueryParams, RetrospectDetailResponse, SearchQueryParams,
+    SearchRetrospectItem, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, TeamRetrospectListItem,
 };
 use super::service::RetrospectService;
 
@@ -459,14 +460,12 @@ pub async fn search_retrospects(
     State(state): State<AppState>,
     Query(params): Query<SearchQueryParams>,
 ) -> Result<Json<BaseResponse<Vec<SearchRetrospectItem>>>, AppError> {
-    // 사용자 ID 추출
     let user_id: i64 = user
         .0
         .sub
         .parse()
         .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
 
-    // 서비스 호출
     let result = RetrospectService::search_retrospects(state, user_id, params).await?;
 
     Ok(Json(BaseResponse::success_with_message(
@@ -478,7 +477,6 @@ pub async fn search_retrospects(
 /// 회고 내보내기 API (API-021)
 ///
 /// 특정 회고 세션의 전체 내용(팀 인사이트, 팀원별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드합니다.
-/// 성공 시 브라우저를 통해 파일 다운로드가 즉시 시작됩니다.
 #[utoipa::path(
     get,
     path = "/api/v1/retrospects/{retrospectId}/export",
@@ -502,28 +500,23 @@ pub async fn export_retrospect(
     State(state): State<AppState>,
     Path(retrospect_id): Path<i64>,
 ) -> Result<impl IntoResponse, AppError> {
-    // retrospectId 검증 (1 이상의 양수)
     if retrospect_id < 1 {
         return Err(AppError::BadRequest(
             "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
         ));
     }
 
-    // 사용자 ID 추출
     let user_id: i64 = user
         .0
         .sub
         .parse()
         .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
 
-    // 서비스 호출 (PDF 바이트 생성)
     let pdf_bytes = RetrospectService::export_retrospect(state, user_id, retrospect_id).await?;
 
-    // 동적 파일명 생성 (UTC 기준)
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
     let filename = format!("retrospect_report_{}_{}.pdf", retrospect_id, timestamp);
 
-    // PDF 바이너리 응답 (Content-Type, Content-Disposition, Cache-Control 헤더 설정)
     let headers = [
         (
             header::CONTENT_TYPE,
@@ -543,9 +536,6 @@ pub async fn export_retrospect(
 }
 
 /// 회고 답변 카테고리별 조회 API (API-020)
-///
-/// 특정 회고 세션의 답변 리스트를 질문 카테고리별로 조회합니다.
-/// 커서 기반 페이지네이션을 사용하여 무한 스크롤을 지원합니다.
 #[utoipa::path(
     get,
     path = "/api/v1/retrospects/{retrospectId}/responses",
@@ -558,7 +548,7 @@ pub async fn export_retrospect(
     ),
     responses(
         (status = 200, description = "답변 리스트 조회를 성공했습니다.", body = SuccessResponsesListResponse),
-        (status = 400, description = "잘못된 요청 (retrospectId, category, cursor, size 유효성 오류)", body = ErrorResponse),
+        (status = 400, description = "잘못된 요청", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 403, description = "접근 권한 없음", body = ErrorResponse),
         (status = 404, description = "존재하지 않는 회고", body = ErrorResponse),
@@ -572,19 +562,16 @@ pub async fn list_responses(
     Path(retrospect_id): Path<i64>,
     Query(params): Query<ResponsesQueryParams>,
 ) -> Result<Json<BaseResponse<ResponsesListResponse>>, AppError> {
-    // retrospectId 검증 (1 이상의 양수)
     if retrospect_id < 1 {
         return Err(AppError::BadRequest(
             "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
         ));
     }
 
-    // category 파싱 및 검증
     let category: ResponseCategory = params.category.parse().map_err(|_| {
         AppError::RetroCategoryInvalid("유효하지 않은 카테고리 값입니다.".to_string())
     })?;
 
-    // cursor 검증 (있을 경우 1 이상)
     if let Some(cursor) = params.cursor {
         if cursor < 1 {
             return Err(AppError::BadRequest(
@@ -593,7 +580,6 @@ pub async fn list_responses(
         }
     }
 
-    // size 검증 (있을 경우 1~100)
     let size = params.size.unwrap_or(10);
     if !(1..=100).contains(&size) {
         return Err(AppError::BadRequest(
@@ -601,10 +587,8 @@ pub async fn list_responses(
         ));
     }
 
-    // 사용자 ID 추출
     let user_id = user.user_id()?;
 
-    // 서비스 호출
     let result = RetrospectService::list_responses(
         state,
         user_id,
@@ -622,9 +606,6 @@ pub async fn list_responses(
 }
 
 /// 회고 삭제 API (API-013)
-///
-/// 특정 회고 세션과 연관된 모든 데이터(답변, 댓글, 좋아요, AI 분석 결과)를 영구 삭제합니다.
-/// 해당 팀의 멤버만 삭제가 가능합니다.
 #[utoipa::path(
     delete,
     path = "/api/v1/retrospects/{retrospectId}",
@@ -638,7 +619,7 @@ pub async fn list_responses(
         (status = 200, description = "회고가 성공적으로 삭제되었습니다.", body = SuccessDeleteRetrospectResponse),
         (status = 400, description = "잘못된 Path Parameter", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 회고이거나 접근 권한 없음 (보안상 404로 통합)", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고이거나 접근 권한 없음", body = ErrorResponse),
         (status = 500, description = "서버 내부 오류", body = ErrorResponse)
     ),
     tag = "Retrospect"
@@ -648,21 +629,131 @@ pub async fn delete_retrospect(
     State(state): State<AppState>,
     Path(retrospect_id): Path<i64>,
 ) -> Result<Json<BaseResponse<()>>, AppError> {
-    // retrospectId 검증 (1 이상의 양수)
     if retrospect_id < 1 {
         return Err(AppError::BadRequest(
             "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
         ));
     }
 
-    // 사용자 ID 추출
     let user_id = user.user_id()?;
 
-    // 서비스 호출
     RetrospectService::delete_retrospect(state, user_id, retrospect_id).await?;
 
     Ok(Json(BaseResponse::success_with_message(
         (),
         "회고가 성공적으로 삭제되었습니다.",
+    )))
+}
+
+/// 회고 답변 댓글 목록 조회 API (API-026)
+#[utoipa::path(
+    get,
+    path = "/api/v1/responses/{responseId}/comments",
+    params(
+        ("responseId" = i64, Path, description = "댓글을 조회할 회고 답변의 고유 식별자"),
+        ("cursor" = Option<i64>, Query, description = "마지막으로 조회된 댓글 ID"),
+        ("size" = Option<i32>, Query, description = "페이지당 조회 개수 (1~100, 기본값: 20)")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "댓글 조회를 성공했습니다.", body = SuccessListCommentsResponse),
+        (status = 400, description = "잘못된 요청", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고 답변", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Response"
+)]
+pub async fn list_comments(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(response_id): Path<i64>,
+    Query(query): Query<ListCommentsQuery>,
+) -> Result<Json<BaseResponse<ListCommentsResponse>>, AppError> {
+    if response_id < 1 {
+        return Err(AppError::BadRequest(
+            "responseId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    if let Some(cursor) = query.cursor {
+        if cursor < 1 {
+            return Err(AppError::BadRequest(
+                "cursor는 1 이상의 양수여야 합니다.".to_string(),
+            ));
+        }
+    }
+
+    let size = query.size.unwrap_or(20);
+    if !(1..=100).contains(&size) {
+        return Err(AppError::BadRequest(
+            "size는 1~100 범위의 정수여야 합니다.".to_string(),
+        ));
+    }
+
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    let result =
+        RetrospectService::list_comments(state, user_id, response_id, query.cursor, size).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "댓글 조회를 성공했습니다.",
+    )))
+}
+
+/// 회고 답변 댓글 작성 API (API-027)
+#[utoipa::path(
+    post,
+    path = "/api/v1/responses/{responseId}/comments",
+    params(
+        ("responseId" = i64, Path, description = "댓글을 작성할 대상 답변의 고유 ID")
+    ),
+    request_body = CreateCommentRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "댓글이 성공적으로 등록되었습니다.", body = SuccessCreateCommentResponse),
+        (status = 400, description = "잘못된 요청", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고 답변", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Response"
+)]
+pub async fn create_comment(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(response_id): Path<i64>,
+    Json(req): Json<CreateCommentRequest>,
+) -> Result<Json<BaseResponse<CreateCommentResponse>>, AppError> {
+    if response_id < 1 {
+        return Err(AppError::BadRequest(
+            "responseId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    req.validate()?;
+
+    let user_id: i64 = user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| AppError::Unauthorized("유효하지 않은 사용자 ID입니다.".to_string()))?;
+
+    let result = RetrospectService::create_comment(state, user_id, response_id, req).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "댓글이 성공적으로 등록되었습니다.",
     )))
 }

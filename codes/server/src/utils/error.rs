@@ -75,6 +75,12 @@ pub enum AppError {
     /// RETRO4002: 과거 회고 참석 불가 / 답변 누락 (400)
     RetrospectAlreadyStarted(String),
 
+    /// RES4041: 존재하지 않는 회고 답변 (404)
+    ResponseNotFound(String),
+
+    /// RES4001: 댓글 길이 초과 (400)
+    CommentTooLong(String),
+
     /// RETRO4002: 답변 누락 (400)
     RetroAnswersMissing(String),
 
@@ -148,6 +154,8 @@ impl AppError {
             AppError::RetrospectNotFound(msg) => msg.clone(),
             AppError::ParticipantDuplicate(msg) => msg.clone(),
             AppError::RetrospectAlreadyStarted(msg) => msg.clone(),
+            AppError::ResponseNotFound(msg) => msg.clone(),
+            AppError::CommentTooLong(msg) => msg.clone(),
             AppError::RetroAnswersMissing(msg) => msg.clone(),
             AppError::RetroAnswerTooLong(msg) => msg.clone(),
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
@@ -189,6 +197,8 @@ impl AppError {
             AppError::RetrospectNotFound(_) => "RETRO4041",
             AppError::ParticipantDuplicate(_) => "RETRO4091",
             AppError::RetrospectAlreadyStarted(_) => "RETRO4002",
+            AppError::ResponseNotFound(_) => "RES4041",
+            AppError::CommentTooLong(_) => "RES4001",
             AppError::RetroAnswersMissing(_) => "RETRO4002",
             AppError::RetroAnswerTooLong(_) => "RETRO4003",
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
@@ -230,6 +240,8 @@ impl AppError {
             AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
             AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
             AppError::RetrospectAlreadyStarted(_) => StatusCode::BAD_REQUEST,
+            AppError::ResponseNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::CommentTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswersMissing(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
