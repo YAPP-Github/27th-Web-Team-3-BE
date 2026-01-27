@@ -1086,7 +1086,7 @@ impl RetrospectService {
 
         let member_map: HashMap<i64, String> = members
             .iter()
-            .map(|m| (m.member_id, m.nickname.clone()))
+            .map(|m| (m.member_id, m.nickname.clone().unwrap_or_default()))
             .collect();
 
         // 4. 질문/답변 조회
@@ -2065,7 +2065,7 @@ impl RetrospectService {
                 let member_id = response_to_member.get(&r.response_id).copied();
                 let user_name = member_id
                     .and_then(|mid| member_map.get(&mid))
-                    .map(|m| m.nickname.clone())
+                    .and_then(|m| m.nickname.clone())
                     .unwrap_or_default();
 
                 ResponseListItem {
