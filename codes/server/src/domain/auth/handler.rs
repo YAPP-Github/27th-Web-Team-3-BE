@@ -2,11 +2,8 @@ use axum::{extract::State, Json};
 use utoipa;
 use validator::Validate;
 
-use super::dto::{EmailLoginRequest, LoginRequest, LoginResponse};
-
-// SuccessLoginResponse는 utoipa 스키마 문서화에 사용됨
 #[allow(unused_imports)]
-use super::dto::SuccessLoginResponse;
+use super::dto::{EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse};
 use super::service::AuthService;
 use crate::state::AppState;
 use crate::utils::auth::AuthUser;
