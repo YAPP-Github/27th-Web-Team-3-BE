@@ -22,7 +22,11 @@ pub struct Claims {
 }
 
 /// JWT 토큰 생성 (Access Token)
-pub fn encode_token(sub: String, secret: &str, expiration_seconds: i64) -> Result<String, AppError> {
+pub fn encode_token(
+    sub: String,
+    secret: &str,
+    expiration_seconds: i64,
+) -> Result<String, AppError> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::seconds(expiration_seconds))
         .expect("valid timestamp")
@@ -45,7 +49,11 @@ pub fn encode_token(sub: String, secret: &str, expiration_seconds: i64) -> Resul
 }
 
 /// Refresh Token 생성
-pub fn encode_refresh_token(sub: String, secret: &str, expiration_seconds: i64) -> Result<String, AppError> {
+pub fn encode_refresh_token(
+    sub: String,
+    secret: &str,
+    expiration_seconds: i64,
+) -> Result<String, AppError> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::seconds(expiration_seconds))
         .expect("valid timestamp")
@@ -68,7 +76,11 @@ pub fn encode_refresh_token(sub: String, secret: &str, expiration_seconds: i64) 
 }
 
 /// Signup Token 생성
-pub fn encode_signup_token(email: String, secret: &str, expiration_seconds: i64) -> Result<String, AppError> {
+pub fn encode_signup_token(
+    email: String,
+    secret: &str,
+    expiration_seconds: i64,
+) -> Result<String, AppError> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::seconds(expiration_seconds))
         .expect("valid timestamp")
