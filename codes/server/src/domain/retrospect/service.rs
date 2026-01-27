@@ -5,8 +5,8 @@ use genpdf::elements::{Break, Paragraph};
 use genpdf::style;
 use genpdf::Element;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use tracing::{info, warn};
 
@@ -1122,6 +1122,156 @@ impl RetrospectService {
         );
 
         Ok(pdf_bytes)
+    }
+
+    /// 회고 삭제 (API-013)
+    ///
+    /// TODO: 현재 스키마에 `created_by`(회고 생성자) 필드와 `member_team.role`(팀 역할) 필드가 없어
+    /// 팀 멤버십만 확인합니다. 스펙상 팀 Owner 또는 회고 생성자만 삭제 가능해야 하므로,
+    /// 스키마 마이그레이션 후 권한 분기를 추가해야 합니다.
+    pub async fn delete_retrospect(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<(), AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            "회고 삭제 요청"
+        );
+
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
+
+        let retrospect_room_id = retrospect_model.retrospect_room_id;
+
+        // 2. 트랜잭션 시작 (연관 데이터 일괄 삭제)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 3. 해당 회고의 모든 응답(response) ID만 조회 (전체 모델 불필요)
+        let response_ids: Vec<i64> = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .select_only()
+            .column(response::Column::ResponseId)
+            .into_tuple()
+            .all(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if !response_ids.is_empty() {
+            // 4. 댓글 삭제 (response_comment)
+            let comments_deleted = response_comment::Entity::delete_many()
+                .filter(response_comment::Column::ResponseId.is_in(response_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 5. 좋아요 삭제 (response_like)
+            let likes_deleted = response_like::Entity::delete_many()
+                .filter(response_like::Column::ResponseId.is_in(response_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 6. 멤버 응답 매핑 삭제 (member_response)
+            let member_responses_deleted = member_response::Entity::delete_many()
+                .filter(member_response::Column::ResponseId.is_in(response_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            info!(
+                retrospect_id = retrospect_id,
+                response_count = response_ids.len(),
+                comments_deleted = comments_deleted.rows_affected,
+                likes_deleted = likes_deleted.rows_affected,
+                member_responses_deleted = member_responses_deleted.rows_affected,
+                "연관 응답 데이터 삭제 완료"
+            );
+        }
+
+        // 7. 응답 삭제 (response)
+        let responses_deleted = response::Entity::delete_many()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 8. 참고자료 삭제 (retro_reference)
+        let references_deleted = retro_reference::Entity::delete_many()
+            .filter(retro_reference::Column::RetrospectId.eq(retrospect_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 9. 멤버-회고 매핑 삭제 (member_retro)
+        let member_retros_deleted = member_retro::Entity::delete_many()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 10. 회고 삭제
+        retrospect_model
+            .delete(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 11. 회고방 삭제 (같은 room을 참조하는 다른 회고가 없는 경우에만)
+        let other_retro_count = retrospect::Entity::find()
+            .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
+            .count(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let (member_retro_rooms_deleted, room_deleted) = if other_retro_count == 0 {
+            // 회고방을 참조하는 다른 회고가 없으므로 멤버-회고방 매핑과 회고방 모두 삭제
+            let member_retro_rooms_deleted = member_retro_room::Entity::delete_many()
+                .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            let room_deleted = retro_room::Entity::delete_many()
+                .filter(retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            (
+                member_retro_rooms_deleted.rows_affected,
+                room_deleted.rows_affected,
+            )
+        } else {
+            warn!(
+                retrospect_room_id = retrospect_room_id,
+                other_retro_count = other_retro_count,
+                "회고방을 공유하는 다른 회고가 존재하여 회고방 삭제를 건너뜁니다"
+            );
+            (0, 0)
+        };
+
+        // 12. 트랜잭션 커밋
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        info!(
+            retrospect_id = retrospect_id,
+            responses_deleted = responses_deleted.rows_affected,
+            references_deleted = references_deleted.rows_affected,
+            member_retros_deleted = member_retros_deleted.rows_affected,
+            member_retro_rooms_deleted = member_retro_rooms_deleted,
+            room_deleted = room_deleted,
+            "회고 및 연관 데이터 삭제 완료"
+        );
+
+        Ok(())
     }
 
     /// 회고 방식 표시명 반환
