@@ -1,12 +1,12 @@
 # [API-004] POST /api/v1/retro-rooms
 
-팀 생성 API
+회고방 생성 API
 
 ## 개요
 
-새로운 팀을 생성합니다.
+새로운 회고방을 생성합니다.
 
-- 팀을 생성한 사용자는 해당 룸의 **관리자(Owner)** 권한을 자동으로 부여받습니다.
+- 회고방을 생성한 사용자는 해당 룸의 **관리자(Owner)** 권한을 자동으로 부여받습니다.
 - 생성과 동시에 다른 사용자를 초대할 수 있는 고유한 **초대 코드(`inviteCode`)**가 생성됩니다.
 
 ## 버전
@@ -39,7 +39,7 @@ POST /api/v1/retro-rooms
 ```json
 {
   "title": "코드 마스터즈",
-  "description": "우리 팀의 성장을 위한 회고 모임입니다."
+  "description": "우리 회고방의 성장을 위한 회고 모임입니다."
 }
 ```
 
@@ -47,8 +47,8 @@ POST /api/v1/retro-rooms
 
 | Field | Type | Required | Description | Validation |
 |-------|------|----------|-------------|------------|
-| title | string | Yes | 팀 이름 | 최대 20자 |
-| description | string | No | 팀 한 줄 소개 | 최대 50자 |
+| title | string | Yes | 회고방 이름 | 최대 20자 |
+| description | string | No | 회고방 한 줄 소개 | 최대 50자 |
 
 ## Response
 
@@ -58,7 +58,7 @@ POST /api/v1/retro-rooms
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "팀이 성공적으로 생성되었습니다.",
+  "message": "회고방이 성공적으로 생성되었습니다.",
   "result": {
     "retroRoomId": 789,
     "title": "코드 마스터즈",
@@ -71,19 +71,19 @@ POST /api/v1/retro-rooms
 
 | Field | Type | Description |
 |-------|------|-------------|
-| retroRoomId | long | 생성된 팀 고유 ID |
-| title | string | 생성된 팀 이름 |
-| inviteCode | string | 팀원 초대를 위한 고유 코드 (형식: `INV-XXXX-XXXX`, 8자리 영숫자). 생성 후 7일간 유효하며, 만료 후 재발급 가능합니다. |
+| retroRoomId | long | 생성된 회고방 고유 ID |
+| title | string | 생성된 회고방 이름 |
+| inviteCode | string | 멤버 초대를 위한 고유 코드 (형식: `INV-XXXX-XXXX`, 8자리 영숫자). 생성 후 7일간 유효하며, 만료 후 재발급 가능합니다. |
 
 ## 에러 응답
 
-### 400 Bad Request - 팀 이름 길이 초과
+### 400 Bad Request - 회고방 이름 길이 초과
 
 ```json
 {
   "isSuccess": false,
   "code": "RETRO4001",
-  "message": "팀 이름은 20자를 초과할 수 없습니다.",
+  "message": "회고방 이름은 20자를 초과할 수 없습니다.",
   "result": null
 }
 ```
@@ -99,13 +99,13 @@ POST /api/v1/retro-rooms
 }
 ```
 
-### 409 Conflict - 팀 이름 중복
+### 409 Conflict - 회고방 이름 중복
 
 ```json
 {
   "isSuccess": false,
   "code": "RETRO4091",
-  "message": "이미 사용 중인 팀 이름입니다.",
+  "message": "이미 사용 중인 회고방 이름입니다.",
   "result": null
 }
 ```
@@ -125,10 +125,10 @@ POST /api/v1/retro-rooms
 
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|-----------|
-| RETRO4001 | 400 | 팀 이름 길이 초과 | title이 20자를 초과한 경우 |
+| RETRO4001 | 400 | 회고방 이름 길이 초과 | title이 20자를 초과한 경우 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
-| RETRO4091 | 409 | 팀 이름 중복 | 이미 사용 중인 title로 생성 시도 |
-| COMMON500 | 500 | 서버 내부 에러 | 팀 생성 과정 중 DB 연결 오류 등 |
+| RETRO4091 | 409 | 회고방 이름 중복 | 이미 사용 중인 title로 생성 시도 |
+| COMMON500 | 500 | 서버 내부 에러 | 회고방 생성 과정 중 DB 연결 오류 등 |
 
 ## 사용 예시
 
@@ -140,6 +140,6 @@ curl -X POST https://api.example.com/api/v1/retro-rooms \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
     "title": "코드 마스터즈",
-    "description": "우리 팀의 성장을 위한 회고 모임입니다."
+    "description": "우리 회고방의 성장을 위한 회고 모임입니다."
   }'
 ```

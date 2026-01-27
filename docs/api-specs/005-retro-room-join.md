@@ -1,10 +1,10 @@
 # [API-005] POST /api/v1/retro-rooms/join
 
-팀 합류 API (초대 링크)
+회고방 합류 API (초대 링크)
 
 ## 개요
 
-사용자가 클릭하거나 복사한 **초대 링크 전체**를 전달받아 해당 팀의 멤버로 합류합니다.
+사용자가 클릭하거나 복사한 **초대 링크 전체**를 전달받아 해당 회고방의 멤버로 합류합니다.
 
 - 서버는 전달받은 URL에서 초대 식별값(`inviteCode`)을 추출하여 유효성을 검사합니다.
 - 이미 가입된 유저이거나 만료된 링크인 경우 적절한 에러 코드를 반환합니다.
@@ -13,7 +13,7 @@
 
 - **유효 기간**: 초대 코드 생성 시점부터 **7일간** 유효합니다.
 - **만료 처리**: 만료된 초대 코드로 룸 참가 시도 시 `RETRO4003` 에러를 반환합니다.
-- **재발급**: 만료된 초대 코드는 팀 관리자가 새로운 코드를 재발급할 수 있습니다.
+- **재발급**: 만료된 초대 코드는 회고방 관리자가 새로운 코드를 재발급할 수 있습니다.
 
 ## 버전
 
@@ -66,7 +66,7 @@ POST /api/v1/retro-rooms/join
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "회고 룸에 성공적으로 합류하였습니다.",
+  "message": "회고방에 성공적으로 합류하였습니다.",
   "result": {
     "retroRoomId": 789,
     "title": "코드 마스터즈",
@@ -79,9 +79,9 @@ POST /api/v1/retro-rooms/join
 
 | Field | Type | Description |
 |-------|------|-------------|
-| retroRoomId | long | 합류한 회고 룸 고유 ID |
-| title | string | 합류한 회고 룸 이름 |
-| joinedAt | string | 회고 룸 합류 일시 (yyyy-MM-ddTHH:mm:ss) |
+| retroRoomId | long | 합류한 회고방 고유 ID |
+| title | string | 합류한 회고방 이름 |
+| joinedAt | string | 회고방 합류 일시 (yyyy-MM-ddTHH:mm:ss) |
 
 ## 에러 응답
 
@@ -118,13 +118,13 @@ POST /api/v1/retro-rooms/join
 }
 ```
 
-### 404 Not Found - 룸 없음
+### 404 Not Found - 회고방 없음
 
 ```json
 {
   "isSuccess": false,
   "code": "RETRO4041",
-  "message": "존재하지 않는 회고 룸입니다.",
+  "message": "존재하지 않는 회고방입니다.",
   "result": null
 }
 ```
@@ -135,7 +135,7 @@ POST /api/v1/retro-rooms/join
 {
   "isSuccess": false,
   "code": "RETRO4092",
-  "message": "이미 해당 회고 룸의 멤버입니다.",
+  "message": "이미 해당 회고방의 멤버입니다.",
   "result": null
 }
 ```
@@ -158,9 +158,9 @@ POST /api/v1/retro-rooms/join
 | RETRO4002 | 400 | 유효하지 않은 초대 링크 | URL 형식 오류 또는 inviteCode 추출 실패 |
 | RETRO4003 | 400 | 만료된 초대 코드 | 초대 코드 생성 후 7일이 경과하여 만료됨 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
-| RETRO4041 | 404 | 존재하지 않는 회고 룸 | 초대 링크의 inviteCode와 매칭되는 룸이 DB에 없음 |
-| RETRO4092 | 409 | 이미 룸 멤버 | 이미 해당 룸에 가입된 사용자가 다시 가입 시도 |
-| COMMON500 | 500 | 서버 내부 에러 | 룸 합류 처리 중 DB 연결 오류 등 |
+| RETRO4041 | 404 | 존재하지 않는 회고방 | 초대 링크의 inviteCode와 매칭되는 룸이 DB에 없음 |
+| RETRO4092 | 409 | 이미 회고방 멤버 | 이미 해당 룸에 가입된 사용자가 다시 가입 시도 |
+| COMMON500 | 500 | 서버 내부 에러 | 회고방 합류 처리 중 DB 연결 오류 등 |
 
 ## 사용 예시
 

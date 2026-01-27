@@ -1,13 +1,13 @@
 # [API-009] DELETE /api/v1/retro-rooms/{retroRoomId}
 
-팀 삭제 API
+회고방 삭제 API
 
 ## 개요
 
-생성된 팀을 완전히 삭제합니다.
+생성된 회고방을 완전히 삭제합니다.
 
-- **데이터 파기**: 팀 삭제 시 해당 룸과 연결된 **모든 회고, 답변, 댓글, 초대 코드** 데이터가 영구적으로 삭제됩니다.
-- **권한 검증**: 해당 팀의 **관리자(Owner)** 권한을 가진 사용자만 요청할 수 있습니다.
+- **데이터 파기**: 회고방 삭제 시 해당 룸과 연결된 **모든 회고, 답변, 댓글, 초대 코드** 데이터가 영구적으로 삭제됩니다.
+- **권한 검증**: 해당 회고방의 **관리자(Owner)** 권한을 가진 사용자만 요청할 수 있습니다.
 
 ## 버전
 
@@ -38,7 +38,7 @@ DELETE /api/v1/retro-rooms/{retroRoomId}
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| retroRoomId | long | Yes | 삭제할 팀의 고유 식별자 |
+| retroRoomId | long | Yes | 삭제할 회고방의 고유 식별자 |
 
 ## Response
 
@@ -48,7 +48,7 @@ DELETE /api/v1/retro-rooms/{retroRoomId}
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "팀 삭제에 성공하였습니다.",
+  "message": "회고방 삭제에 성공하였습니다.",
   "result": {
     "retroRoomId": 123,
     "deletedAt": "2026-01-24T22:45:05"
@@ -60,7 +60,7 @@ DELETE /api/v1/retro-rooms/{retroRoomId}
 
 | Field | Type | Description |
 |-------|------|-------------|
-| retroRoomId | long | 삭제 처리된 팀 고유 ID |
+| retroRoomId | long | 삭제 처리된 회고방 고유 ID |
 | deletedAt | string | 삭제 완료 일시 (yyyy-MM-ddTHH:mm:ss) |
 
 ## 에러 응답
@@ -81,19 +81,19 @@ DELETE /api/v1/retro-rooms/{retroRoomId}
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "팀을 삭제할 권한이 없습니다.",
+  "code": "RETRO4031",
+  "message": "회고방을 삭제할 권한이 없습니다.",
   "result": null
 }
 ```
 
-### 404 Not Found - 팀 없음
+### 404 Not Found - 회고방 없음
 
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4041",
-  "message": "존재하지 않는 팀입니다.",
+  "code": "RETRO4041",
+  "message": "존재하지 않는 회고방입니다.",
   "result": null
 }
 ```
@@ -114,8 +114,8 @@ DELETE /api/v1/retro-rooms/{retroRoomId}
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|----------|
 | AUTH4001 | 401 | 토큰 누락, 만료 또는 잘못된 형식 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
-| TEAM4031 | 403 | 관리자(Owner)가 아닌 일반 멤버가 삭제 시도 | 팀 관리자(Owner) 권한이 없는 사용자가 삭제 요청 |
-| TEAM4041 | 404 | 유효하지 않은 retroRoomId이거나 이미 삭제된 경우 | 존재하지 않거나 이미 삭제된 팀의 retroRoomId로 요청 |
+| RETRO4031 | 403 | 관리자(Owner)가 아닌 일반 멤버가 삭제 시도 | 회고방 관리자(Owner) 권한이 없는 사용자가 삭제 요청 |
+| RETRO4041 | 404 | 유효하지 않은 retroRoomId이거나 이미 삭제된 경우 | 존재하지 않거나 이미 삭제된 회고방의 retroRoomId로 요청 |
 | COMMON500 | 500 | 연관 데이터 삭제 트랜잭션 처리 중 오류 | 데이터베이스 연결 실패, 연관 데이터 삭제 중 트랜잭션 오류 |
 
 ## 사용 예시
@@ -132,4 +132,4 @@ curl -X DELETE https://api.example.com/api/v1/retro-rooms/123 \
 
 - 삭제된 데이터는 복구할 수 없습니다.
 - 삭제 전 사용자에게 확인 다이얼로그를 표시하는 것을 권장합니다.
-- 팀 관리자(Owner)만 삭제할 수 있습니다.
+- 회고방 관리자(Owner)만 삭제할 수 있습니다.
