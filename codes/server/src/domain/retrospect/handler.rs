@@ -14,9 +14,10 @@ use crate::utils::BaseResponse;
 
 use super::dto::{
     AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
-    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
+    DraftSaveRequest, DraftSaveResponse, ReferenceItem, ResponseCategory, ResponsesListResponse,
+    ResponsesQueryParams, RetrospectDetailResponse, SearchQueryParams, SearchRetrospectItem,
+    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    TeamRetrospectListItem,
 };
 use super::service::RetrospectService;
 
@@ -539,6 +540,88 @@ pub async fn export_retrospect(
     ];
 
     Ok((headers, pdf_bytes))
+}
+
+/// 회고 답변 카테고리별 조회 API (API-020)
+///
+/// 특정 회고 세션의 답변 리스트를 질문 카테고리별로 조회합니다.
+/// 커서 기반 페이지네이션을 사용하여 무한 스크롤을 지원합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retrospects/{retrospectId}/responses",
+    params(
+        ("retrospectId" = i64, Path, description = "조회를 진행할 회고 세션 고유 ID"),
+        ResponsesQueryParams
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "답변 리스트 조회를 성공했습니다.", body = SuccessResponsesListResponse),
+        (status = 400, description = "잘못된 요청 (retrospectId, category, cursor, size 유효성 오류)", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn list_responses(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(retrospect_id): Path<i64>,
+    Query(params): Query<ResponsesQueryParams>,
+) -> Result<Json<BaseResponse<ResponsesListResponse>>, AppError> {
+    // retrospectId 검증 (1 이상의 양수)
+    if retrospect_id < 1 {
+        return Err(AppError::BadRequest(
+            "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    // category 필수 파라미터 검증 및 파싱
+    let category_str = params.category.as_deref().ok_or_else(|| {
+        AppError::RetroCategoryInvalid("유효하지 않은 카테고리 값입니다.".to_string())
+    })?;
+    let category: ResponseCategory = category_str.parse().map_err(|_| {
+        AppError::RetroCategoryInvalid("유효하지 않은 카테고리 값입니다.".to_string())
+    })?;
+
+    // cursor 검증 (있을 경우 1 이상)
+    if let Some(cursor) = params.cursor {
+        if cursor < 1 {
+            return Err(AppError::BadRequest(
+                "cursor는 1 이상의 양수여야 합니다.".to_string(),
+            ));
+        }
+    }
+
+    // size 검증 (있을 경우 1~100)
+    let size = params.size.unwrap_or(10);
+    if !(1..=100).contains(&size) {
+        return Err(AppError::BadRequest(
+            "size는 1~100 범위의 정수여야 합니다.".to_string(),
+        ));
+    }
+
+    // 사용자 ID 추출
+    let user_id = user.user_id()?;
+
+    // 서비스 호출
+    let result = RetrospectService::list_responses(
+        state,
+        user_id,
+        retrospect_id,
+        category,
+        params.cursor,
+        size,
+    )
+    .await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "답변 리스트 조회를 성공했습니다.",
+    )))
 }
 
 /// 회고 삭제 API (API-013)

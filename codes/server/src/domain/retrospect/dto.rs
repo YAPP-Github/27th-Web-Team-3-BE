@@ -538,6 +538,126 @@ pub struct SuccessSearchResponse {
     pub result: Vec<SearchRetrospectItem>,
 }
 
+// ============================================
+// API-020: 회고 답변 카테고리별 조회 DTO
+// ============================================
+
+/// 답변 조회 카테고리 필터
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
+pub enum ResponseCategory {
+    /// 전체 답변 조회
+    #[serde(rename = "ALL")]
+    All,
+    /// 질문 1에 대한 답변만 조회
+    #[serde(rename = "QUESTION_1")]
+    Question1,
+    /// 질문 2에 대한 답변만 조회
+    #[serde(rename = "QUESTION_2")]
+    Question2,
+    /// 질문 3에 대한 답변만 조회
+    #[serde(rename = "QUESTION_3")]
+    Question3,
+    /// 질문 4에 대한 답변만 조회
+    #[serde(rename = "QUESTION_4")]
+    Question4,
+    /// 질문 5에 대한 답변만 조회
+    #[serde(rename = "QUESTION_5")]
+    Question5,
+}
+
+impl fmt::Display for ResponseCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ResponseCategory::All => write!(f, "ALL"),
+            ResponseCategory::Question1 => write!(f, "QUESTION_1"),
+            ResponseCategory::Question2 => write!(f, "QUESTION_2"),
+            ResponseCategory::Question3 => write!(f, "QUESTION_3"),
+            ResponseCategory::Question4 => write!(f, "QUESTION_4"),
+            ResponseCategory::Question5 => write!(f, "QUESTION_5"),
+        }
+    }
+}
+
+impl ResponseCategory {
+    /// 카테고리에 해당하는 질문 인덱스 반환 (0-based, None이면 전체)
+    pub fn question_index(&self) -> Option<usize> {
+        match self {
+            ResponseCategory::All => None,
+            ResponseCategory::Question1 => Some(0),
+            ResponseCategory::Question2 => Some(1),
+            ResponseCategory::Question3 => Some(2),
+            ResponseCategory::Question4 => Some(3),
+            ResponseCategory::Question5 => Some(4),
+        }
+    }
+}
+
+impl std::str::FromStr for ResponseCategory {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ALL" => Ok(ResponseCategory::All),
+            "QUESTION_1" => Ok(ResponseCategory::Question1),
+            "QUESTION_2" => Ok(ResponseCategory::Question2),
+            "QUESTION_3" => Ok(ResponseCategory::Question3),
+            "QUESTION_4" => Ok(ResponseCategory::Question4),
+            "QUESTION_5" => Ok(ResponseCategory::Question5),
+            _ => Err(format!("유효하지 않은 카테고리: {}", s)),
+        }
+    }
+}
+
+/// 답변 조회 쿼리 파라미터
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponsesQueryParams {
+    /// 조회 필터 (ALL, QUESTION_1~QUESTION_5) — 문자열로 수신하여 핸들러에서 직접 파싱
+    pub category: Option<String>,
+    /// 마지막으로 조회된 답변 ID (커서)
+    pub cursor: Option<i64>,
+    /// 페이지당 조회 개수 (1~100, 기본값: 10)
+    pub size: Option<i64>,
+}
+
+/// 답변 아이템 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponseListItem {
+    /// 답변 고유 식별자
+    pub response_id: i64,
+    /// 작성자 이름(닉네임)
+    pub user_name: String,
+    /// 답변 내용
+    pub content: String,
+    /// 해당 답변의 좋아요 수
+    pub like_count: i64,
+    /// 해당 답변의 댓글 수
+    pub comment_count: i64,
+}
+
+/// 답변 카테고리별 조회 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponsesListResponse {
+    /// 답변 데이터 리스트 (없을 경우 빈 배열)
+    pub responses: Vec<ResponseListItem>,
+    /// 다음 페이지 존재 여부
+    pub has_next: bool,
+    /// 다음 조회를 위한 커서 ID (마지막 페이지면 null)
+    pub next_cursor: Option<i64>,
+}
+
+/// Swagger용 답변 카테고리별 조회 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessResponsesListResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: ResponsesListResponse,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1379,5 +1499,346 @@ mod tests {
 
         // Assert
         assert!(result.is_err());
+    }
+
+    // ========================================
+    // API-020: ResponseCategory 테스트
+    // ========================================
+
+    #[test]
+    fn should_deserialize_all_response_category() {
+        // Arrange & Act
+        let category: ResponseCategory = serde_json::from_str("\"ALL\"").unwrap();
+
+        // Assert
+        assert_eq!(category, ResponseCategory::All);
+        assert!(category.question_index().is_none());
+    }
+
+    #[test]
+    fn should_deserialize_question_1_category() {
+        // Arrange & Act
+        let category: ResponseCategory = serde_json::from_str("\"QUESTION_1\"").unwrap();
+
+        // Assert
+        assert_eq!(category, ResponseCategory::Question1);
+        assert_eq!(category.question_index(), Some(0));
+    }
+
+    #[test]
+    fn should_deserialize_question_2_category() {
+        // Arrange & Act
+        let category: ResponseCategory = serde_json::from_str("\"QUESTION_2\"").unwrap();
+
+        // Assert
+        assert_eq!(category, ResponseCategory::Question2);
+        assert_eq!(category.question_index(), Some(1));
+    }
+
+    #[test]
+    fn should_deserialize_question_3_category() {
+        // Arrange & Act
+        let category: ResponseCategory = serde_json::from_str("\"QUESTION_3\"").unwrap();
+
+        // Assert
+        assert_eq!(category, ResponseCategory::Question3);
+        assert_eq!(category.question_index(), Some(2));
+    }
+
+    #[test]
+    fn should_deserialize_question_4_category() {
+        // Arrange & Act
+        let category: ResponseCategory = serde_json::from_str("\"QUESTION_4\"").unwrap();
+
+        // Assert
+        assert_eq!(category, ResponseCategory::Question4);
+        assert_eq!(category.question_index(), Some(3));
+    }
+
+    #[test]
+    fn should_deserialize_question_5_category() {
+        // Arrange & Act
+        let category: ResponseCategory = serde_json::from_str("\"QUESTION_5\"").unwrap();
+
+        // Assert
+        assert_eq!(category, ResponseCategory::Question5);
+        assert_eq!(category.question_index(), Some(4));
+    }
+
+    #[test]
+    fn should_fail_deserialize_invalid_response_category() {
+        // Arrange & Act
+        let result: Result<ResponseCategory, _> = serde_json::from_str("\"INVALID\"");
+
+        // Assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn should_fail_deserialize_question_6_category() {
+        // Arrange & Act
+        let result: Result<ResponseCategory, _> = serde_json::from_str("\"QUESTION_6\"");
+
+        // Assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn should_display_response_category_correctly() {
+        // Assert
+        assert_eq!(ResponseCategory::All.to_string(), "ALL");
+        assert_eq!(ResponseCategory::Question1.to_string(), "QUESTION_1");
+        assert_eq!(ResponseCategory::Question2.to_string(), "QUESTION_2");
+        assert_eq!(ResponseCategory::Question3.to_string(), "QUESTION_3");
+        assert_eq!(ResponseCategory::Question4.to_string(), "QUESTION_4");
+        assert_eq!(ResponseCategory::Question5.to_string(), "QUESTION_5");
+    }
+
+    // ========================================
+    // API-020: ResponseListItem 직렬화 테스트
+    // ========================================
+
+    #[test]
+    fn should_serialize_response_list_item_in_camel_case() {
+        // Arrange
+        let item = ResponseListItem {
+            response_id: 501,
+            user_name: "제이슨".to_string(),
+            content: "이번 스프린트에서 테스트 코드를 꼼꼼히 짠 것이 좋았습니다.".to_string(),
+            like_count: 12,
+            comment_count: 3,
+        };
+
+        // Act
+        let json = serde_json::to_value(&item).unwrap();
+
+        // Assert
+        assert_eq!(json["responseId"], 501);
+        assert_eq!(json["userName"], "제이슨");
+        assert!(json["content"].as_str().unwrap().contains("테스트 코드"));
+        assert_eq!(json["likeCount"], 12);
+        assert_eq!(json["commentCount"], 3);
+        // snake_case 키가 없는지 확인
+        assert!(json.get("response_id").is_none());
+        assert!(json.get("user_name").is_none());
+        assert!(json.get("like_count").is_none());
+        assert!(json.get("comment_count").is_none());
+    }
+
+    #[test]
+    fn should_serialize_response_list_item_with_zero_counts() {
+        // Arrange
+        let item = ResponseListItem {
+            response_id: 1,
+            user_name: "테스트유저".to_string(),
+            content: "테스트 답변".to_string(),
+            like_count: 0,
+            comment_count: 0,
+        };
+
+        // Act
+        let json = serde_json::to_value(&item).unwrap();
+
+        // Assert
+        assert_eq!(json["likeCount"], 0);
+        assert_eq!(json["commentCount"], 0);
+    }
+
+    // ========================================
+    // API-020: ResponsesListResponse 직렬화 테스트
+    // ========================================
+
+    #[test]
+    fn should_serialize_responses_list_response_in_camel_case() {
+        // Arrange
+        let response = ResponsesListResponse {
+            responses: vec![
+                ResponseListItem {
+                    response_id: 501,
+                    user_name: "제이슨".to_string(),
+                    content: "좋은 점".to_string(),
+                    like_count: 12,
+                    comment_count: 3,
+                },
+                ResponseListItem {
+                    response_id: 456,
+                    user_name: "김민수".to_string(),
+                    content: "기한 맞춰서".to_string(),
+                    like_count: 12,
+                    comment_count: 21,
+                },
+            ],
+            has_next: true,
+            next_cursor: Some(455),
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["responses"].as_array().unwrap().len(), 2);
+        assert_eq!(json["hasNext"], true);
+        assert_eq!(json["nextCursor"], 455);
+        assert_eq!(json["responses"][0]["responseId"], 501);
+        assert_eq!(json["responses"][1]["responseId"], 456);
+        // snake_case 키가 없는지 확인
+        assert!(json.get("has_next").is_none());
+        assert!(json.get("next_cursor").is_none());
+    }
+
+    #[test]
+    fn should_serialize_empty_responses_list_response() {
+        // Arrange
+        let response = ResponsesListResponse {
+            responses: vec![],
+            has_next: false,
+            next_cursor: None,
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["responses"].as_array().unwrap().len(), 0);
+        assert_eq!(json["hasNext"], false);
+        assert!(json["nextCursor"].is_null());
+    }
+
+    #[test]
+    fn should_serialize_last_page_responses() {
+        // Arrange
+        let response = ResponsesListResponse {
+            responses: vec![ResponseListItem {
+                response_id: 100,
+                user_name: "유저".to_string(),
+                content: "마지막 답변".to_string(),
+                like_count: 1,
+                comment_count: 0,
+            }],
+            has_next: false,
+            next_cursor: None,
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["responses"].as_array().unwrap().len(), 1);
+        assert_eq!(json["hasNext"], false);
+        assert!(json["nextCursor"].is_null());
+    }
+
+    #[test]
+    fn should_serialize_success_responses_list_response_in_camel_case() {
+        // Arrange
+        let response = SuccessResponsesListResponse {
+            is_success: true,
+            code: "COMMON200".to_string(),
+            message: "답변 리스트 조회를 성공했습니다.".to_string(),
+            result: ResponsesListResponse {
+                responses: vec![ResponseListItem {
+                    response_id: 501,
+                    user_name: "제이슨".to_string(),
+                    content: "테스트 답변".to_string(),
+                    like_count: 5,
+                    comment_count: 2,
+                }],
+                has_next: false,
+                next_cursor: None,
+            },
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["isSuccess"], true);
+        assert_eq!(json["code"], "COMMON200");
+        assert_eq!(json["message"], "답변 리스트 조회를 성공했습니다.");
+        assert_eq!(json["result"]["responses"].as_array().unwrap().len(), 1);
+        assert_eq!(json["result"]["hasNext"], false);
+        assert!(json["result"]["nextCursor"].is_null());
+    }
+
+    // ========================================
+    // API-020: ResponsesQueryParams 역직렬화 테스트
+    // ========================================
+
+    #[test]
+    fn should_deserialize_responses_query_params_with_all_fields() {
+        // Arrange
+        let json = r#"{"category": "ALL", "cursor": 100, "size": 20}"#;
+
+        // Act
+        let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(params.category.as_deref(), Some("ALL"));
+        assert_eq!(params.cursor, Some(100));
+        assert_eq!(params.size, Some(20));
+    }
+
+    #[test]
+    fn should_deserialize_responses_query_params_with_category_only() {
+        // Arrange
+        let json = r#"{"category": "QUESTION_1"}"#;
+
+        // Act
+        let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(params.category.as_deref(), Some("QUESTION_1"));
+        assert!(params.cursor.is_none());
+        assert!(params.size.is_none());
+    }
+
+    #[test]
+    fn should_deserialize_responses_query_params_without_optional_fields() {
+        // Arrange
+        let json = r#"{}"#;
+
+        // Act
+        let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert!(params.category.is_none());
+        assert!(params.cursor.is_none());
+        assert!(params.size.is_none());
+    }
+
+    #[test]
+    fn should_deserialize_responses_query_params_with_invalid_category() {
+        // Arrange — invalid category는 String이므로 역직렬화 자체는 성공
+        let json = r#"{"category": "INVALID"}"#;
+
+        // Act
+        let params: ResponsesQueryParams = serde_json::from_str(json).unwrap();
+
+        // Assert — 핸들러에서 파싱 시 실패하도록 문자열로 전달됨
+        assert_eq!(params.category.as_deref(), Some("INVALID"));
+    }
+
+    // ========================================
+    // API-020: ResponseCategory FromStr 테스트
+    // ========================================
+
+    #[test]
+    fn should_parse_valid_category_from_str() {
+        // Assert
+        assert_eq!("ALL".parse::<ResponseCategory>().unwrap(), ResponseCategory::All);
+        assert_eq!("QUESTION_1".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question1);
+        assert_eq!("QUESTION_2".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question2);
+        assert_eq!("QUESTION_3".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question3);
+        assert_eq!("QUESTION_4".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question4);
+        assert_eq!("QUESTION_5".parse::<ResponseCategory>().unwrap(), ResponseCategory::Question5);
+    }
+
+    #[test]
+    fn should_fail_parse_invalid_category_from_str() {
+        // Assert
+        assert!("INVALID".parse::<ResponseCategory>().is_err());
+        assert!("QUESTION_6".parse::<ResponseCategory>().is_err());
+        assert!("all".parse::<ResponseCategory>().is_err());
+        assert!("".parse::<ResponseCategory>().is_err());
     }
 }

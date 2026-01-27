@@ -20,12 +20,13 @@ use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
     DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem, MissionItem,
-    PersonalMissionItem, ReferenceItem, RetrospectDetailResponse, RetrospectMemberItem,
-    RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessCreateParticipantResponse,
-    SuccessCreateRetrospectResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
-    SuccessReferencesListResponse, SuccessRetrospectDetailResponse, SuccessSearchResponse,
+    PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
+    RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem,
+    StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessAnalysisResponse,
+    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
+    SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse, SuccessReferencesListResponse,
+    SuccessResponsesListResponse, SuccessRetrospectDetailResponse, SuccessSearchResponse,
     SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
     TeamRetrospectListItem,
 };
@@ -51,6 +52,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::get_storage,
         domain::retrospect::handler::analyze_retrospective_handler,
         domain::retrospect::handler::search_retrospects,
+        domain::retrospect::handler::list_responses,
         domain::retrospect::handler::export_retrospect,
         domain::retrospect::handler::delete_retrospect
     ),
@@ -98,7 +100,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
             SuccessAnalysisResponse,
             SearchRetrospectItem,
             SuccessSearchResponse,
-            SuccessDeleteRetrospectResponse
+            SuccessDeleteRetrospectResponse,
+            ResponseCategory,
+            ResponseListItem,
+            ResponsesListResponse,
+            SuccessResponsesListResponse
         )
     ),
     tags(
@@ -220,6 +226,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/analysis",
             axum::routing::post(domain::retrospect::handler::analyze_retrospective_handler),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/responses",
+            axum::routing::get(domain::retrospect::handler::list_responses),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/export",

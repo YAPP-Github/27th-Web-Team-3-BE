@@ -29,11 +29,11 @@ use crate::utils::error::AppError;
 use super::dto::{
     AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
     DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem, MissionItem,
-    PersonalMissionItem, ReferenceItem, RetrospectDetailResponse, RetrospectMemberItem,
-    RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
-    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
-    REFERENCE_URL_MAX_LENGTH,
+    PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
+    RetrospectDetailResponse, RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams,
+    SearchRetrospectItem, StorageQueryParams, StorageResponse, StorageRetrospectItem,
+    StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    TeamRetrospectListItem, REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -1814,6 +1814,266 @@ impl RetrospectService {
             team_insight,
             emotion_rank,
             personal_missions,
+        })
+    }
+
+    /// 회고 답변 카테고리별 조회 (API-020)
+    pub async fn list_responses(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+        category: ResponseCategory,
+        cursor: Option<i64>,
+        size: i64,
+    ) -> Result<ResponsesListResponse, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            category = %category,
+            cursor = ?cursor,
+            size = size,
+            "회고 답변 카테고리별 조회 요청"
+        );
+
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let _retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
+
+        // 2. 해당 회고의 모든 response 조회 (response_id 오름차순)
+        let all_responses = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(response::Column::ResponseId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if all_responses.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 3. 질문 텍스트 목록 추출 (첫 참여자의 응답 순서 기준으로 질문 순서 결정)
+        //    member_response를 통해 첫 번째 참여자의 응답 세트를 찾고, 질문 순서를 확정
+        let first_member_responses = member_response::Entity::find()
+            .filter(
+                member_response::Column::ResponseId.is_in(
+                    all_responses
+                        .iter()
+                        .map(|r| r.response_id)
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .order_by_asc(member_response::Column::ResponseId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // member_id별로 그룹화하여 첫 번째 멤버의 응답 세트 확인
+        let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
+        for mr in &first_member_responses {
+            member_response_map
+                .entry(mr.member_id)
+                .or_default()
+                .push(mr.response_id);
+        }
+
+        // 첫 번째 멤버의 응답 ID 목록 (오름차순 정렬됨)
+        let first_member_id = member_response_map.keys().min().copied();
+        let question_response_ids: Vec<i64> = first_member_id
+            .and_then(|mid| member_response_map.get(&mid))
+            .cloned()
+            .unwrap_or_default();
+
+        // 질문 텍스트 순서를 response_id 순으로 매핑
+        let response_map: HashMap<i64, &response::Model> =
+            all_responses.iter().map(|r| (r.response_id, r)).collect();
+
+        let question_texts: Vec<String> = question_response_ids
+            .iter()
+            .filter_map(|rid| response_map.get(rid).map(|r| r.question.clone()))
+            .collect();
+
+        // 4. 카테고리에 따른 대상 응답 ID 필터링
+        let target_response_ids: Vec<i64> = match category.question_index() {
+            Some(idx) => {
+                // 특정 질문에 대한 답변만 필터링
+                if idx >= question_texts.len() {
+                    // 해당 질문 번호가 없으면 빈 결과 반환
+                    return Ok(ResponsesListResponse {
+                        responses: vec![],
+                        has_next: false,
+                        next_cursor: None,
+                    });
+                }
+                let target_question = &question_texts[idx];
+                all_responses
+                    .iter()
+                    .filter(|r| &r.question == target_question)
+                    .map(|r| r.response_id)
+                    .collect()
+            }
+            None => {
+                // ALL: 모든 응답
+                all_responses.iter().map(|r| r.response_id).collect()
+            }
+        };
+
+        if target_response_ids.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 5. 공백만 있는 빈 답변 필터링 (content가 비어있거나 공백만인 응답 제외)
+        let valid_response_ids: Vec<i64> = target_response_ids
+            .iter()
+            .filter(|rid| {
+                response_map
+                    .get(rid)
+                    .map(|r| !r.content.trim().is_empty())
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
+
+        if valid_response_ids.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 6. 커서 기반 페이지네이션 (response_id 내림차순)
+        let mut query = response::Entity::find()
+            .filter(response::Column::ResponseId.is_in(valid_response_ids))
+            .order_by_desc(response::Column::ResponseId);
+
+        if let Some(cursor_id) = cursor {
+            query = query.filter(response::Column::ResponseId.lt(cursor_id));
+        }
+
+        // size + 1개 조회하여 다음 페이지 존재 여부 확인
+        let fetched = query
+            .limit(Some((size + 1) as u64))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let has_next = fetched.len() as i64 > size;
+        let page_responses: Vec<&response::Model> = fetched.iter().take(size as usize).collect();
+
+        // 빈 페이지인 경우 즉시 빈 응답 반환 (이후 is_in([]) 쿼리 방지)
+        if page_responses.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 7. 응답에 대한 member 정보 조회 (member_response -> member)
+        let page_response_ids: Vec<i64> = page_responses.iter().map(|r| r.response_id).collect();
+
+        let member_responses_for_page = member_response::Entity::find()
+            .filter(member_response::Column::ResponseId.is_in(page_response_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let response_to_member: HashMap<i64, i64> = member_responses_for_page
+            .iter()
+            .map(|mr| (mr.response_id, mr.member_id))
+            .collect();
+
+        let member_ids: Vec<i64> = response_to_member
+            .values()
+            .copied()
+            .collect::<HashSet<i64>>()
+            .into_iter()
+            .collect();
+
+        let members = member::Entity::find()
+            .filter(member::Column::MemberId.is_in(member_ids))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let member_map: HashMap<i64, &member::Model> =
+            members.iter().map(|m| (m.member_id, m)).collect();
+
+        // 8. 좋아요 수 집계
+        let like_counts: Vec<(i64, i64)> = response_like::Entity::find()
+            .filter(response_like::Column::ResponseId.is_in(page_response_ids.clone()))
+            .select_only()
+            .column(response_like::Column::ResponseId)
+            .column_as(response_like::Column::ResponseLikeId.count(), "count")
+            .group_by(response_like::Column::ResponseId)
+            .into_tuple()
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let like_count_map: HashMap<i64, i64> = like_counts.into_iter().collect();
+
+        // 9. 댓글 수 집계
+        let comment_counts: Vec<(i64, i64)> = response_comment::Entity::find()
+            .filter(response_comment::Column::ResponseId.is_in(page_response_ids.clone()))
+            .select_only()
+            .column(response_comment::Column::ResponseId)
+            .column_as(response_comment::Column::ResponseCommentId.count(), "count")
+            .group_by(response_comment::Column::ResponseId)
+            .into_tuple()
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let comment_count_map: HashMap<i64, i64> = comment_counts.into_iter().collect();
+
+        // 10. DTO 변환
+        let response_items: Vec<ResponseListItem> = page_responses
+            .iter()
+            .map(|r| {
+                let member_id = response_to_member.get(&r.response_id).copied();
+                let user_name = member_id
+                    .and_then(|mid| member_map.get(&mid))
+                    .map(|m| m.nickname.clone())
+                    .unwrap_or_default();
+
+                ResponseListItem {
+                    response_id: r.response_id,
+                    user_name,
+                    content: r.content.clone(),
+                    like_count: like_count_map.get(&r.response_id).copied().unwrap_or(0),
+                    comment_count: comment_count_map.get(&r.response_id).copied().unwrap_or(0),
+                }
+            })
+            .collect();
+
+        // 11. 다음 커서 계산
+        let next_cursor = if has_next {
+            response_items.last().map(|r| r.response_id)
+        } else {
+            None
+        };
+
+        info!(
+            retrospect_id = retrospect_id,
+            category = %category,
+            response_count = response_items.len(),
+            has_next = has_next,
+            "회고 답변 카테고리별 조회 완료"
+        );
+
+        Ok(ResponsesListResponse {
+            responses: response_items,
+            has_next,
+            next_cursor,
         })
     }
 }
