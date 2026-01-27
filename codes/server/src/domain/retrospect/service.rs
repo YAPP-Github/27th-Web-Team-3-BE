@@ -142,7 +142,8 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
+        let room =
+            room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
 
         // 3. 만료 체크 (7일)
         let now = Utc::now().naive_utc();
@@ -233,7 +234,34 @@ impl RetrospectService {
             ));
         }
 
-        // 사용자가 참여 중인 룸 ID 목록 조회
+        // 요청된 룸 ID 목록
+        let requested_room_ids: Vec<i64> = req
+            .retro_room_orders
+            .iter()
+            .map(|o| o.retro_room_id)
+            .collect();
+
+        // 1. 요청된 모든 룸이 실제로 존재하는지 확인 (RETRO4041)
+        let existing_rooms = RetroRoom::find()
+            .filter(retro_room::Column::RetrospectRoomId.is_in(requested_room_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let existing_room_ids: HashSet<i64> = existing_rooms
+            .iter()
+            .map(|r| r.retrospect_room_id)
+            .collect();
+
+        for room_id in &requested_room_ids {
+            if !existing_room_ids.contains(room_id) {
+                return Err(AppError::RetroRoomNotFound(
+                    "존재하지 않는 회고방 정보가 포함되어 있습니다.".into(),
+                ));
+            }
+        }
+
+        // 2. 사용자가 참여 중인 룸 ID 목록 조회
         let member_rooms = MemberRetroRoom::find()
             .filter(member_retro_room::Column::MemberId.eq(member_id))
             .all(&state.db)
@@ -245,7 +273,7 @@ impl RetrospectService {
             .map(|mr| mr.retrospect_room_id)
             .collect();
 
-        // 요청된 모든 룸이 사용자가 참여 중인 룸인지 확인
+        // 3. 요청된 모든 룸이 사용자가 참여 중인 룸인지 확인 (RETRO4031)
         for order_item in &req.retro_room_orders {
             if !member_room_ids.contains(&order_item.retro_room_id) {
                 return Err(AppError::NoPermission(
@@ -298,9 +326,10 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
+        let room =
+            room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
 
-        // 2. Owner 권한 확인
+        // 2. 멤버십 및 Owner 권한 확인
         let member_room = MemberRetroRoom::find()
             .filter(member_retro_room::Column::MemberId.eq(member_id))
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
@@ -308,9 +337,12 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let member_room =
-            member_room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
+        // 멤버가 아닌 경우 403 (RETRO4031)
+        let member_room = member_room.ok_or_else(|| {
+            AppError::NoRoomPermission("회고방 이름을 변경할 권한이 없습니다.".into())
+        })?;
 
+        // Owner가 아닌 경우 403 (RETRO4031)
         if member_room.role != RoomRole::Owner {
             return Err(AppError::NoRoomPermission(
                 "회고방 이름을 변경할 권한이 없습니다.".into(),
@@ -364,9 +396,10 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
+        let room =
+            room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
 
-        // 2. Owner 권한 확인
+        // 2. 멤버십 및 Owner 권한 확인
         let member_room = MemberRetroRoom::find()
             .filter(member_retro_room::Column::MemberId.eq(member_id))
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
@@ -374,9 +407,11 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let member_room =
-            member_room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
+        // 멤버가 아닌 경우 403 (RETRO4031)
+        let member_room = member_room
+            .ok_or_else(|| AppError::NoPermission("회고방을 삭제할 권한이 없습니다.".into()))?;
 
+        // Owner가 아닌 경우 403 (RETRO4031)
         if member_room.role != RoomRole::Owner {
             return Err(AppError::NoPermission(
                 "회고방을 삭제할 권한이 없습니다.".into(),
@@ -409,7 +444,9 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         if room.is_none() {
-            return Err(AppError::NotFound("존재하지 않는 회고방입니다.".into()));
+            return Err(AppError::RetroRoomNotFound(
+                "존재하지 않는 회고방입니다.".into(),
+            ));
         }
 
         // 2. 사용자 권한 확인 (멤버인지)
@@ -464,7 +501,11 @@ impl RetrospectService {
             let code = &invite_url[pos..];
             // INV-XXXX-XXXX 형식 (13자)
             if code.len() >= 13 {
-                return Ok(code[..13].to_string());
+                let extracted = &code[..13];
+                // 형식 검증: INV-XXXX-XXXX (숫자 4자리-숫자 4자리)
+                if Self::is_valid_invite_code(extracted) {
+                    return Ok(extracted.to_string());
+                }
             }
         }
 
@@ -474,13 +515,39 @@ impl RetrospectService {
             let code_end = after_code.find('&').unwrap_or(after_code.len());
             let code = &after_code[..code_end];
             if !code.is_empty() {
-                return Ok(code.to_string());
+                // 형식 검증: INV-XXXX-XXXX
+                if Self::is_valid_invite_code(code) {
+                    return Ok(code.to_string());
+                }
+                // code= 값이 있지만 형식이 잘못된 경우
+                return Err(AppError::InvalidInviteLink(
+                    "유효하지 않은 초대 링크입니다.".into(),
+                ));
             }
         }
 
         Err(AppError::InvalidInviteLink(
             "유효하지 않은 초대 링크입니다.".into(),
         ))
+    }
+
+    /// 초대 코드 형식 검증 (INV-XXXX-XXXX, X는 영문자 또는 숫자)
+    fn is_valid_invite_code(code: &str) -> bool {
+        if code.len() != 13 {
+            return false;
+        }
+        let parts: Vec<&str> = code.split('-').collect();
+        if parts.len() != 3 {
+            return false;
+        }
+        if parts[0] != "INV" {
+            return false;
+        }
+        // 영문자 또는 숫자 4자리 검증
+        parts[1].len() == 4
+            && parts[1].chars().all(|c| c.is_ascii_alphanumeric())
+            && parts[2].len() == 4
+            && parts[2].chars().all(|c| c.is_ascii_alphanumeric())
     }
 
     // ============================================

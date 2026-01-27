@@ -57,7 +57,10 @@ pub async fn create_retro_room(
 
     let result = RetrospectService::create_retro_room(state, member_id, req).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 생성에 성공하였습니다.",
+    )))
 }
 
 /// 회고 룸 참여 API (초대 코드)
@@ -89,7 +92,10 @@ pub async fn join_retro_room(
 
     let result = RetrospectService::join_retro_room(state, member_id, req).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 참여에 성공하였습니다.",
+    )))
 }
 
 /// API-006: 참여 중인 레트로룸 목록 조회
@@ -113,7 +119,10 @@ pub async fn list_retro_rooms(
 
     let result = RetrospectService::list_retro_rooms(state, member_id).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "참여 중인 회고방 목록 조회를 성공했습니다.",
+    )))
 }
 
 /// API-007: 레트로룸 순서 변경
@@ -143,7 +152,10 @@ pub async fn update_retro_room_order(
 
     RetrospectService::update_retro_room_order(state, member_id, req).await?;
 
-    Ok(Json(BaseResponse::success(())))
+    Ok(Json(BaseResponse::success_with_message(
+        (),
+        "회고방 순서가 성공적으로 변경되었습니다.",
+    )))
 }
 
 /// API-008: 레트로룸 이름 변경
@@ -180,7 +192,10 @@ pub async fn update_retro_room_name(
     let result =
         RetrospectService::update_retro_room_name(state, member_id, retro_room_id, req).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 이름 변경에 성공하였습니다.",
+    )))
 }
 
 /// API-009: 레트로룸 삭제
@@ -210,7 +225,10 @@ pub async fn delete_retro_room(
 
     let result = RetrospectService::delete_retro_room(state, member_id, retro_room_id).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 삭제에 성공하였습니다.",
+    )))
 }
 
 /// API-010: 레트로룸 내 회고 목록 조회
@@ -240,7 +258,10 @@ pub async fn list_retrospects(
 
     let result = RetrospectService::list_retrospects(state, member_id, retro_room_id).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 내 전체 회고 목록 조회를 성공했습니다.",
+    )))
 }
 
 // ============================================
