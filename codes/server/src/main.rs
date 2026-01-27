@@ -1,31 +1,33 @@
 mod config;
 mod domain;
-mod utils;
 mod state;
+mod utils;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use utoipa::openapi::security::{SecurityScheme, HttpAuthScheme, Http};
 
 use crate::config::AppConfig;
-use crate::utils::{BaseResponse, ErrorResponse};
+use crate::domain::auth::dto::{
+    EmailLoginRequest, EmailLoginResponse, SignupRequest, SignupResponse, SocialLoginRequest,
+    SocialLoginResponse, SuccessEmailLoginResponse, SuccessSignupResponse,
+    SuccessSocialLoginResponse,
+};
 use crate::state::AppState;
-use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, SuccessLoginResponse};
+use crate::utils::{BaseResponse, ErrorResponse};
 
 /// OpenAPI 문서 정의
 #[derive(OpenApi)]
 #[openapi(
     paths(
         health_check,
-        domain::auth::handler::login,
+        domain::auth::handler::social_login,
+        domain::auth::handler::signup,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test
     ),
@@ -34,10 +36,15 @@ use crate::domain::auth::dto::{LoginRequest, LoginResponse, EmailLoginRequest, S
             ErrorResponse,
             HealthResponse,
             SuccessHealthResponse,
-            LoginRequest,
-            LoginResponse,
+            SocialLoginRequest,
+            SocialLoginResponse,
+            SuccessSocialLoginResponse,
+            SignupRequest,
+            SignupResponse,
+            SuccessSignupResponse,
             EmailLoginRequest,
-            SuccessLoginResponse
+            EmailLoginResponse,
+            SuccessEmailLoginResponse
         )
     ),
     tags(
@@ -60,9 +67,7 @@ impl utoipa::Modify for SecurityAddon {
         if let Some(components) = openapi.components.as_mut() {
             components.add_security_scheme(
                 "bearer_auth",
-                SecurityScheme::Http(
-                    Http::new(HttpAuthScheme::Bearer)
-                ),
+                SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
             )
         }
     }
@@ -90,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = crate::config::establish_connection(&database_url).await?;
 
     // 애플리케이션 상태 생성
-    let app_state = AppState { 
+    let app_state = AppState {
         db,
         config: config.clone(),
     };
@@ -104,9 +109,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 라우터 구성
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/api/auth/login", axum::routing::post(domain::auth::handler::login))
-        .route("/api/auth/login/email", axum::routing::post(domain::auth::handler::login_by_email))
-        .route("/api/auth/test", axum::routing::get(domain::auth::handler::auth_test))
+        // [API-001] 소셜 로그인
+        .route(
+            "/api/v1/auth/social-login",
+            axum::routing::post(domain::auth::handler::social_login),
+        )
+        // [API-002] 회원가입
+        .route(
+            "/api/v1/auth/signup",
+            axum::routing::post(domain::auth::handler::signup),
+        )
+        // 테스트/개발용 API
+        .route(
+            "/api/auth/login/email",
+            axum::routing::post(domain::auth::handler::login_by_email),
+        )
+        .route(
+            "/api/auth/test",
+            axum::routing::get(domain::auth::handler::auth_test),
+        )
+        // 하위 호환성을 위한 구 엔드포인트 (deprecated)
+        .route(
+            "/api/auth/login",
+            axum::routing::post(domain::auth::handler::login),
+        )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

@@ -2,7 +2,9 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, ToSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, ToSchema,
+)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "SocialType")]
 pub enum SocialType {
     #[sea_orm(string_value = "KAKAO")]
@@ -17,6 +19,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub member_id: i64,
     pub email: String,
+    pub nickname: Option<String>,
     pub insight_count: i32,
     #[sea_orm(column_name = "SocialType")]
     pub social_type: SocialType,

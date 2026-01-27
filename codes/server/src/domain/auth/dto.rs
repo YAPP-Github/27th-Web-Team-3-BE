@@ -1,17 +1,69 @@
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 use utoipa::ToSchema;
+use validator::Validate;
 
 use crate::domain::member::entity::member::SocialType;
 
+/// [API-001] 소셜 로그인 요청 DTO
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct LoginRequest {
-    pub social_type: SocialType, // JSON string "KAKAO" or "GOOGLE"
-    
-    #[validate(length(min = 1))]
-    pub token: String, // Access Token from Provider or ID Token
+pub struct SocialLoginRequest {
+    /// 소셜 서비스 구분 (GOOGLE, KAKAO)
+    pub provider: SocialType,
+
+    /// 소셜 서비스에서 발급받은 Access Token
+    #[validate(length(min = 1, message = "accessToken은 필수입니다"))]
+    pub access_token: String,
 }
+
+/// [API-001] 소셜 로그인 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SocialLoginResponse {
+    /// 신규 회원 여부
+    pub is_new_member: bool,
+    /// 서비스 Access Token (기존 회원인 경우)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>,
+    /// 서비스 Refresh Token (기존 회원인 경우)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+    /// 소셜 계정 이메일 (신규 회원인 경우)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    /// 회원가입용 임시 토큰 (신규 회원인 경우)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signup_token: Option<String>,
+}
+
+/// [API-002] 회원가입 요청 DTO
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SignupRequest {
+    /// 소셜 로그인에서 반환받은 이메일
+    #[validate(email(message = "이메일 형식이 올바르지 않습니다"))]
+    pub email: String,
+
+    /// 사용자 닉네임 (1~20자, 특수문자 제외)
+    #[validate(length(min = 1, max = 20, message = "닉네임은 1~20자 이내로 입력해야 합니다"))]
+    pub nickname: String,
+}
+
+/// [API-002] 회원가입 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SignupResponse {
+    /// 생성된 회원 ID
+    pub member_id: i64,
+    /// 설정된 닉네임
+    pub nickname: String,
+    /// 서비스 Access Token
+    pub access_token: String,
+    /// 서비스 Refresh Token
+    pub refresh_token: String,
+}
+
+// --- 이메일 로그인 (테스트용) ---
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -22,23 +74,56 @@ pub struct EmailLoginRequest {
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct LoginResponse {
+pub struct EmailLoginResponse {
     pub is_new_member: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub signup_token: Option<String>,
 }
 
+// --- Swagger용 래핑 DTO ---
+
+/// 소셜 로그인 성공 응답 (Swagger용)
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SuccessLoginResponse {
+pub struct SuccessSocialLoginResponse {
     pub is_success: bool,
     pub code: String,
     pub message: String,
-    pub result: LoginResponse,
+    pub result: SocialLoginResponse,
 }
+
+/// 회원가입 성공 응답 (Swagger용)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessSignupResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: SignupResponse,
+}
+
+/// 이메일 로그인 성공 응답 (Swagger용)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessEmailLoginResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: EmailLoginResponse,
+}
+
+// --- 하위 호환성을 위한 별칭 ---
+
+/// LoginRequest 별칭 (하위 호환성)
+#[allow(dead_code)]
+pub type LoginRequest = SocialLoginRequest;
+
+/// LoginResponse 별칭 (하위 호환성)
+#[allow(dead_code)]
+pub type LoginResponse = SocialLoginResponse;
+
+/// SuccessLoginResponse 별칭 (하위 호환성)
+#[allow(dead_code)]
+pub type SuccessLoginResponse = SuccessSocialLoginResponse;

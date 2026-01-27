@@ -31,6 +31,15 @@ pub enum AppError {
 
     /// COMMON403: 권한 없음 (403)
     Forbidden(String),
+
+    /// AUTH4002: 유효하지 않은 소셜 토큰 (401)
+    SocialAuthFailed(String),
+
+    /// MEMBER4091: 리소스 충돌 (409)
+    Conflict(String),
+
+    /// MEMBER4041: 리소스 없음 (404)
+    NotFound(String),
 }
 
 impl AppError {
@@ -41,8 +50,11 @@ impl AppError {
             AppError::ValidationError(msg) => format!("잘못된 요청입니다: {}", msg),
             AppError::InternalError(_) => "서버 에러, 관리자에게 문의 바랍니다.".to_string(),
             AppError::JsonParseFailed(msg) => format!("JSON 파싱 실패: {}", msg),
-            AppError::Unauthorized(msg) => format!("인증 실패: {}", msg),
+            AppError::Unauthorized(msg) => msg.clone(),
             AppError::Forbidden(msg) => format!("권한 없음: {}", msg),
+            AppError::SocialAuthFailed(msg) => msg.clone(),
+            AppError::Conflict(msg) => msg.clone(),
+            AppError::NotFound(msg) => msg.clone(),
         }
     }
 
@@ -53,8 +65,11 @@ impl AppError {
             AppError::ValidationError(_) => "COMMON400",
             AppError::InternalError(_) => "COMMON500",
             AppError::JsonParseFailed(_) => "COMMON400",
-            AppError::Unauthorized(_) => "COMMON401",
+            AppError::Unauthorized(_) => "AUTH4001",
             AppError::Forbidden(_) => "COMMON403",
+            AppError::SocialAuthFailed(_) => "AUTH4002",
+            AppError::Conflict(_) => "MEMBER4091",
+            AppError::NotFound(_) => "MEMBER4041",
         }
     }
 
@@ -67,6 +82,9 @@ impl AppError {
             AppError::JsonParseFailed(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::SocialAuthFailed(_) => StatusCode::UNAUTHORIZED,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
         }
     }
 }
