@@ -68,6 +68,7 @@ pub enum ConfigError {
     InvalidPort,
     #[error("Invalid expiration time")]
     InvalidExpiration,
+    #[allow(dead_code)]
     #[error("JWT_SECRET environment variable is required in production")]
     MissingJwtSecret,
 }
