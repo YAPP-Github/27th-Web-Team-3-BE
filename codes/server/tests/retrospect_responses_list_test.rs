@@ -104,8 +104,9 @@ mod responses_test_helpers {
 
             // cursor 검증
             if let Some(cursor_str) = params.get("cursor") {
-                if let Ok(cursor) = cursor_str.parse::<i64>() {
-                    if cursor < 1 {
+                let cursor = match cursor_str.parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => {
                         return Err((
                             StatusCode::BAD_REQUEST,
                             axum::Json(json!({
@@ -116,13 +117,25 @@ mod responses_test_helpers {
                             })),
                         ));
                     }
+                };
+                if cursor < 1 {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        axum::Json(json!({
+                            "isSuccess": false,
+                            "code": "COMMON400",
+                            "message": "cursor는 1 이상의 양수여야 합니다.",
+                            "result": null
+                        })),
+                    ));
                 }
             }
 
             // size 검증
             if let Some(size_str) = params.get("size") {
-                if let Ok(size) = size_str.parse::<i64>() {
-                    if !(1..=100).contains(&size) {
+                let size = match size_str.parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => {
                         return Err((
                             StatusCode::BAD_REQUEST,
                             axum::Json(json!({
@@ -133,6 +146,17 @@ mod responses_test_helpers {
                             })),
                         ));
                     }
+                };
+                if !(1..=100).contains(&size) {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        axum::Json(json!({
+                            "isSuccess": false,
+                            "code": "COMMON400",
+                            "message": "size는 1~100 범위의 정수여야 합니다.",
+                            "result": null
+                        })),
+                    ));
                 }
             }
 
