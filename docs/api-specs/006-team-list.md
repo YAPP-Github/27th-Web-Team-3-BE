@@ -1,13 +1,13 @@
 # [API-006] GET /api/v1/retro-rooms
 
-참여 레트로룸 목록 조회 API
+참여 팀 목록 조회 API
 
 ## 개요
 
-현재 로그인한 사용자가 참여 중인 모든 레트로룸 목록을 조회합니다.
+현재 로그인한 사용자가 참여 중인 모든 팀 목록을 조회합니다.
 
 - 사용자가 설정한 정렬 순서(`orderIndex`)가 반영되어 반환됩니다.
-- 참여 중인 레트로룸이 없는 경우 `result`는 빈 배열(`[]`)로 반환됩니다.
+- 참여 중인 팀이 없는 경우 `result`는 빈 배열(`[]`)로 반환됩니다.
 
 ## 버전
 
@@ -45,16 +45,16 @@ GET /api/v1/retro-rooms
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "참여 중인 레트로룸 목록 조회를 성공했습니다.",
+  "message": "참여 중인 팀 목록 조회를 성공했습니다.",
   "result": [
     {
       "retroRoomId": 789,
-      "retroRoomName": "가장 먼저 만든 레트로룸",
+      "retroRoomName": "가장 먼저 만든 팀",
       "orderIndex": 1
     },
     {
       "retroRoomId": 456,
-      "retroRoomName": "두 번째로 만든 레트로룸",
+      "retroRoomName": "두 번째로 만든 팀",
       "orderIndex": 2
     }
   ]
@@ -65,8 +65,8 @@ GET /api/v1/retro-rooms
 
 | Field | Type | Description |
 |-------|------|-------------|
-| retroRoomId | long | 레트로룸 고유 식별자 |
-| retroRoomName | string | 레트로룸 이름 |
+| retroRoomId | long | 팀 고유 식별자 |
+| retroRoomName | string | 팀 이름 |
 | orderIndex | integer | 정렬 순서 (1부터 시작, 낮을수록 상단에 노출) |
 
 > **정렬 순서**: 응답 배열은 `orderIndex` 기준 **오름차순**으로 정렬되어 반환됩니다.
@@ -77,7 +77,7 @@ GET /api/v1/retro-rooms
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "참여 중인 레트로룸 목록 조회를 성공했습니다.",
+  "message": "참여 중인 팀 목록 조회를 성공했습니다.",
   "result": []
 }
 ```
