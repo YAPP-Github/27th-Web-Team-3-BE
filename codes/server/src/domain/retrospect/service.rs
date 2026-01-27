@@ -1303,12 +1303,16 @@ impl RetrospectService {
             })?;
 
         // 2. response -> retrospect -> team 경로로 팀 정보 조회
+        // retrospect가 없으면 데이터 정합성 문제이므로 InternalError 처리
         let retrospect_model = retrospect::Entity::find_by_id(response_model.retrospect_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| {
-                AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
+                AppError::InternalError(format!(
+                    "데이터 정합성 오류: response_id={}에 연결된 retrospect_id={}가 존재하지 않습니다.",
+                    response_id, response_model.retrospect_id
+                ))
             })?;
 
         // 3. 팀 멤버십 확인
@@ -1386,10 +1390,7 @@ impl RetrospectService {
         // member_id -> nickname 매핑
         let member_map: HashMap<i64, String> = members
             .into_iter()
-            .map(|m| {
-                let nickname = m.email.split('@').next().unwrap_or(&m.email).to_string();
-                (m.member_id, nickname)
-            })
+            .map(|m| (m.member_id, m.nickname.clone()))
             .collect();
 
         // 5. DTO 변환
@@ -1428,7 +1429,14 @@ impl RetrospectService {
         response_id: i64,
         req: CreateCommentRequest,
     ) -> Result<CreateCommentResponse, AppError> {
-        // 1. 댓글 길이 검증 (200자 초과 시 RES4001)
+        // 1. 댓글 내용 검증
+        // 공백만 있는 댓글 차단
+        if req.content.trim().is_empty() {
+            return Err(AppError::BadRequest(
+                "댓글 내용은 공백만으로 구성될 수 없습니다.".to_string(),
+            ));
+        }
+        // 200자 초과 시 RES4001
         if req.content.chars().count() > 200 {
             return Err(AppError::CommentTooLong(
                 "댓글은 최대 200자까지만 입력 가능합니다.".to_string(),
