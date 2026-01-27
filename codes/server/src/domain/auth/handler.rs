@@ -3,7 +3,10 @@ use utoipa;
 use validator::Validate;
 
 #[allow(unused_imports)]
-use super::dto::{EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse};
+use super::dto::{
+    EmailLoginRequest, LoginRequest, LoginResponse, LogoutRequest, SuccessLoginResponse,
+    SuccessLogoutResponse, SuccessTokenRefreshResponse, TokenRefreshRequest, TokenRefreshResponse,
+};
 use super::service::AuthService;
 use crate::state::AppState;
 use crate::utils::auth::AuthUser;
@@ -76,6 +79,55 @@ pub async fn login(
     req.validate()?;
 
     let result = AuthService::login(state, req).await?;
+
+    Ok(Json(BaseResponse::success(result)))
+}
+
+/// 로그아웃
+///
+/// Refresh Token을 무효화하여 로그아웃 처리합니다.
+#[utoipa::path(
+    post,
+    path = "/api/auth/logout",
+    request_body = LogoutRequest,
+    responses(
+        (status = 200, description = "로그아웃 성공", body = SuccessLogoutResponse),
+        (status = 401, description = "유효하지 않은 토큰", body = ErrorResponse)
+    ),
+    tag = "Auth"
+)]
+pub async fn logout(
+    State(state): State<AppState>,
+    Json(req): Json<LogoutRequest>,
+) -> Result<Json<BaseResponse<()>>, AppError> {
+    req.validate()?;
+
+    AuthService::logout(state, req).await?;
+
+    Ok(Json(BaseResponse::success(())))
+}
+
+/// 토큰 갱신
+///
+/// Refresh Token을 사용하여 새로운 Access Token과 Refresh Token을 발급받습니다.
+/// Refresh Token Rotation이 적용되어 기존 Refresh Token은 무효화됩니다.
+#[utoipa::path(
+    post,
+    path = "/api/auth/refresh",
+    request_body = TokenRefreshRequest,
+    responses(
+        (status = 200, description = "토큰 갱신 성공", body = SuccessTokenRefreshResponse),
+        (status = 401, description = "유효하지 않은 토큰", body = ErrorResponse)
+    ),
+    tag = "Auth"
+)]
+pub async fn refresh(
+    State(state): State<AppState>,
+    Json(req): Json<TokenRefreshRequest>,
+) -> Result<Json<BaseResponse<TokenRefreshResponse>>, AppError> {
+    req.validate()?;
+
+    let result = AuthService::refresh(state, req).await?;
 
     Ok(Json(BaseResponse::success(result)))
 }

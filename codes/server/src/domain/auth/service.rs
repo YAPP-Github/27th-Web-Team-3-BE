@@ -1,14 +1,18 @@
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use reqwest::Client;
 use sea_orm::*;
 
-use super::dto::{EmailLoginRequest, LoginRequest, LoginResponse};
+use super::dto::{
+    EmailLoginRequest, LoginRequest, LoginResponse, LogoutRequest, TokenRefreshRequest,
+    TokenRefreshResponse,
+};
 use crate::domain::member::entity::member::{
     self, Entity as Member, Model as MemberModel, SocialType,
 };
+use crate::domain::member::entity::refresh_token::{self, Entity as RefreshToken};
 use crate::state::AppState;
 use crate::utils::error::AppError;
-use crate::utils::jwt::encode_token;
+use crate::utils::jwt::{decode_refresh_token, encode_access_token, encode_refresh_token};
 
 pub struct AuthService;
 
@@ -33,15 +37,26 @@ impl AuthService {
         let member =
             member.ok_or_else(|| AppError::Unauthorized("존재하지 않는 사용자입니다.".into()))?;
 
-        // JWT 발급
-        let token = encode_token(
+        // Access Token 발급
+        let access_token = encode_access_token(
             member.member_id.to_string(),
             &state.config.jwt_secret,
             state.config.jwt_expiration,
         )?;
 
+        // Refresh Token 발급
+        let refresh_token_str = encode_refresh_token(
+            member.member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
+        // Refresh Token DB 저장
+        Self::store_refresh_token(&state.db, member.member_id, &refresh_token_str, state.config.refresh_token_expiration).await?;
+
         Ok(LoginResponse {
-            access_token: token,
+            access_token,
+            refresh_token: refresh_token_str,
             token_type: "Bearer".to_string(),
             expires_in: state.config.jwt_expiration,
         })
@@ -70,15 +85,26 @@ impl AuthService {
             }
         };
 
-        // 4. JWT 발급
-        let token = encode_token(
+        // 4. Access Token 발급
+        let access_token = encode_access_token(
             member.member_id.to_string(),
             &state.config.jwt_secret,
             state.config.jwt_expiration,
         )?;
 
+        // 5. Refresh Token 발급
+        let refresh_token_str = encode_refresh_token(
+            member.member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
+        // 6. Refresh Token DB 저장
+        Self::store_refresh_token(&state.db, member.member_id, &refresh_token_str, state.config.refresh_token_expiration).await?;
+
         Ok(LoginResponse {
-            access_token: token,
+            access_token,
+            refresh_token: refresh_token_str,
             token_type: "Bearer".to_string(),
             expires_in: state.config.jwt_expiration,
         })
@@ -136,6 +162,119 @@ impl AuthService {
             .to_string();
 
         Ok(SocialUserInfo { email })
+    }
+
+    /// Refresh Token을 DB에 저장
+    async fn store_refresh_token(
+        db: &DatabaseConnection,
+        member_id: i64,
+        token: &str,
+        expiration_seconds: i64,
+    ) -> Result<(), AppError> {
+        let expires_at = Utc::now()
+            .checked_add_signed(Duration::seconds(expiration_seconds))
+            .expect("valid timestamp")
+            .naive_utc();
+
+        let active_model = refresh_token::ActiveModel {
+            member_id: Set(member_id),
+            token: Set(token.to_string()),
+            expires_at: Set(expires_at),
+            created_at: Set(Utc::now().naive_utc()),
+            ..Default::default()
+        };
+
+        active_model
+            .insert(db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("Refresh Token 저장 실패: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// 로그아웃 - Refresh Token 삭제
+    pub async fn logout(state: AppState, req: LogoutRequest) -> Result<(), AppError> {
+        // 1. Refresh Token 검증
+        let _claims = decode_refresh_token(&req.refresh_token, &state.config.jwt_secret)?;
+
+        // 2. DB에서 해당 Refresh Token 삭제
+        let delete_result = RefreshToken::delete_many()
+            .filter(refresh_token::Column::Token.eq(&req.refresh_token))
+            .exec(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("Refresh Token 삭제 실패: {}", e)))?;
+
+        if delete_result.rows_affected == 0 {
+            return Err(AppError::Unauthorized(
+                "유효하지 않은 리프레시 토큰입니다.".into(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// 토큰 갱신 - Refresh Token으로 새 Access Token 발급
+    pub async fn refresh(
+        state: AppState,
+        req: TokenRefreshRequest,
+    ) -> Result<TokenRefreshResponse, AppError> {
+        // 1. Refresh Token JWT 검증
+        let claims = decode_refresh_token(&req.refresh_token, &state.config.jwt_secret)?;
+
+        // 2. DB에서 해당 Refresh Token 존재 확인
+        let stored_token = RefreshToken::find()
+            .filter(refresh_token::Column::Token.eq(&req.refresh_token))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let stored_token = stored_token.ok_or_else(|| {
+            AppError::Unauthorized("유효하지 않은 리프레시 토큰입니다.".into())
+        })?;
+
+        // 3. 만료 시간 확인
+        if stored_token.expires_at < Utc::now().naive_utc() {
+            // 만료된 토큰 삭제
+            RefreshToken::delete_by_id(stored_token.refresh_token_id)
+                .exec(&state.db)
+                .await
+                .ok();
+            return Err(AppError::Unauthorized("리프레시 토큰이 만료되었습니다.".into()));
+        }
+
+        // 4. 기존 Refresh Token 삭제
+        RefreshToken::delete_by_id(stored_token.refresh_token_id)
+            .exec(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("Refresh Token 삭제 실패: {}", e)))?;
+
+        // 5. 새 Access Token 발급
+        let new_access_token = encode_access_token(
+            claims.sub.clone(),
+            &state.config.jwt_secret,
+            state.config.jwt_expiration,
+        )?;
+
+        // 6. 새 Refresh Token 발급 (Rotation)
+        let new_refresh_token = encode_refresh_token(
+            claims.sub,
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
+        // 7. 새 Refresh Token DB 저장
+        Self::store_refresh_token(
+            &state.db,
+            stored_token.member_id,
+            &new_refresh_token,
+            state.config.refresh_token_expiration,
+        )
+        .await?;
+
+        Ok(TokenRefreshResponse {
+            access_token: new_access_token,
+            refresh_token: new_refresh_token,
+        })
     }
 
     async fn register(

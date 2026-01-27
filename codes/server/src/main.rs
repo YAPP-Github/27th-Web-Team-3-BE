@@ -14,7 +14,8 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AppConfig;
 use crate::domain::auth::dto::{
-    EmailLoginRequest, LoginRequest, LoginResponse, SuccessLoginResponse,
+    EmailLoginRequest, LoginRequest, LoginResponse, LogoutRequest, SuccessLoginResponse,
+    SuccessLogoutResponse, SuccessTokenRefreshResponse, TokenRefreshRequest, TokenRefreshResponse,
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
@@ -40,6 +41,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::auth::handler::login,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
+        domain::auth::handler::logout,
+        domain::auth::handler::refresh,
         domain::retrospect::handler::create_retrospect,
         domain::retrospect::handler::list_team_retrospects,
         domain::retrospect::handler::create_participant,
@@ -59,6 +62,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
             LoginResponse,
             EmailLoginRequest,
             SuccessLoginResponse,
+            LogoutRequest,
+            SuccessLogoutResponse,
+            TokenRefreshRequest,
+            TokenRefreshResponse,
+            SuccessTokenRefreshResponse,
             CreateRetrospectRequest,
             CreateRetrospectResponse,
             SuccessCreateRetrospectResponse,
@@ -172,6 +180,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/auth/test",
             axum::routing::get(domain::auth::handler::auth_test),
+        )
+        .route(
+            "/api/auth/logout",
+            axum::routing::post(domain::auth::handler::logout),
+        )
+        .route(
+            "/api/auth/refresh",
+            axum::routing::post(domain::auth::handler::refresh),
         )
         .route(
             "/api/v1/retrospects",

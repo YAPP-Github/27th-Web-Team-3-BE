@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub server_port: u16,
     pub jwt_secret: String,
     pub jwt_expiration: i64,
+    pub refresh_token_expiration: i64,
 
     // Social Login (향후 소셜 로그인 기능에서 사용)
     pub google_client_id: String,
@@ -38,6 +39,11 @@ impl AppConfig {
             .parse()
             .map_err(|_| ConfigError::InvalidExpiration)?;
 
+        let refresh_token_expiration = env::var("REFRESH_TOKEN_EXPIRATION")
+            .unwrap_or_else(|_| "604800".to_string()) // 기본 7일
+            .parse()
+            .map_err(|_| ConfigError::InvalidExpiration)?;
+
         let google_client_id = env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
         let google_redirect_uri = env::var("GOOGLE_REDIRECT_URI").unwrap_or_default();
         let kakao_client_id = env::var("KAKAO_CLIENT_ID").unwrap_or_default();
@@ -53,6 +59,7 @@ impl AppConfig {
             server_port,
             jwt_secret,
             jwt_expiration,
+            refresh_token_expiration,
             google_client_id,
             google_redirect_uri,
             kakao_client_id,
