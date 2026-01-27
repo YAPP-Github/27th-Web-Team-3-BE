@@ -109,7 +109,7 @@ pub fn encode_signup_token(
     .map_err(|e| AppError::InternalError(format!("Signup token creation failed: {}", e)))
 }
 
-/// JWT 토큰 검증
+/// JWT 토큰 검증 (토큰 타입 무관)
 pub fn decode_token(token: &str, secret: &str) -> Result<Claims, AppError> {
     let validation = Validation::default();
 
@@ -125,6 +125,19 @@ pub fn decode_token(token: &str, secret: &str) -> Result<Claims, AppError> {
         }
         _ => AppError::Unauthorized("유효하지 않은 토큰입니다.".into()),
     })
+}
+
+/// Access Token 전용 검증 (token_type == "access" 확인)
+pub fn decode_access_token(token: &str, secret: &str) -> Result<Claims, AppError> {
+    let claims = decode_token(token, secret)?;
+
+    // token_type이 "access"인지 확인
+    match claims.token_type.as_deref() {
+        Some("access") => Ok(claims),
+        _ => Err(AppError::Unauthorized(
+            "유효하지 않은 액세스 토큰입니다.".into(),
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -147,6 +160,50 @@ mod tests {
     fn test_invalid_token() {
         let secret = "test_secret";
         let result = decode_token("invalid_token", secret);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_access_token_success() {
+        let secret = "test_secret";
+        let sub = "user_123".to_string();
+        let expiration = 3600;
+
+        let token = encode_token(sub.clone(), secret, expiration).expect("Token generation failed");
+        let claims = decode_access_token(&token, secret).expect("Access token validation failed");
+
+        assert_eq!(claims.sub, sub);
+        assert_eq!(claims.token_type, Some("access".to_string()));
+    }
+
+    #[test]
+    fn test_decode_access_token_rejects_refresh_token() {
+        let secret = "test_secret";
+        let sub = "user_123".to_string();
+        let expiration = 3600;
+
+        // Create a refresh token
+        let refresh_token =
+            encode_refresh_token(sub, secret, expiration).expect("Refresh token generation failed");
+
+        // Try to decode it as an access token - should fail
+        let result = decode_access_token(&refresh_token, secret);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_access_token_rejects_signup_token() {
+        let secret = "test_secret";
+        let email = "test@example.com".to_string();
+        let provider = "KAKAO".to_string();
+        let expiration = 600;
+
+        // Create a signup token
+        let signup_token = encode_signup_token(email, provider, secret, expiration)
+            .expect("Signup token generation failed");
+
+        // Try to decode it as an access token - should fail
+        let result = decode_access_token(&signup_token, secret);
         assert!(result.is_err());
     }
 }
