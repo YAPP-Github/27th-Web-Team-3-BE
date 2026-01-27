@@ -67,13 +67,13 @@ pub enum AppError {
     /// RETRO4092: 이미 회고 룸 멤버 (409)
     AlreadyMember(String),
 
-    /// TEAM4004: 잘못된 순서 데이터 (400)
+    /// RETRO4004: 잘못된 순서 데이터 (400)
     InvalidOrderData(String),
 
-    /// TEAM4031: 권한 없음 - 순서/삭제 (403)
+    /// RETRO4031: 권한 없음 - 순서/삭제/이름 변경 (403)
     NoPermission(String),
 
-    /// ROOM4031: 권한 없음 - 이름 변경 (403)
+    /// RETRO4031: 권한 없음 - 이름 변경 (403, NoPermission과 동일 코드)
     NoRoomPermission(String),
 
     // ============== Retrospect 관련 에러 ==============
@@ -86,11 +86,11 @@ pub enum AppError {
     /// RETRO4006: 유효하지 않은 URL 형식 (400)
     RetroUrlInvalid(String),
 
-    /// TEAM4031: 팀 접근 권한 없음 (403)
-    TeamAccessDenied(String),
+    /// RETRO4031: 회고방 접근 권한 없음 (403)
+    RetroRoomAccessDenied(String),
 
-    /// TEAM4041: 존재하지 않는 팀 (404)
-    TeamNotFound(String),
+    /// RETRO4041: 존재하지 않는 회고방 (404)
+    RetroRoomNotFound(String),
 
     /// RETRO4041: 존재하지 않는 회고 (404)
     RetrospectNotFound(String),
@@ -150,8 +150,8 @@ pub enum AppError {
     RetroCategoryInvalid(String),
 
     /// RETRO4031: 회고 삭제 권한 없음 (403)
-    /// TODO: 현재 미사용. retrospects.created_by / member_team.role 스키마 추가 후
-    /// 팀 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
+    /// TODO: 현재 미사용. retrospects.created_by / member_retro_room.role 스키마 추가 후
+    /// 회고방 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
     #[allow(dead_code)]
     RetroDeleteAccessDenied(String),
 }
@@ -185,8 +185,8 @@ impl AppError {
             AppError::RetroProjectNameInvalid(msg) => msg.clone(),
             AppError::RetroMethodInvalid(msg) => msg.clone(),
             AppError::RetroUrlInvalid(msg) => msg.clone(),
-            AppError::TeamAccessDenied(msg) => msg.clone(),
-            AppError::TeamNotFound(msg) => msg.clone(),
+            AppError::RetroRoomAccessDenied(msg) => msg.clone(),
+            AppError::RetroRoomNotFound(msg) => msg.clone(),
             AppError::RetrospectNotFound(msg) => msg.clone(),
             AppError::ParticipantDuplicate(msg) => msg.clone(),
             AppError::RetrospectAlreadyStarted(msg) => msg.clone(),
@@ -231,15 +231,15 @@ impl AppError {
             AppError::RetroRoomNameTooLong(_) => "RETRO4001",
             AppError::RetroRoomNameDuplicate(_) => "RETRO4091",
             AppError::AlreadyMember(_) => "RETRO4092",
-            AppError::InvalidOrderData(_) => "TEAM4004",
-            AppError::NoPermission(_) => "TEAM4031",
-            AppError::NoRoomPermission(_) => "ROOM4031",
+            AppError::InvalidOrderData(_) => "RETRO4004",
+            AppError::NoPermission(_) => "RETRO4031",
+            AppError::NoRoomPermission(_) => "RETRO4031",
             // Retrospect 관련
             AppError::RetroProjectNameInvalid(_) => "RETRO4001",
             AppError::RetroMethodInvalid(_) => "RETRO4005",
             AppError::RetroUrlInvalid(_) => "RETRO4006",
-            AppError::TeamAccessDenied(_) => "TEAM4031",
-            AppError::TeamNotFound(_) => "TEAM4041",
+            AppError::RetroRoomAccessDenied(_) => "RETRO4031",
+            AppError::RetroRoomNotFound(_) => "RETRO4041",
             AppError::RetrospectNotFound(_) => "RETRO4041",
             AppError::ParticipantDuplicate(_) => "RETRO4091",
             AppError::RetrospectAlreadyStarted(_) => "RETRO4002",
@@ -291,8 +291,8 @@ impl AppError {
             AppError::RetroProjectNameInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::RetroMethodInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::RetroUrlInvalid(_) => StatusCode::BAD_REQUEST,
-            AppError::TeamAccessDenied(_) => StatusCode::FORBIDDEN,
-            AppError::TeamNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::RetroRoomAccessDenied(_) => StatusCode::FORBIDDEN,
+            AppError::RetroRoomNotFound(_) => StatusCode::NOT_FOUND,
             AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
             AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
             AppError::RetrospectAlreadyStarted(_) => StatusCode::BAD_REQUEST,

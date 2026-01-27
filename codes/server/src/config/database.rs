@@ -3,7 +3,6 @@ use crate::domain::{
     retrospect::entity::{
         response, response_comment, response_like, retro_reference, retro_room, retrospect,
     },
-    team::entity::{member_team, team},
 };
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr, Schema, Statement};
 use std::env;
@@ -46,11 +45,9 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
     // 1. Independent Entities
     create_table_if_not_exists(db, &schema, member::Entity).await?;
     create_table_if_not_exists(db, &schema, retro_room::Entity).await?;
-    create_table_if_not_exists(db, &schema, team::Entity).await?;
 
     // 2. Dependent Entities (Level 1)
     create_table_if_not_exists(db, &schema, retrospect::Entity).await?;
-    create_table_if_not_exists(db, &schema, member_team::Entity).await?;
     create_table_if_not_exists(db, &schema, refresh_token::Entity).await?;
 
     // 3. Dependent Entities (Level 2)

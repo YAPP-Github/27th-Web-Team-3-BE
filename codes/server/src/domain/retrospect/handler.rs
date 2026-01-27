@@ -20,8 +20,7 @@ use super::dto::{
     ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
     RetrospectDetailResponse, RetrospectListItem, SearchQueryParams, SearchRetrospectItem,
     StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
-    TeamRetrospectListItem, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
-    UpdateRetroRoomOrderRequest,
+    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
 };
 use super::service::RetrospectService;
 
@@ -263,8 +262,8 @@ pub async fn list_retrospects(
         (status = 200, description = "회고가 성공적으로 생성되었습니다.", body = SuccessCreateRetrospectResponse),
         (status = 400, description = "잘못된 요청 (프로젝트 이름 길이 초과, 날짜 형식 오류, URL 형식 오류 등)", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "팀 접근 권한 없음", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 팀", body = ErrorResponse),
+        (status = 403, description = "회고방 접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고방", body = ErrorResponse),
         (status = 500, description = "서버 내부 오류", body = ErrorResponse)
     ),
     tag = "Retrospect"
@@ -289,57 +288,10 @@ pub async fn create_retrospect(
     )))
 }
 
-/// 팀 회고 목록 조회 API (API-010)
-///
-/// 특정 팀에 속한 모든 회고 목록을 조회합니다.
-/// 과거, 오늘, 예정된 회고 데이터가 모두 포함되며 최신순으로 정렬됩니다.
-#[utoipa::path(
-    get,
-    path = "/api/v1/teams/{teamId}/retrospects",
-    params(
-        ("teamId" = i64, Path, description = "조회를 원하는 팀의 고유 ID")
-    ),
-    security(
-        ("bearer_auth" = [])
-    ),
-    responses(
-        (status = 200, description = "팀 내 전체 회고 목록 조회를 성공했습니다.", body = SuccessTeamRetrospectListResponse),
-        (status = 400, description = "잘못된 요청 (team_id는 1 이상이어야 합니다.)", body = ErrorResponse),
-        (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "팀 접근 권한 없음", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 팀", body = ErrorResponse),
-        (status = 500, description = "서버 내부 오류", body = ErrorResponse)
-    ),
-    tag = "Retrospect"
-)]
-pub async fn list_team_retrospects(
-    user: AuthUser,
-    State(state): State<AppState>,
-    Path(team_id): Path<i64>,
-) -> Result<Json<BaseResponse<Vec<TeamRetrospectListItem>>>, AppError> {
-    // teamId 검증 (1 이상의 양수)
-    if team_id < 1 {
-        return Err(AppError::BadRequest(
-            "팀 ID는 1 이상이어야 합니다.".to_string(),
-        ));
-    }
-
-    // 사용자 ID 추출
-    let user_id = user.user_id()?;
-
-    // 서비스 호출
-    let result = RetrospectService::list_team_retrospects(state, user_id, team_id).await?;
-
-    Ok(Json(BaseResponse::success_with_message(
-        result,
-        "팀 내 전체 회고 목록 조회를 성공했습니다.",
-    )))
-}
-
 /// 회고 참석자 등록 API (API-014)
 ///
 /// 진행 예정인 회고에 참석자로 등록합니다.
-/// JWT의 유저 정보를 기반으로 참석을 처리하며, 해당 회고가 속한 팀의 멤버만 참석이 가능합니다.
+/// JWT의 유저 정보를 기반으로 참석을 처리하며, 해당 회고가 속한 회고방의 멤버만 참석이 가능합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/retrospects/{retrospectId}/participants",
@@ -611,7 +563,7 @@ pub async fn get_storage(
 
 /// 회고 분석 API (API-022)
 ///
-/// 특정 회고 세션에 쌓인 모든 팀원의 답변을 종합 분석하여 AI 인사이트, 감정 통계, 맞춤형 미션을 생성합니다.
+/// 특정 회고 세션에 쌓인 모든 회고방 멤버의 답변을 종합 분석하여 AI 인사이트, 감정 통계, 맞춤형 미션을 생성합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/retrospects/{retrospectId}/analysis",
@@ -659,7 +611,7 @@ pub async fn analyze_retrospective_handler(
 
 /// 회고 검색 API (API-023)
 ///
-/// 사용자가 참여하는 모든 팀의 회고를 프로젝트명/회고명 기준으로 검색합니다.
+/// 사용자가 참여하는 모든 회고방의 회고를 프로젝트명/회고명 기준으로 검색합니다.
 /// 결과는 회고 날짜 내림차순(최신순), 동일 날짜인 경우 회고 시간 내림차순으로 정렬됩니다.
 #[utoipa::path(
     get,
@@ -693,7 +645,7 @@ pub async fn search_retrospects(
 
 /// 회고 내보내기 API (API-021)
 ///
-/// 특정 회고 세션의 전체 내용(팀 인사이트, 팀원별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드합니다.
+/// 특정 회고 세션의 전체 내용(회고방 인사이트, 멤버별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드합니다.
 #[utoipa::path(
     get,
     path = "/api/v1/retrospects/{retrospectId}/export",

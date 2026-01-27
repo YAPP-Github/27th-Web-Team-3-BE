@@ -21,8 +21,6 @@ use crate::domain::retrospect::entity::response_like;
 use crate::domain::retrospect::entity::retro_reference;
 use crate::domain::retrospect::entity::retro_room;
 use crate::domain::retrospect::entity::retrospect;
-use crate::domain::team::entity::member_team;
-use crate::domain::team::entity::team;
 use crate::state::AppState;
 use crate::utils::error::AppError;
 
@@ -39,8 +37,8 @@ use super::dto::{
     RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
     SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
     StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, TeamRetrospectListItem, UpdateRetroRoomNameRequest,
-    UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
+    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
+    UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -67,7 +65,7 @@ impl RetrospectService {
 
         if existing_room.is_some() {
             return Err(AppError::RetroRoomNameDuplicate(
-                "이미 사용 중인 팀 이름입니다.".into(),
+                "이미 사용 중인 회고방 이름입니다.".into(),
             ));
         }
 
@@ -144,7 +142,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 팀입니다.".into()))?;
+        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
 
         // 3. 만료 체크 (7일)
         let now = Utc::now().naive_utc();
@@ -300,7 +298,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 팀입니다.".into()))?;
+        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
 
         // 2. Owner 권한 확인
         let member_room = MemberRetroRoom::find()
@@ -311,11 +309,11 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         let member_room =
-            member_room.ok_or_else(|| AppError::NotFound("존재하지 않는 팀입니다.".into()))?;
+            member_room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
 
         if member_room.role != RoomRole::Owner {
             return Err(AppError::NoRoomPermission(
-                "팀 이름을 변경할 권한이 없습니다.".into(),
+                "회고방 이름을 변경할 권한이 없습니다.".into(),
             ));
         }
 
@@ -329,7 +327,7 @@ impl RetrospectService {
 
         if existing_room.is_some() {
             return Err(AppError::RetroRoomNameDuplicate(
-                "이미 사용 중인 팀 이름입니다.".into(),
+                "이미 사용 중인 회고방 이름입니다.".into(),
             ));
         }
 
@@ -366,7 +364,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 팀입니다.".into()))?;
+        let room = room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
 
         // 2. Owner 권한 확인
         let member_room = MemberRetroRoom::find()
@@ -377,11 +375,11 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         let member_room =
-            member_room.ok_or_else(|| AppError::NotFound("존재하지 않는 팀입니다.".into()))?;
+            member_room.ok_or_else(|| AppError::NotFound("존재하지 않는 회고방입니다.".into()))?;
 
         if member_room.role != RoomRole::Owner {
             return Err(AppError::NoPermission(
-                "팀을 삭제할 권한이 없습니다.".into(),
+                "회고방을 삭제할 권한이 없습니다.".into(),
             ));
         }
 
@@ -390,7 +388,7 @@ impl RetrospectService {
         // 3. 삭제 (관련 member_retro_room은 CASCADE로 삭제)
         room.delete(&state.db)
             .await
-            .map_err(|e| AppError::InternalError(format!("팀 삭제 실패: {}", e)))?;
+            .map_err(|e| AppError::InternalError(format!("회고방 삭제 실패: {}", e)))?;
 
         Ok(DeleteRetroRoomResponse {
             retro_room_id,
@@ -411,7 +409,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
         if room.is_none() {
-            return Err(AppError::NotFound("존재하지 않는 팀입니다.".into()));
+            return Err(AppError::NotFound("존재하지 않는 회고방입니다.".into()));
         }
 
         // 2. 사용자 권한 확인 (멤버인지)
@@ -424,7 +422,7 @@ impl RetrospectService {
 
         if member_room.is_none() {
             return Err(AppError::NoPermission(
-                "해당 팀에 접근 권한이 없습니다.".into(),
+                "해당 회고방에 접근 권한이 없습니다.".into(),
             ));
         }
 
@@ -505,29 +503,29 @@ impl RetrospectService {
         // 3. 미래 날짜/시간 검증
         Self::validate_future_datetime(retrospect_date, retrospect_time)?;
 
-        // 4. 팀 존재 여부 확인
-        let team_exists = team::Entity::find_by_id(req.team_id)
+        // 4. 회고방 존재 여부 확인
+        let room_exists = RetroRoom::find_by_id(req.retro_room_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if team_exists.is_none() {
-            return Err(AppError::TeamNotFound(
-                "존재하지 않는 팀입니다.".to_string(),
+        if room_exists.is_none() {
+            return Err(AppError::NotFound(
+                "존재하지 않는 회고방입니다.".to_string(),
             ));
         }
 
-        // 5. 팀 멤버십 확인
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(req.team_id))
+        // 5. 회고방 멤버십 확인
+        let is_member = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(req.retro_room_id))
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 팀의 멤버가 아닙니다.".to_string(),
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방에 접근 권한이 없습니다.".to_string(),
             ));
         }
 
@@ -538,32 +536,9 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 7. 회고방 생성
         let now = Utc::now().naive_utc();
-        let base_url = std::env::var("INVITATION_BASE_URL")
-            .unwrap_or_else(|_| "https://retro.example.com".to_string());
-        let invitation_url = format!(
-            "{}/room/{}",
-            base_url.trim_end_matches('/'),
-            uuid::Uuid::new_v4()
-        );
 
-        let retro_room_model = retro_room::ActiveModel {
-            title: Set(req.project_name.clone()),
-            invition_url: Set(invitation_url),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
-
-        let retro_room_result = retro_room_model
-            .insert(&txn)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        let retrospect_room_id = retro_room_result.retrospect_room_id;
-
-        // 8. 회고 생성
+        // 7. 회고 생성
         let start_time = NaiveDateTime::new(retrospect_date, retrospect_time);
 
         let retrospect_model = retrospect::ActiveModel {
@@ -573,8 +548,8 @@ impl RetrospectService {
             created_at: Set(now),
             updated_at: Set(now),
             start_time: Set(start_time),
-            retrospect_room_id: Set(retrospect_room_id),
-            team_id: Set(req.team_id),
+            retrospect_room_id: Set(req.retro_room_id),
+            team_id: Set(req.retro_room_id),
             ..Default::default()
         };
 
@@ -625,7 +600,7 @@ impl RetrospectService {
 
         Ok(CreateRetrospectResponse {
             retrospect_id,
-            team_id: req.team_id,
+            retro_room_id: req.retro_room_id,
             project_name: req.project_name,
         })
     }
@@ -716,55 +691,7 @@ impl RetrospectService {
         Ok(())
     }
 
-    /// 팀 회고 목록 조회 (API-010)
-    pub async fn list_team_retrospects(
-        state: AppState,
-        user_id: i64,
-        team_id: i64,
-    ) -> Result<Vec<TeamRetrospectListItem>, AppError> {
-        // 1. 팀 존재 여부 확인
-        let team_exists = team::Entity::find_by_id(team_id)
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        if team_exists.is_none() {
-            return Err(AppError::TeamNotFound(
-                "존재하지 않는 팀입니다.".to_string(),
-            ));
-        }
-
-        // 2. 팀 멤버십 확인
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(team_id))
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 팀에 접근 권한이 없습니다.".to_string(),
-            ));
-        }
-
-        // 3. 팀에 속한 회고 목록 조회 (최신순 정렬, 동일 시간일 경우 ID 역순으로 안정 정렬)
-        let retrospects = retrospect::Entity::find()
-            .filter(retrospect::Column::TeamId.eq(team_id))
-            .order_by_desc(retrospect::Column::StartTime)
-            .order_by_desc(retrospect::Column::RetrospectId)
-            .all(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        // 4. DTO 변환
-        let result: Vec<TeamRetrospectListItem> =
-            retrospects.into_iter().map(|r| r.into()).collect();
-
-        Ok(result)
-    }
-
-    /// 회고 조회 및 팀 멤버십 확인 헬퍼
+    /// 회고 조회 및 회고방 멤버십 확인 헬퍼
     /// 비멤버에게 회고 존재 여부를 노출하지 않도록
     /// "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
     async fn find_retrospect_for_member(
@@ -782,9 +709,11 @@ impl RetrospectService {
                 )
             })?;
 
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+        let is_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -804,7 +733,7 @@ impl RetrospectService {
         user_id: i64,
         retrospect_id: i64,
     ) -> Result<CreateParticipantResponse, AppError> {
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -879,7 +808,7 @@ impl RetrospectService {
         user_id: i64,
         retrospect_id: i64,
     ) -> Result<Vec<ReferenceItem>, AppError> {
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let _retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -936,7 +865,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| {
-                AppError::TeamAccessDenied("해당 회고에 작성 권한이 없습니다.".to_string())
+                AppError::RetroRoomAccessDenied("해당 회고에 작성 권한이 없습니다.".to_string())
             })?;
 
         // 4. member_response를 통해 해당 멤버의 응답(response) ID 조회
@@ -951,7 +880,7 @@ impl RetrospectService {
 
         // 4-1. 응답이 없는 경우 사전 방어 (member_response가 없으면 권한 문제)
         if member_response_ids.is_empty() {
-            return Err(AppError::TeamAccessDenied(
+            return Err(AppError::RetroRoomAccessDenied(
                 "해당 회고에 대한 응답 데이터가 존재하지 않습니다.".to_string(),
             ));
         }
@@ -1273,17 +1202,17 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
 
-        // 2. 접근 권한 확인 (해당 회고가 속한 팀의 멤버인지 확인)
+        // 2. 접근 권한 확인 (해당 회고가 속한 회고방의 멤버인지 확인)
         let retrospect_room_id = retrospect_model.retrospect_room_id;
-        let is_team_member = member_retro_room::Entity::find()
+        let is_room_member = member_retro_room::Entity::find()
             .filter(member_retro_room::Column::MemberId.eq(user_id))
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if is_team_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
                 "해당 회고에 접근 권한이 없습니다.".to_string(),
             ));
         }
@@ -1388,7 +1317,7 @@ impl RetrospectService {
         let start_time = retrospect_model.start_time.format("%Y-%m-%d").to_string();
 
         Ok(RetrospectDetailResponse {
-            team_id: retrospect_room_id,
+            retro_room_id: retrospect_room_id,
             title: retrospect_model.title,
             start_time,
             retro_category: retrospect_model.retrospect_method,
@@ -1433,32 +1362,34 @@ impl RetrospectService {
             "회고 검색 요청"
         );
 
-        // 2. 사용자가 속한 팀 목록 조회
-        let user_teams = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
+        // 2. 사용자가 속한 회고방 목록 조회
+        let user_rooms = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if user_teams.is_empty() {
+        if user_rooms.is_empty() {
             return Ok(vec![]);
         }
 
-        let team_ids: Vec<i64> = user_teams.iter().map(|mt| mt.team_id).collect();
+        let retro_room_ids: Vec<i64> = user_rooms.iter().map(|mr| mr.retrospect_room_id).collect();
 
-        // 3. 팀 정보 조회 (팀명 매핑)
-        let teams = team::Entity::find()
-            .filter(team::Column::TeamId.is_in(team_ids.clone()))
+        // 3. 회고방 정보 조회 (회고방명 매핑)
+        let rooms = retro_room::Entity::find()
+            .filter(retro_room::Column::RetrospectRoomId.is_in(retro_room_ids.clone()))
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let team_map: HashMap<i64, String> =
-            teams.iter().map(|t| (t.team_id, t.name.clone())).collect();
+        let room_map: HashMap<i64, String> = rooms
+            .iter()
+            .map(|r| (r.retrospect_room_id, r.title.clone()))
+            .collect();
 
-        // 4. 해당 팀들의 회고 중 키워드가 포함된 회고 검색 (동일 시간대 안정 정렬을 위해 ID 보조 정렬 추가)
+        // 4. 해당 회고방들의 회고 중 키워드가 포함된 회고 검색 (동일 시간대 안정 정렬을 위해 ID 보조 정렬 추가)
         let retrospects = retrospect::Entity::find()
-            .filter(retrospect::Column::TeamId.is_in(team_ids))
+            .filter(retrospect::Column::RetrospectRoomId.is_in(retro_room_ids))
             .filter(retrospect::Column::Title.contains(&keyword))
             .order_by_desc(retrospect::Column::StartTime)
             .order_by_desc(retrospect::Column::RetrospectId)
@@ -1472,7 +1403,10 @@ impl RetrospectService {
             .map(|r| SearchRetrospectItem {
                 retrospect_id: r.retrospect_id,
                 project_name: r.title.clone(),
-                team_name: team_map.get(&r.team_id).cloned().unwrap_or_default(),
+                retro_room_name: room_map
+                    .get(&r.retrospect_room_id)
+                    .cloned()
+                    .unwrap_or_default(),
                 retrospect_method: r.retrospect_method.clone(),
                 retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
                 retrospect_time: r.start_time.format("%H:%M").to_string(),
@@ -1501,17 +1435,17 @@ impl RetrospectService {
             "회고 내보내기 요청"
         );
 
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
-        // 2. 팀 이름 조회
-        let team_model = team::Entity::find_by_id(retrospect_model.team_id)
+        // 2. 회고방 이름 조회
+        let room_model = retro_room::Entity::find_by_id(retrospect_model.retrospect_room_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
-        let team_name = team_model
-            .map(|t| t.name)
+        let room_name = room_model
+            .map(|r| r.title)
             .unwrap_or_else(|| "(알 수 없음)".to_string());
 
         // 3. 참여 멤버 조회
@@ -1565,7 +1499,7 @@ impl RetrospectService {
         // 5. PDF 생성
         let pdf_bytes = Self::generate_pdf(
             &retrospect_model,
-            &team_name,
+            &room_name,
             &member_retros,
             &member_map,
             &responses,
@@ -1583,8 +1517,8 @@ impl RetrospectService {
 
     /// 회고 삭제 (API-013)
     ///
-    /// TODO: 현재 스키마에 `created_by`(회고 생성자) 필드와 `member_team.role`(팀 역할) 필드가 없어
-    /// 팀 멤버십만 확인합니다. 스펙상 팀 Owner 또는 회고 생성자만 삭제 가능해야 하므로,
+    /// TODO: 현재 스키마에 `created_by`(회고 생성자) 필드와 `member_retro_room.role`(회고방 역할) 필드가 없어
+    /// 회고방 멤버십만 확인합니다. 스펙상 회고방 Owner 또는 회고 생성자만 삭제 가능해야 하므로,
     /// 스키마 마이그레이션 후 권한 분기를 추가해야 합니다.
     pub async fn delete_retrospect(
         state: AppState,
@@ -1597,7 +1531,7 @@ impl RetrospectService {
             "회고 삭제 요청"
         );
 
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -1745,7 +1679,7 @@ impl RetrospectService {
     /// PDF 문서 생성
     fn generate_pdf(
         retrospect_model: &retrospect::Model,
-        team_name: &str,
+        retro_room_name: &str,
         member_retros: &[member_retro::Model],
         member_map: &HashMap<i64, String>,
         responses: &[response::Model],
@@ -1828,7 +1762,7 @@ impl RetrospectService {
                 .styled(style::Style::new().bold().with_font_size(14)),
         );
         doc.push(Break::new(0.3));
-        doc.push(Paragraph::new(format!("Team: {}", team_name)));
+        doc.push(Paragraph::new(format!("Retro Room: {}", retro_room_name)));
         doc.push(Paragraph::new(format!("Date: {} {}", date_str, time_str)));
         doc.push(Paragraph::new(format!("Method: {}", method_str)));
 
@@ -1846,10 +1780,10 @@ impl RetrospectService {
         }
         doc.push(Break::new(0.5));
 
-        // ===== 팀 인사이트 섹션 =====
+        // ===== 회고방 인사이트 섹션 =====
         if let Some(ref insight) = retrospect_model.team_insight {
             doc.push(
-                Paragraph::new("Team Insight")
+                Paragraph::new("Retro Room Insight")
                     .styled(style::Style::new().bold().with_font_size(14)),
             );
             doc.push(Break::new(0.3));
@@ -2062,23 +1996,25 @@ impl RetrospectService {
             ));
         }
 
-        // 3. 팀 멤버십 확인 (팀 기반 접근 제어)
-        let is_team_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+        // 3. 회고방 멤버십 확인 (회고방 기반 접근 제어)
+        let is_room_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if is_team_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 회고에 접근 권한이 없습니다.".to_string(),
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방에 접근 권한이 없습니다.".to_string(),
             ));
         }
 
         let retrospect_room_id = retrospect_model.retrospect_room_id;
 
-        // 4. 월간 사용량 확인 (팀당 월 10회 제한)
+        // 4. 월간 사용량 확인 (회고방당 월 10회 제한)
         let kst_offset = chrono::Duration::hours(9);
         let now_kst = Utc::now().naive_utc() + kst_offset;
         let current_month_start =
@@ -2308,7 +2244,7 @@ impl RetrospectService {
             "회고 답변 카테고리별 조회 요청"
         );
 
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let _retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -2550,9 +2486,9 @@ impl RetrospectService {
         })
     }
 
-    /// 회고 답변 조회 및 팀 멤버십 확인 헬퍼
+    /// 회고 답변 조회 및 회고방 멤버십 확인 헬퍼
     /// - 답변이 존재하지 않으면 RES4041 (404) 반환
-    /// - 팀 멤버가 아니면 TEAM4031 (403) 반환
+    /// - 회고방 멤버가 아니면 TEAM4031 (403) 반환
     async fn find_response_for_member(
         state: &AppState,
         user_id: i64,
@@ -2567,7 +2503,7 @@ impl RetrospectService {
                 AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
             })?;
 
-        // 2. response -> retrospect -> team 경로로 팀 정보 조회
+        // 2. response -> retrospect -> 회고방 경로로 회고방 정보 조회
         let retrospect_model = retrospect::Entity::find_by_id(response_model.retrospect_id)
             .one(&state.db)
             .await
@@ -2579,17 +2515,19 @@ impl RetrospectService {
                 ))
             })?;
 
-        // 3. 팀 멤버십 확인
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+        // 3. 회고방 멤버십 확인
+        let is_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 리소스에 접근 권한이 없습니다.".to_string(),
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방 리소스에 접근 권한이 없습니다.".to_string(),
             ));
         }
 
@@ -2611,7 +2549,7 @@ impl RetrospectService {
             ));
         }
 
-        // 1. 답변 조회 및 팀 멤버십 확인
+        // 1. 답변 조회 및 회고방 멤버십 확인
         let _response_model = Self::find_response_for_member(&state, user_id, response_id).await?;
 
         // 2. 댓글 목록 조회 (커서 기반 페이지네이션, 최신순 정렬)
@@ -2708,7 +2646,7 @@ impl RetrospectService {
             ));
         }
 
-        // 2. 답변 조회 및 팀 멤버십 확인
+        // 2. 답변 조회 및 회고방 멤버십 확인
         let _response_model = Self::find_response_for_member(&state, user_id, response_id).await?;
 
         // 3. 댓글 생성

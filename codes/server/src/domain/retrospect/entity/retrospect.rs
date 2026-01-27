@@ -108,14 +108,6 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     RetroRoom,
-    #[sea_orm(
-        belongs_to = "crate::domain::team::entity::team::Entity",
-        from = "Column::TeamId",
-        to = "crate::domain::team::entity::team::Column::TeamId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Team,
     #[sea_orm(has_many = "super::response::Entity")]
     Response,
     #[sea_orm(has_many = "crate::domain::member::entity::member_retro::Entity")]
@@ -127,12 +119,6 @@ pub enum Relation {
 impl Related<super::retro_room::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::RetroRoom.def()
-    }
-}
-
-impl Related<crate::domain::team::entity::team::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Team.def()
     }
 }
 

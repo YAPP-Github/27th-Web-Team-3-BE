@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
 
-use super::entity::retrospect::{Model as RetrospectModel, RetrospectMethod};
+use super::entity::retrospect::RetrospectMethod;
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 
 // ============================================
@@ -198,9 +198,9 @@ fn validate_reference_url_items(urls: &[String]) -> Result<(), validator::Valida
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRetrospectRequest {
-    /// 회고가 속한 팀의 고유 ID
-    #[validate(range(min = 1, message = "팀 ID는 1 이상이어야 합니다"))]
-    pub team_id: i64,
+    /// 회고가 속한 회고방의 고유 ID
+    #[validate(range(min = 1, message = "회고방 ID는 1 이상이어야 합니다"))]
+    pub retro_room_id: i64,
 
     /// 프로젝트 이름 (최소 1자, 최대 20자)
     #[validate(length(
@@ -244,8 +244,8 @@ pub struct CreateRetrospectRequest {
 pub struct CreateRetrospectResponse {
     /// 생성된 회고 고유 ID
     pub retrospect_id: i64,
-    /// 회고가 속한 팀의 고유 ID
-    pub team_id: i64,
+    /// 회고가 속한 회고방의 고유 ID
+    pub retro_room_id: i64,
     /// 저장된 프로젝트 이름
     pub project_name: String,
 }
@@ -344,48 +344,6 @@ pub struct SuccessSubmitRetrospectResponse {
     pub code: String,
     pub message: String,
     pub result: SubmitRetrospectResponse,
-}
-
-// ============================================
-// API-010: 팀 회고 목록 조회 DTO
-// ============================================
-
-/// 팀 회고 목록 아이템 응답 DTO
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TeamRetrospectListItem {
-    /// 회고 고유 식별자
-    pub retrospect_id: i64,
-    /// 프로젝트 이름
-    pub project_name: String,
-    /// 회고 방식
-    pub retrospect_method: RetrospectMethod,
-    /// 회고 날짜 (yyyy-MM-dd)
-    pub retrospect_date: String,
-    /// 회고 시간 (HH:mm)
-    pub retrospect_time: String,
-}
-
-impl From<RetrospectModel> for TeamRetrospectListItem {
-    fn from(model: RetrospectModel) -> Self {
-        Self {
-            retrospect_id: model.retrospect_id,
-            project_name: model.title,
-            retrospect_method: model.retrospect_method,
-            retrospect_date: model.start_time.format("%Y-%m-%d").to_string(),
-            retrospect_time: model.start_time.format("%H:%M").to_string(),
-        }
-    }
-}
-
-/// Swagger용 팀 회고 목록 성공 응답 타입
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SuccessTeamRetrospectListResponse {
-    pub is_success: bool,
-    pub code: String,
-    pub message: String,
-    pub result: Vec<TeamRetrospectListItem>,
 }
 
 // ============================================
@@ -545,8 +503,8 @@ pub struct SuccessStorageResponse {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetrospectDetailResponse {
-    /// 회고가 속한 팀의 고유 ID
-    pub team_id: i64,
+    /// 회고가 속한 회고방의 고유 ID
+    pub retro_room_id: i64,
     /// 회고 제목 (프로젝트명)
     pub title: String,
     /// 회고 시작 날짜 (YYYY-MM-DD)
@@ -651,7 +609,7 @@ pub struct PersonalMissionItem {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisResponse {
-    /// 팀 전체를 위한 AI 분석 메시지
+    /// 회고방 전체를 위한 AI 분석 메시지
     pub team_insight: String,
     /// 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개)
     pub emotion_rank: Vec<EmotionRankItem>,
@@ -691,8 +649,8 @@ pub struct SearchRetrospectItem {
     pub retrospect_id: i64,
     /// 프로젝트 이름
     pub project_name: String,
-    /// 팀 이름
-    pub team_name: String,
+    /// 회고방 이름
+    pub retro_room_name: String,
     /// 회고 방식
     pub retrospect_method: RetrospectMethod,
     /// 회고 날짜 (YYYY-MM-DD)
@@ -927,7 +885,7 @@ mod tests {
 
     fn create_valid_request() -> CreateRetrospectRequest {
         CreateRetrospectRequest {
-            team_id: 1,
+            retro_room_id: 1,
             project_name: "테스트 프로젝트".to_string(),
             retrospect_date: "2025-01-25".to_string(),
             retrospect_time: "14:00".to_string(),
@@ -992,14 +950,14 @@ mod tests {
     }
 
     // ========================================
-    // team_id 검증 테스트
+    // retro_room_id 검증 테스트
     // ========================================
 
     #[test]
-    fn should_fail_validation_when_team_id_is_zero() {
+    fn should_fail_validation_when_retro_room_id_is_zero() {
         // Arrange
         let request = CreateRetrospectRequest {
-            team_id: 0,
+            retro_room_id: 0,
             ..create_valid_request()
         };
 
@@ -1010,14 +968,14 @@ mod tests {
         assert!(result.is_err());
         let errors = result.unwrap_err();
         let field_errors = errors.field_errors();
-        assert!(field_errors.contains_key("team_id"));
+        assert!(field_errors.contains_key("retro_room_id"));
     }
 
     #[test]
-    fn should_fail_validation_when_team_id_is_negative() {
+    fn should_fail_validation_when_retro_room_id_is_negative() {
         // Arrange
         let request = CreateRetrospectRequest {
-            team_id: -1,
+            retro_room_id: -1,
             ..create_valid_request()
         };
 
@@ -1028,14 +986,14 @@ mod tests {
         assert!(result.is_err());
         let errors = result.unwrap_err();
         let field_errors = errors.field_errors();
-        assert!(field_errors.contains_key("team_id"));
+        assert!(field_errors.contains_key("retro_room_id"));
     }
 
     #[test]
-    fn should_pass_validation_when_team_id_is_positive() {
+    fn should_pass_validation_when_retro_room_id_is_positive() {
         // Arrange
         let request = CreateRetrospectRequest {
-            team_id: 1,
+            retro_room_id: 1,
             ..create_valid_request()
         };
 
@@ -1485,7 +1443,7 @@ mod tests {
     fn should_serialize_retrospect_detail_response_in_camel_case() {
         // Arrange
         let response = RetrospectDetailResponse {
-            team_id: 789,
+            retro_room_id: 789,
             title: "3차 스프린트 회고".to_string(),
             start_time: "2026-01-24".to_string(),
             retro_category: RetrospectMethod::Kpt,
@@ -1521,7 +1479,7 @@ mod tests {
         let json = serde_json::to_value(&response).unwrap();
 
         // Assert
-        assert_eq!(json["teamId"], 789);
+        assert_eq!(json["retroRoomId"], 789);
         assert_eq!(json["title"], "3차 스프린트 회고");
         assert_eq!(json["startTime"], "2026-01-24");
         assert_eq!(json["retroCategory"], "KPT");
@@ -1549,7 +1507,7 @@ mod tests {
     fn should_serialize_retrospect_detail_with_empty_members_and_questions() {
         // Arrange
         let response = RetrospectDetailResponse {
-            team_id: 1,
+            retro_room_id: 1,
             title: "빈 회고".to_string(),
             start_time: "2026-01-01".to_string(),
             retro_category: RetrospectMethod::Free,
@@ -1583,7 +1541,7 @@ mod tests {
 
         for (category, expected) in categories {
             let response = RetrospectDetailResponse {
-                team_id: 1,
+                retro_room_id: 1,
                 title: "테스트".to_string(),
                 start_time: "2026-01-01".to_string(),
                 retro_category: category,
@@ -1643,7 +1601,7 @@ mod tests {
         let item = SearchRetrospectItem {
             retrospect_id: 42,
             project_name: "스프린트 회고".to_string(),
-            team_name: "팀A".to_string(),
+            retro_room_name: "회고방A".to_string(),
             retrospect_method: RetrospectMethod::Kpt,
             retrospect_date: "2026-01-24".to_string(),
             retrospect_time: "14:30".to_string(),
@@ -1655,14 +1613,14 @@ mod tests {
         // Assert
         assert_eq!(json["retrospectId"], 42);
         assert_eq!(json["projectName"], "스프린트 회고");
-        assert_eq!(json["teamName"], "팀A");
+        assert_eq!(json["retroRoomName"], "회고방A");
         assert_eq!(json["retrospectMethod"], "KPT");
         assert_eq!(json["retrospectDate"], "2026-01-24");
         assert_eq!(json["retrospectTime"], "14:30");
         // snake_case 키가 없는지 확인
         assert!(json.get("retrospect_id").is_none());
         assert!(json.get("project_name").is_none());
-        assert!(json.get("team_name").is_none());
+        assert!(json.get("retro_room_name").is_none());
         assert!(json.get("retrospect_method").is_none());
         assert!(json.get("retrospect_date").is_none());
         assert!(json.get("retrospect_time").is_none());
@@ -1683,7 +1641,7 @@ mod tests {
             let item = SearchRetrospectItem {
                 retrospect_id: 1,
                 project_name: "테스트".to_string(),
-                team_name: "팀".to_string(),
+                retro_room_name: "회고방".to_string(),
                 retrospect_method: method,
                 retrospect_date: "2026-01-01".to_string(),
                 retrospect_time: "10:00".to_string(),
@@ -1704,7 +1662,7 @@ mod tests {
             result: vec![SearchRetrospectItem {
                 retrospect_id: 1,
                 project_name: "테스트 프로젝트".to_string(),
-                team_name: "팀A".to_string(),
+                retro_room_name: "회고방A".to_string(),
                 retrospect_method: RetrospectMethod::Kpt,
                 retrospect_date: "2026-01-24".to_string(),
                 retrospect_time: "14:00".to_string(),

@@ -37,8 +37,8 @@ use crate::domain::retrospect::dto::{
     SuccessReferencesListResponse, SuccessResponsesListResponse, SuccessRetroRoomCreateResponse,
     SuccessRetroRoomListResponse, SuccessRetrospectDetailResponse, SuccessRetrospectListResponse,
     SuccessSearchResponse, SuccessStorageResponse, SuccessSubmitRetrospectResponse,
-    SuccessTeamRetrospectListResponse, SuccessUpdateRetroRoomNameResponse, TeamRetrospectListItem,
-    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
+    SuccessUpdateRetroRoomNameResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
+    UpdateRetroRoomOrderRequest,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -65,7 +65,6 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::list_retrospects,
         // Retrospect APIs
         domain::retrospect::handler::create_retrospect,
-        domain::retrospect::handler::list_team_retrospects,
         domain::retrospect::handler::create_participant,
         domain::retrospect::handler::list_references,
         domain::retrospect::handler::save_draft,
@@ -122,8 +121,6 @@ use crate::utils::{BaseResponse, ErrorResponse};
             CreateRetrospectRequest,
             CreateRetrospectResponse,
             SuccessCreateRetrospectResponse,
-            TeamRetrospectListItem,
-            SuccessTeamRetrospectListResponse,
             RetrospectMethod,
             CreateParticipantResponse,
             SuccessCreateParticipantResponse,
@@ -171,7 +168,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
-        (name = "RetroRoom", description = "회고 룸(팀) 관리 API"),
+        (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
         (name = "Response", description = "회고 답변 API")
     ),
@@ -301,10 +298,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects",
             axum::routing::post(domain::retrospect::handler::create_retrospect),
-        )
-        .route(
-            "/api/v1/teams/:team_id/retrospects",
-            axum::routing::get(domain::retrospect::handler::list_team_retrospects),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/participants",
