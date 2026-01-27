@@ -1216,55 +1216,47 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 10. 멤버-회고방 매핑 삭제 (member_retro_room) - 다른 회고가 없는 경우에만
-        let other_retro_count_for_room = retrospect::Entity::find()
-            .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
-            .filter(retrospect::Column::RetrospectId.ne(retrospect_id))
-            .count(&txn)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        let member_retro_rooms_deleted = if other_retro_count_for_room == 0 {
-            member_retro_room::Entity::delete_many()
-                .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
-                .exec(&txn)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?
-                .rows_affected
-        } else {
-            0
-        };
-
-        // 11. 회고 삭제
+        // 10. 회고 삭제
         retrospect_model
             .delete(&txn)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 12. 회고방 삭제 (같은 room을 참조하는 다른 회고가 없는 경우에만)
+        // 11. 회고방 삭제 (같은 room을 참조하는 다른 회고가 없는 경우에만)
         let other_retro_count = retrospect::Entity::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
             .count(&txn)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let room_deleted = if other_retro_count == 0 {
-            let result = retro_room::Entity::delete_many()
+        let (member_retro_rooms_deleted, room_deleted) = if other_retro_count == 0 {
+            // 회고방을 참조하는 다른 회고가 없으므로 멤버-회고방 매핑과 회고방 모두 삭제
+            let member_retro_rooms_deleted = member_retro_room::Entity::delete_many()
+                .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            let room_deleted = retro_room::Entity::delete_many()
                 .filter(retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
                 .exec(&txn)
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
-            result.rows_affected
+
+            (
+                member_retro_rooms_deleted.rows_affected,
+                room_deleted.rows_affected,
+            )
         } else {
             warn!(
                 retrospect_room_id = retrospect_room_id,
                 other_retro_count = other_retro_count,
                 "회고방을 공유하는 다른 회고가 존재하여 회고방 삭제를 건너뜁니다"
             );
-            0
+            (0, 0)
         };
 
-        // 13. 트랜잭션 커밋
+        // 12. 트랜잭션 커밋
         txn.commit()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;

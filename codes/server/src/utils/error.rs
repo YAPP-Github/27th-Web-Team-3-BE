@@ -12,6 +12,7 @@ use super::response::ErrorResponse;
 /// 애플리케이션 전역 에러 타입
 /// API 명세에 정의된 에러 코드를 사용합니다.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum AppError {
     /// COMMON400: 잘못된 요청 (400)
     BadRequest(String),
