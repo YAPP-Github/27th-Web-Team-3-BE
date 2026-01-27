@@ -30,6 +30,7 @@ pub enum AppError {
     Unauthorized(String),
 
     /// COMMON403: 권한 없음 (403)
+    #[allow(dead_code)]
     Forbidden(String),
 
     // ============== RetroRoom 관련 에러 (feat/team-generate) ==============
@@ -120,6 +121,21 @@ pub enum AppError {
 
     /// AI5003: AI 일반 오류 (500)
     AiGeneralError(String),
+
+    /// SEARCH4001: 검색어 누락 또는 유효하지 않음 (400)
+    SearchKeywordInvalid(String),
+
+    /// COMMON500: PDF 생성 실패 (500)
+    PdfGenerationFailed(String),
+
+    /// RETRO4004: 유효하지 않은 카테고리 값 (400)
+    RetroCategoryInvalid(String),
+
+    /// RETRO4031: 회고 삭제 권한 없음 (403)
+    /// TODO: 현재 미사용. retrospects.created_by / member_team.role 스키마 추가 후
+    /// 팀 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
+    #[allow(dead_code)]
+    RetroDeleteAccessDenied(String),
 }
 
 impl AppError {
@@ -163,6 +179,10 @@ impl AppError {
             AppError::AiConnectionFailed(msg) => msg.clone(),
             AppError::AiServiceUnavailable(msg) => msg.clone(),
             AppError::AiGeneralError(msg) => msg.clone(),
+            AppError::SearchKeywordInvalid(msg) => msg.clone(),
+            AppError::RetroCategoryInvalid(msg) => msg.clone(),
+            AppError::PdfGenerationFailed(_) => "PDF 생성 중 서버 에러가 발생했습니다.".to_string(),
+            AppError::RetroDeleteAccessDenied(msg) => msg.clone(),
         }
     }
 
@@ -206,6 +226,10 @@ impl AppError {
             AppError::AiConnectionFailed(_) => "AI5002",
             AppError::AiServiceUnavailable(_) => "AI5031",
             AppError::AiGeneralError(_) => "AI5003",
+            AppError::SearchKeywordInvalid(_) => "SEARCH4001",
+            AppError::RetroCategoryInvalid(_) => "RETRO4004",
+            AppError::PdfGenerationFailed(_) => "COMMON500",
+            AppError::RetroDeleteAccessDenied(_) => "RETRO4031",
         }
     }
 
@@ -249,6 +273,10 @@ impl AppError {
             AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::AiServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::SearchKeywordInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroCategoryInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::PdfGenerationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::RetroDeleteAccessDenied(_) => StatusCode::FORBIDDEN,
         }
     }
 }
@@ -275,6 +303,9 @@ impl IntoResponse for AppError {
             }
             AppError::AiGeneralError(msg) => {
                 error!("AI General Error: {}", msg);
+            }
+            AppError::PdfGenerationFailed(msg) => {
+                error!("PDF Generation Failed: {}", msg);
             }
             _ => {
                 error!("Error [{}]: {}", error_code, message);

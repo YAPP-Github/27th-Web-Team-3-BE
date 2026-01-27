@@ -21,14 +21,16 @@ use crate::domain::retrospect::dto::{
     AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
     DeleteRetroRoomResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem,
     JoinRetroRoomRequest, JoinRetroRoomResponse, MissionItem, PersonalMissionItem, ReferenceItem,
-    RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
-    RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetroRoomOrderItem,
+    ResponseCategory, ResponseListItem, ResponsesListResponse, RetroRoomCreateRequest,
+    RetroRoomCreateResponse, RetroRoomListItem, RetroRoomOrderItem, RetrospectDetailResponse,
+    RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem,
     StorageRangeFilter, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
     SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessAnalysisResponse,
     SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
-    SuccessDeleteRetroRoomResponse, SuccessDraftSaveResponse, SuccessEmptyResponse,
-    SuccessJoinRetroRoomResponse, SuccessReferencesListResponse, SuccessRetrospectDetailResponse,
-    SuccessRetrospectListResponse, SuccessRetroRoomCreateResponse, SuccessRetroRoomListResponse,
+    SuccessDeleteRetroRoomResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
+    SuccessEmptyResponse, SuccessJoinRetroRoomResponse, SuccessReferencesListResponse,
+    SuccessResponsesListResponse, SuccessRetroRoomCreateResponse, SuccessRetroRoomListResponse,
+    SuccessRetrospectDetailResponse, SuccessRetrospectListResponse, SuccessSearchResponse,
     SuccessStorageResponse, SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse,
     SuccessUpdateRetroRoomNameResponse, TeamRetrospectListItem, UpdateRetroRoomNameRequest,
     UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
@@ -62,7 +64,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::get_retrospect_detail,
         domain::retrospect::handler::submit_retrospect,
         domain::retrospect::handler::get_storage,
-        domain::retrospect::handler::analyze_retrospective_handler
+        domain::retrospect::handler::analyze_retrospective_handler,
+        domain::retrospect::handler::search_retrospects,
+        domain::retrospect::handler::list_responses,
+        domain::retrospect::handler::export_retrospect,
+        domain::retrospect::handler::delete_retrospect
     ),
     components(
         schemas(
@@ -125,7 +131,14 @@ use crate::utils::{BaseResponse, ErrorResponse};
             EmotionRankItem,
             MissionItem,
             PersonalMissionItem,
-            SuccessAnalysisResponse
+            SuccessAnalysisResponse,
+            SearchRetrospectItem,
+            SuccessSearchResponse,
+            SuccessDeleteRetrospectResponse,
+            ResponseCategory,
+            ResponseListItem,
+            ResponsesListResponse,
+            SuccessResponsesListResponse
         )
     ),
     tags(
@@ -252,12 +265,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::get(domain::retrospect::handler::list_references),
         )
         .route(
+            "/api/v1/retrospects/search",
+            axum::routing::get(domain::retrospect::handler::search_retrospects),
+        )
+        .route(
             "/api/v1/retrospects/storage",
             axum::routing::get(domain::retrospect::handler::get_storage),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id",
-            axum::routing::get(domain::retrospect::handler::get_retrospect_detail),
+            axum::routing::get(domain::retrospect::handler::get_retrospect_detail)
+                .delete(domain::retrospect::handler::delete_retrospect),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/drafts",
@@ -270,6 +288,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/analysis",
             axum::routing::post(domain::retrospect::handler::analyze_retrospective_handler),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/responses",
+            axum::routing::get(domain::retrospect::handler::list_responses),
+        )
+        .route(
+            "/api/v1/retrospects/:retrospect_id/export",
+            axum::routing::get(domain::retrospect::handler::export_retrospect),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
