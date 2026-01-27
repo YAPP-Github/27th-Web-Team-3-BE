@@ -21,7 +21,6 @@ pub struct Model {
     pub email: String,
     pub nickname: String,
     pub insight_count: i32,
-    #[sea_orm(column_name = "SocialType")]
     pub social_type: SocialType,
     pub created_at: DateTime,
     pub updated_at: DateTime,

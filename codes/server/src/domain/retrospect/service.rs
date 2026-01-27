@@ -103,7 +103,7 @@ impl RetrospectService {
 
         let retro_room_model = retro_room::ActiveModel {
             title: Set(req.project_name.clone()),
-            invition_url: Set(invitation_url),
+            invitation_url: Set(invitation_url),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -439,7 +439,7 @@ impl RetrospectService {
         // 2. 참고자료 목록 조회 (referenceId 오름차순)
         let references = retro_reference::Entity::find()
             .filter(retro_reference::Column::RetrospectId.eq(retrospect_id))
-            .order_by_asc(retro_reference::Column::RetroRefrenceId)
+            .order_by_asc(retro_reference::Column::RetroReferenceId)
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -448,7 +448,7 @@ impl RetrospectService {
         let result: Vec<ReferenceItem> = references
             .into_iter()
             .map(|r| ReferenceItem {
-                reference_id: r.retro_refrence_id,
+                reference_id: r.retro_reference_id,
                 url_name: r.title,
                 url: r.url,
             })
