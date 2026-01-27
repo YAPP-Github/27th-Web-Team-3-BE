@@ -1,6 +1,6 @@
 use chrono::Utc;
 use reqwest::Client;
-use sea_orm::*;
+use sea_orm::{DbErr, RuntimeErr, *};
 
 use super::dto::{
     EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
@@ -145,10 +145,16 @@ impl AuthService {
             ..Default::default()
         };
 
-        let new_member = active_model
-            .insert(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(format!("회원가입 실패: {}", e)))?;
+        let new_member = active_model.insert(&state.db).await.map_err(|e| {
+            // DB unique constraint 위반 시 Conflict 에러 반환 (TOCTOU 경쟁 조건 방어)
+            if let DbErr::Query(RuntimeErr::SqlxError(sqlx_err)) = &e {
+                let err_str = sqlx_err.to_string();
+                if err_str.contains("UNIQUE") || err_str.contains("duplicate") {
+                    return AppError::Conflict("이미 사용 중인 닉네임입니다.".into());
+                }
+            }
+            AppError::InternalError(format!("회원가입 실패: {}", e))
+        })?;
 
         // 7. JWT 토큰 발급
         let access_token = encode_token(
