@@ -1,9 +1,12 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use genpdf::elements::{Break, Paragraph};
+use genpdf::style;
+use genpdf::Element;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use tracing::{info, warn};
 
@@ -25,10 +28,12 @@ use crate::utils::error::AppError;
 
 use super::dto::{
     AnalysisResponse, CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DraftItem, DraftSaveRequest, DraftSaveResponse, ReferenceItem, RetrospectDetailResponse,
-    RetrospectMemberItem, RetrospectQuestionItem, StorageQueryParams, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, TeamRetrospectListItem, REFERENCE_URL_MAX_LENGTH,
+    DraftItem, DraftSaveRequest, DraftSaveResponse, ReferenceItem, ResponseCategory,
+    ResponseListItem, ResponsesListResponse, RetrospectDetailResponse, RetrospectMemberItem,
+    RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
+    REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -98,7 +103,7 @@ impl RetrospectService {
 
         let retro_room_model = retro_room::ActiveModel {
             title: Set(req.project_name.clone()),
-            invition_url: Set(invitation_url),
+            invitation_url: Set(invitation_url),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -434,7 +439,7 @@ impl RetrospectService {
         // 2. 참고자료 목록 조회 (referenceId 오름차순)
         let references = retro_reference::Entity::find()
             .filter(retro_reference::Column::RetrospectId.eq(retrospect_id))
-            .order_by_asc(retro_reference::Column::RetroRefrenceId)
+            .order_by_asc(retro_reference::Column::RetroReferenceId)
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -443,7 +448,7 @@ impl RetrospectService {
         let result: Vec<ReferenceItem> = references
             .into_iter()
             .map(|r| ReferenceItem {
-                reference_id: r.retro_refrence_id,
+                reference_id: r.retro_reference_id,
                 url_name: r.title,
                 url: r.url,
             })
@@ -929,11 +934,8 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))? as i64
         };
 
-        // 8. 시작일 포맷 (UTC → KST, YYYY-MM-DD)
-        let kst_offset = chrono::Duration::hours(9);
-        let start_time = (retrospect_model.start_time + kst_offset)
-            .format("%Y-%m-%d")
-            .to_string();
+        // 8. 시작일 포맷 (start_time은 생성 시 KST로 저장되므로 변환 불필요)
+        let start_time = retrospect_model.start_time.format("%Y-%m-%d").to_string();
 
         Ok(RetrospectDetailResponse {
             team_id: retrospect_room_id,
@@ -945,6 +947,547 @@ impl RetrospectService {
             total_comment_count,
             questions,
         })
+    }
+
+    /// 검색 키워드 검증
+    fn validate_search_keyword(keyword: Option<&str>) -> Result<String, AppError> {
+        let trimmed = keyword.unwrap_or("").trim().to_string();
+
+        if trimmed.is_empty() {
+            return Err(AppError::SearchKeywordInvalid(
+                "검색어를 입력해주세요.".to_string(),
+            ));
+        }
+
+        if trimmed.chars().count() > 100 {
+            return Err(AppError::SearchKeywordInvalid(
+                "검색어는 최대 100자까지 입력 가능합니다.".to_string(),
+            ));
+        }
+
+        Ok(trimmed)
+    }
+
+    /// 회고 검색 (API-023)
+    pub async fn search_retrospects(
+        state: AppState,
+        user_id: i64,
+        params: SearchQueryParams,
+    ) -> Result<Vec<SearchRetrospectItem>, AppError> {
+        // 1. 키워드 검증
+        let keyword = Self::validate_search_keyword(params.keyword.as_deref())?;
+
+        info!(
+            user_id = user_id,
+            keyword = %keyword,
+            "회고 검색 요청"
+        );
+
+        // 2. 사용자가 속한 팀 목록 조회
+        let user_teams = member_team::Entity::find()
+            .filter(member_team::Column::MemberId.eq(user_id))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if user_teams.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let team_ids: Vec<i64> = user_teams.iter().map(|mt| mt.team_id).collect();
+
+        // 3. 팀 정보 조회 (팀명 매핑)
+        let teams = team::Entity::find()
+            .filter(team::Column::TeamId.is_in(team_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let team_map: HashMap<i64, String> =
+            teams.iter().map(|t| (t.team_id, t.name.clone())).collect();
+
+        // 4. 해당 팀들의 회고 중 키워드가 포함된 회고 검색 (동일 시간대 안정 정렬을 위해 ID 보조 정렬 추가)
+        let retrospects = retrospect::Entity::find()
+            .filter(retrospect::Column::TeamId.is_in(team_ids))
+            .filter(retrospect::Column::Title.contains(&keyword))
+            .order_by_desc(retrospect::Column::StartTime)
+            .order_by_desc(retrospect::Column::RetrospectId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 5. 응답 DTO 변환 (start_time은 생성 시 KST로 저장되므로 변환 불필요)
+        let items: Vec<SearchRetrospectItem> = retrospects
+            .iter()
+            .map(|r| SearchRetrospectItem {
+                retrospect_id: r.retrospect_id,
+                project_name: r.title.clone(),
+                team_name: team_map.get(&r.team_id).cloned().unwrap_or_default(),
+                retrospect_method: r.retrospect_method.clone(),
+                retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
+                retrospect_time: r.start_time.format("%H:%M").to_string(),
+            })
+            .collect();
+
+        info!(
+            user_id = user_id,
+            keyword = %keyword,
+            result_count = items.len(),
+            "회고 검색 완료"
+        );
+
+        Ok(items)
+    }
+
+    /// 회고 내보내기 (API-021) - PDF 바이트 생성
+    pub async fn export_retrospect(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<Vec<u8>, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            "회고 내보내기 요청"
+        );
+
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
+
+        // 2. 팀 이름 조회
+        let team_model = team::Entity::find_by_id(retrospect_model.team_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let team_name = team_model
+            .map(|t| t.name)
+            .unwrap_or_else(|| "(알 수 없음)".to_string());
+
+        // 3. 참여 멤버 조회
+        let member_retros = member_retro::Entity::find()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(member_retro::Column::MemberRetroId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let member_ids: Vec<i64> = member_retros.iter().map(|mr| mr.member_id).collect();
+
+        let members = if member_ids.is_empty() {
+            vec![]
+        } else {
+            member::Entity::find()
+                .filter(member::Column::MemberId.is_in(member_ids))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+        };
+
+        let member_map: HashMap<i64, String> = members
+            .iter()
+            .map(|m| (m.member_id, m.nickname.clone()))
+            .collect();
+
+        // 4. 질문/답변 조회
+        let responses = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(response::Column::ResponseId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 4-1. 답변-멤버 매핑 조회
+        let response_ids: Vec<i64> = responses.iter().map(|r| r.response_id).collect();
+        let response_member_map: HashMap<i64, i64> = if response_ids.is_empty() {
+            HashMap::new()
+        } else {
+            member_response::Entity::find()
+                .filter(member_response::Column::ResponseId.is_in(response_ids))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+                .into_iter()
+                .map(|mr| (mr.response_id, mr.member_id))
+                .collect()
+        };
+
+        // 5. PDF 생성
+        let pdf_bytes = Self::generate_pdf(
+            &retrospect_model,
+            &team_name,
+            &member_retros,
+            &member_map,
+            &responses,
+            &response_member_map,
+        )?;
+
+        info!(
+            retrospect_id = retrospect_id,
+            pdf_size = pdf_bytes.len(),
+            "회고 PDF 생성 완료"
+        );
+
+        Ok(pdf_bytes)
+    }
+
+    /// 회고 삭제 (API-013)
+    ///
+    /// TODO: 현재 스키마에 `created_by`(회고 생성자) 필드와 `member_team.role`(팀 역할) 필드가 없어
+    /// 팀 멤버십만 확인합니다. 스펙상 팀 Owner 또는 회고 생성자만 삭제 가능해야 하므로,
+    /// 스키마 마이그레이션 후 권한 분기를 추가해야 합니다.
+    pub async fn delete_retrospect(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<(), AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            "회고 삭제 요청"
+        );
+
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
+
+        let retrospect_room_id = retrospect_model.retrospect_room_id;
+
+        // 2. 트랜잭션 시작 (연관 데이터 일괄 삭제)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 3. 해당 회고의 모든 응답(response) ID만 조회 (전체 모델 불필요)
+        let response_ids: Vec<i64> = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .select_only()
+            .column(response::Column::ResponseId)
+            .into_tuple()
+            .all(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if !response_ids.is_empty() {
+            // 4. 댓글 삭제 (response_comment)
+            let comments_deleted = response_comment::Entity::delete_many()
+                .filter(response_comment::Column::ResponseId.is_in(response_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 5. 좋아요 삭제 (response_like)
+            let likes_deleted = response_like::Entity::delete_many()
+                .filter(response_like::Column::ResponseId.is_in(response_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 6. 멤버 응답 매핑 삭제 (member_response)
+            let member_responses_deleted = member_response::Entity::delete_many()
+                .filter(member_response::Column::ResponseId.is_in(response_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            info!(
+                retrospect_id = retrospect_id,
+                response_count = response_ids.len(),
+                comments_deleted = comments_deleted.rows_affected,
+                likes_deleted = likes_deleted.rows_affected,
+                member_responses_deleted = member_responses_deleted.rows_affected,
+                "연관 응답 데이터 삭제 완료"
+            );
+        }
+
+        // 7. 응답 삭제 (response)
+        let responses_deleted = response::Entity::delete_many()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 8. 참고자료 삭제 (retro_reference)
+        let references_deleted = retro_reference::Entity::delete_many()
+            .filter(retro_reference::Column::RetrospectId.eq(retrospect_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 9. 멤버-회고 매핑 삭제 (member_retro)
+        let member_retros_deleted = member_retro::Entity::delete_many()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 10. 회고 삭제
+        retrospect_model
+            .delete(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 11. 회고방 삭제 (같은 room을 참조하는 다른 회고가 없는 경우에만)
+        let other_retro_count = retrospect::Entity::find()
+            .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
+            .count(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let (member_retro_rooms_deleted, room_deleted) = if other_retro_count == 0 {
+            // 회고방을 참조하는 다른 회고가 없으므로 멤버-회고방 매핑과 회고방 모두 삭제
+            let member_retro_rooms_deleted = member_retro_room::Entity::delete_many()
+                .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            let room_deleted = retro_room::Entity::delete_many()
+                .filter(retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            (
+                member_retro_rooms_deleted.rows_affected,
+                room_deleted.rows_affected,
+            )
+        } else {
+            warn!(
+                retrospect_room_id = retrospect_room_id,
+                other_retro_count = other_retro_count,
+                "회고방을 공유하는 다른 회고가 존재하여 회고방 삭제를 건너뜁니다"
+            );
+            (0, 0)
+        };
+
+        // 12. 트랜잭션 커밋
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        info!(
+            retrospect_id = retrospect_id,
+            responses_deleted = responses_deleted.rows_affected,
+            references_deleted = references_deleted.rows_affected,
+            member_retros_deleted = member_retros_deleted.rows_affected,
+            member_retro_rooms_deleted = member_retro_rooms_deleted,
+            room_deleted = room_deleted,
+            "회고 및 연관 데이터 삭제 완료"
+        );
+
+        Ok(())
+    }
+
+    /// 회고 방식 표시명 반환
+    fn retrospect_method_display(method: &retrospect::RetrospectMethod) -> String {
+        match method {
+            retrospect::RetrospectMethod::Kpt => "KPT".to_string(),
+            retrospect::RetrospectMethod::FourL => "4L".to_string(),
+            retrospect::RetrospectMethod::FiveF => "5F".to_string(),
+            retrospect::RetrospectMethod::Pmi => "PMI".to_string(),
+            retrospect::RetrospectMethod::Free => "Free".to_string(),
+        }
+    }
+
+    /// PDF 문서 생성
+    fn generate_pdf(
+        retrospect_model: &retrospect::Model,
+        team_name: &str,
+        member_retros: &[member_retro::Model],
+        member_map: &HashMap<i64, String>,
+        responses: &[response::Model],
+        response_member_map: &HashMap<i64, i64>,
+    ) -> Result<Vec<u8>, AppError> {
+        // 폰트 로딩
+        let font_dir = std::env::var("PDF_FONT_DIR").unwrap_or_else(|_| "./fonts".to_string());
+        let font_family_name =
+            std::env::var("PDF_FONT_FAMILY").unwrap_or_else(|_| "NanumGothic".to_string());
+
+        let font_family = match genpdf::fonts::from_files(&font_dir, &font_family_name, None) {
+            Ok(family) => family,
+            Err(full_err) => {
+                warn!(
+                    "전체 폰트 패밀리 로딩 실패 ({}), Regular 폰트로 대체합니다.",
+                    full_err
+                );
+                let regular_path = std::path::Path::new(&font_dir)
+                    .join(format!("{}-Regular.ttf", font_family_name));
+                let font_bytes = std::fs::read(&regular_path).map_err(|e| {
+                    AppError::PdfGenerationFailed(format!(
+                        "Regular 폰트 파일 읽기 실패 ({}) : {}",
+                        regular_path.display(),
+                        e
+                    ))
+                })?;
+                genpdf::fonts::FontFamily {
+                    regular: genpdf::fonts::FontData::new(font_bytes.clone(), None).map_err(
+                        |e| {
+                            AppError::PdfGenerationFailed(format!(
+                                "Regular 폰트 데이터 로딩 실패: {}",
+                                e
+                            ))
+                        },
+                    )?,
+                    bold: genpdf::fonts::FontData::new(font_bytes.clone(), None).map_err(|e| {
+                        AppError::PdfGenerationFailed(format!("Bold 폰트 데이터 로딩 실패: {}", e))
+                    })?,
+                    italic: genpdf::fonts::FontData::new(font_bytes.clone(), None).map_err(
+                        |e| {
+                            AppError::PdfGenerationFailed(format!(
+                                "Italic 폰트 데이터 로딩 실패: {}",
+                                e
+                            ))
+                        },
+                    )?,
+                    bold_italic: genpdf::fonts::FontData::new(font_bytes, None).map_err(|e| {
+                        AppError::PdfGenerationFailed(format!(
+                            "BoldItalic 폰트 데이터 로딩 실패: {}",
+                            e
+                        ))
+                    })?,
+                }
+            }
+        };
+
+        let mut doc = genpdf::Document::new(font_family);
+        doc.set_title(format!("{} - Retrospect Report", retrospect_model.title));
+        doc.set_minimal_conformance();
+
+        // 페이지 여백 설정
+        let mut decorator = genpdf::SimplePageDecorator::new();
+        decorator.set_margins(15);
+        doc.set_page_decorator(decorator);
+
+        // ===== 제목 섹션 =====
+        doc.push(
+            Paragraph::new(format!("{} - Retrospect Report", retrospect_model.title))
+                .styled(style::Style::new().bold().with_font_size(18)),
+        );
+        doc.push(Break::new(0.5));
+
+        // ===== 기본 정보 섹션 =====
+        let method_str = Self::retrospect_method_display(&retrospect_model.retrospect_method);
+        let date_str = retrospect_model.start_time.format("%Y-%m-%d").to_string();
+        let time_str = retrospect_model.start_time.format("%H:%M").to_string();
+
+        doc.push(
+            Paragraph::new("Basic Information")
+                .styled(style::Style::new().bold().with_font_size(14)),
+        );
+        doc.push(Break::new(0.3));
+        doc.push(Paragraph::new(format!("Team: {}", team_name)));
+        doc.push(Paragraph::new(format!("Date: {} {}", date_str, time_str)));
+        doc.push(Paragraph::new(format!("Method: {}", method_str)));
+
+        // 참여 멤버 목록
+        let participant_names: Vec<String> = member_retros
+            .iter()
+            .filter_map(|mr| member_map.get(&mr.member_id).cloned())
+            .collect();
+        doc.push(Paragraph::new(format!(
+            "Participants ({}):",
+            participant_names.len()
+        )));
+        for name in &participant_names {
+            doc.push(Paragraph::new(format!("  - {}", name)));
+        }
+        doc.push(Break::new(0.5));
+
+        // ===== 팀 인사이트 섹션 =====
+        if let Some(ref insight) = retrospect_model.team_insight {
+            doc.push(
+                Paragraph::new("Team Insight")
+                    .styled(style::Style::new().bold().with_font_size(14)),
+            );
+            doc.push(Break::new(0.3));
+            doc.push(Paragraph::new(insight.clone()));
+            doc.push(Break::new(0.5));
+        }
+
+        // ===== 질문/답변 섹션 =====
+        if !responses.is_empty() {
+            doc.push(
+                Paragraph::new("Questions & Answers")
+                    .styled(style::Style::new().bold().with_font_size(14)),
+            );
+            doc.push(Break::new(0.3));
+
+            // 중복 제거된 질문 추출
+            let mut seen_questions = HashSet::new();
+            let unique_questions: Vec<&response::Model> = responses
+                .iter()
+                .filter(|r| seen_questions.insert(r.question.clone()))
+                .collect();
+
+            for (i, question_response) in unique_questions.iter().enumerate() {
+                doc.push(
+                    Paragraph::new(format!("Q{}. {}", i + 1, question_response.question))
+                        .styled(style::Style::new().bold()),
+                );
+
+                // 해당 질문에 대한 모든 답변 수집
+                let answers_for_question: Vec<&response::Model> = responses
+                    .iter()
+                    .filter(|r| {
+                        r.question == question_response.question && !r.content.trim().is_empty()
+                    })
+                    .collect();
+
+                if answers_for_question.is_empty() {
+                    doc.push(Paragraph::new("  (No answers)"));
+                } else {
+                    for answer in &answers_for_question {
+                        let author = response_member_map
+                            .get(&answer.response_id)
+                            .and_then(|mid| member_map.get(mid))
+                            .cloned()
+                            .unwrap_or_else(|| "Anonymous".to_string());
+                        doc.push(Paragraph::new(format!(
+                            "  - [{}] {}",
+                            author, answer.content
+                        )));
+                    }
+                }
+                doc.push(Break::new(0.3));
+            }
+        }
+
+        // ===== 개인 인사이트 섹션 =====
+        let members_with_insight: Vec<&member_retro::Model> = member_retros
+            .iter()
+            .filter(|mr| mr.personal_insight.is_some())
+            .collect();
+
+        if !members_with_insight.is_empty() {
+            doc.push(Break::new(0.3));
+            doc.push(
+                Paragraph::new("Personal Insights")
+                    .styled(style::Style::new().bold().with_font_size(14)),
+            );
+            doc.push(Break::new(0.3));
+
+            for mr in &members_with_insight {
+                let name = member_map
+                    .get(&mr.member_id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("Member #{}", mr.member_id));
+                doc.push(Paragraph::new(format!("[{}]", name)).styled(style::Style::new().bold()));
+                if let Some(ref insight) = mr.personal_insight {
+                    doc.push(Paragraph::new(format!("  {}", insight)));
+                }
+                doc.push(Break::new(0.2));
+            }
+        }
+
+        // PDF 렌더링
+        let mut buf = Vec::new();
+        doc.render(&mut buf)
+            .map_err(|e| AppError::PdfGenerationFailed(format!("PDF 렌더링 실패: {}", e)))?;
+
+        Ok(buf)
     }
 
     /// 임시 저장 답변 비즈니스 검증
@@ -1295,6 +1838,266 @@ impl RetrospectService {
         info!(retrospect_id = retrospect_id, "회고 분석 완료");
 
         Ok(analysis)
+    }
+
+    /// 회고 답변 카테고리별 조회 (API-020)
+    pub async fn list_responses(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+        category: ResponseCategory,
+        cursor: Option<i64>,
+        size: i64,
+    ) -> Result<ResponsesListResponse, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            category = %category,
+            cursor = ?cursor,
+            size = size,
+            "회고 답변 카테고리별 조회 요청"
+        );
+
+        // 1. 회고 조회 및 팀 멤버십 확인
+        let _retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
+
+        // 2. 해당 회고의 모든 response 조회 (response_id 오름차순)
+        let all_responses = response::Entity::find()
+            .filter(response::Column::RetrospectId.eq(retrospect_id))
+            .order_by_asc(response::Column::ResponseId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if all_responses.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 3. 질문 텍스트 목록 추출 (첫 참여자의 응답 순서 기준으로 질문 순서 결정)
+        //    member_response를 통해 첫 번째 참여자의 응답 세트를 찾고, 질문 순서를 확정
+        let first_member_responses = member_response::Entity::find()
+            .filter(
+                member_response::Column::ResponseId.is_in(
+                    all_responses
+                        .iter()
+                        .map(|r| r.response_id)
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .order_by_asc(member_response::Column::ResponseId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // member_id별로 그룹화하여 첫 번째 멤버의 응답 세트 확인
+        let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
+        for mr in &first_member_responses {
+            member_response_map
+                .entry(mr.member_id)
+                .or_default()
+                .push(mr.response_id);
+        }
+
+        // 첫 번째 멤버의 응답 ID 목록 (오름차순 정렬됨)
+        let first_member_id = member_response_map.keys().min().copied();
+        let question_response_ids: Vec<i64> = first_member_id
+            .and_then(|mid| member_response_map.get(&mid))
+            .cloned()
+            .unwrap_or_default();
+
+        // 질문 텍스트 순서를 response_id 순으로 매핑
+        let response_map: HashMap<i64, &response::Model> =
+            all_responses.iter().map(|r| (r.response_id, r)).collect();
+
+        let question_texts: Vec<String> = question_response_ids
+            .iter()
+            .filter_map(|rid| response_map.get(rid).map(|r| r.question.clone()))
+            .collect();
+
+        // 4. 카테고리에 따른 대상 응답 ID 필터링
+        let target_response_ids: Vec<i64> = match category.question_index() {
+            Some(idx) => {
+                // 특정 질문에 대한 답변만 필터링
+                if idx >= question_texts.len() {
+                    // 해당 질문 번호가 없으면 빈 결과 반환
+                    return Ok(ResponsesListResponse {
+                        responses: vec![],
+                        has_next: false,
+                        next_cursor: None,
+                    });
+                }
+                let target_question = &question_texts[idx];
+                all_responses
+                    .iter()
+                    .filter(|r| &r.question == target_question)
+                    .map(|r| r.response_id)
+                    .collect()
+            }
+            None => {
+                // ALL: 모든 응답
+                all_responses.iter().map(|r| r.response_id).collect()
+            }
+        };
+
+        if target_response_ids.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 5. 공백만 있는 빈 답변 필터링 (content가 비어있거나 공백만인 응답 제외)
+        let valid_response_ids: Vec<i64> = target_response_ids
+            .iter()
+            .filter(|rid| {
+                response_map
+                    .get(rid)
+                    .map(|r| !r.content.trim().is_empty())
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
+
+        if valid_response_ids.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 6. 커서 기반 페이지네이션 (response_id 내림차순)
+        let mut query = response::Entity::find()
+            .filter(response::Column::ResponseId.is_in(valid_response_ids))
+            .order_by_desc(response::Column::ResponseId);
+
+        if let Some(cursor_id) = cursor {
+            query = query.filter(response::Column::ResponseId.lt(cursor_id));
+        }
+
+        // size + 1개 조회하여 다음 페이지 존재 여부 확인
+        let fetched = query
+            .limit(Some((size + 1) as u64))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let has_next = fetched.len() as i64 > size;
+        let page_responses: Vec<&response::Model> = fetched.iter().take(size as usize).collect();
+
+        // 빈 페이지인 경우 즉시 빈 응답 반환 (이후 is_in([]) 쿼리 방지)
+        if page_responses.is_empty() {
+            return Ok(ResponsesListResponse {
+                responses: vec![],
+                has_next: false,
+                next_cursor: None,
+            });
+        }
+
+        // 7. 응답에 대한 member 정보 조회 (member_response -> member)
+        let page_response_ids: Vec<i64> = page_responses.iter().map(|r| r.response_id).collect();
+
+        let member_responses_for_page = member_response::Entity::find()
+            .filter(member_response::Column::ResponseId.is_in(page_response_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let response_to_member: HashMap<i64, i64> = member_responses_for_page
+            .iter()
+            .map(|mr| (mr.response_id, mr.member_id))
+            .collect();
+
+        let member_ids: Vec<i64> = response_to_member
+            .values()
+            .copied()
+            .collect::<HashSet<i64>>()
+            .into_iter()
+            .collect();
+
+        let members = member::Entity::find()
+            .filter(member::Column::MemberId.is_in(member_ids))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let member_map: HashMap<i64, &member::Model> =
+            members.iter().map(|m| (m.member_id, m)).collect();
+
+        // 8. 좋아요 수 집계
+        let like_counts: Vec<(i64, i64)> = response_like::Entity::find()
+            .filter(response_like::Column::ResponseId.is_in(page_response_ids.clone()))
+            .select_only()
+            .column(response_like::Column::ResponseId)
+            .column_as(response_like::Column::ResponseLikeId.count(), "count")
+            .group_by(response_like::Column::ResponseId)
+            .into_tuple()
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let like_count_map: HashMap<i64, i64> = like_counts.into_iter().collect();
+
+        // 9. 댓글 수 집계
+        let comment_counts: Vec<(i64, i64)> = response_comment::Entity::find()
+            .filter(response_comment::Column::ResponseId.is_in(page_response_ids.clone()))
+            .select_only()
+            .column(response_comment::Column::ResponseId)
+            .column_as(response_comment::Column::ResponseCommentId.count(), "count")
+            .group_by(response_comment::Column::ResponseId)
+            .into_tuple()
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let comment_count_map: HashMap<i64, i64> = comment_counts.into_iter().collect();
+
+        // 10. DTO 변환
+        let response_items: Vec<ResponseListItem> = page_responses
+            .iter()
+            .map(|r| {
+                let member_id = response_to_member.get(&r.response_id).copied();
+                let user_name = member_id
+                    .and_then(|mid| member_map.get(&mid))
+                    .map(|m| m.nickname.clone())
+                    .unwrap_or_default();
+
+                ResponseListItem {
+                    response_id: r.response_id,
+                    user_name,
+                    content: r.content.clone(),
+                    like_count: like_count_map.get(&r.response_id).copied().unwrap_or(0),
+                    comment_count: comment_count_map.get(&r.response_id).copied().unwrap_or(0),
+                }
+            })
+            .collect();
+
+        // 11. 다음 커서 계산
+        let next_cursor = if has_next {
+            response_items.last().map(|r| r.response_id)
+        } else {
+            None
+        };
+
+        info!(
+            retrospect_id = retrospect_id,
+            category = %category,
+            response_count = response_items.len(),
+            has_next = has_next,
+            "회고 답변 카테고리별 조회 완료"
+        );
+
+        Ok(ResponsesListResponse {
+            responses: response_items,
+            has_next,
+            next_cursor,
+        })
     }
 }
 
@@ -2082,5 +2885,149 @@ mod tests {
         // Assert
         assert!(result.is_err());
         assert!(matches!(result, Err(AppError::RetroAnswersMissing(_))));
+    }
+
+    // ===== 검색 키워드 검증 테스트 (API-023) =====
+
+    #[test]
+    fn should_fail_when_keyword_is_none() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(None);
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::SearchKeywordInvalid(_))));
+    }
+
+    #[test]
+    fn should_fail_when_keyword_is_empty() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some(""));
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::SearchKeywordInvalid(_))));
+    }
+
+    #[test]
+    fn should_fail_when_keyword_exceeds_100_chars() {
+        // Arrange
+        let keyword = "가".repeat(101);
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(Some(&keyword));
+
+        // Assert
+        assert!(result.is_err());
+        if let Err(AppError::SearchKeywordInvalid(msg)) = result {
+            assert!(msg.contains("100자"));
+        } else {
+            panic!("Expected SearchKeywordInvalid error");
+        }
+    }
+
+    #[test]
+    fn should_pass_when_keyword_is_exactly_100_chars() {
+        // Arrange
+        let keyword = "가".repeat(100);
+
+        // Act
+        let result = RetrospectService::validate_search_keyword(Some(&keyword));
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), keyword);
+    }
+
+    #[test]
+    fn should_fail_when_keyword_is_whitespace_only() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("   \t\n  "));
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::SearchKeywordInvalid(_))));
+    }
+
+    #[test]
+    fn should_trim_keyword_with_leading_trailing_whitespace() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("  스프린트  "));
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "스프린트");
+    }
+
+    #[test]
+    fn should_pass_valid_keyword() {
+        // Arrange & Act
+        let result = RetrospectService::validate_search_keyword(Some("스프린트 회고"));
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "스프린트 회고");
+    }
+
+    // ===== 회고 방식 표시명 테스트 (API-021) =====
+
+    #[test]
+    fn should_display_kpt_as_kpt() {
+        // Arrange
+        use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
+
+        // Act
+        let result = RetrospectService::retrospect_method_display(&RetrospectMethod::Kpt);
+
+        // Assert
+        assert_eq!(result, "KPT");
+    }
+
+    #[test]
+    fn should_display_four_l_as_4l() {
+        // Arrange
+        use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
+
+        // Act
+        let result = RetrospectService::retrospect_method_display(&RetrospectMethod::FourL);
+
+        // Assert
+        assert_eq!(result, "4L");
+    }
+
+    #[test]
+    fn should_display_five_f_as_5f() {
+        // Arrange
+        use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
+
+        // Act
+        let result = RetrospectService::retrospect_method_display(&RetrospectMethod::FiveF);
+
+        // Assert
+        assert_eq!(result, "5F");
+    }
+
+    #[test]
+    fn should_display_pmi_as_pmi() {
+        // Arrange
+        use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
+
+        // Act
+        let result = RetrospectService::retrospect_method_display(&RetrospectMethod::Pmi);
+
+        // Assert
+        assert_eq!(result, "PMI");
+    }
+
+    #[test]
+    fn should_display_free_as_free() {
+        // Arrange
+        use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
+
+        // Act
+        let result = RetrospectService::retrospect_method_display(&RetrospectMethod::Free);
+
+        // Assert
+        assert_eq!(result, "Free");
     }
 }

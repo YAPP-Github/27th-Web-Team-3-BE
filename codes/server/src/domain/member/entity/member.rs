@@ -22,7 +22,6 @@ pub struct Model {
     #[sea_orm(unique)]
     pub nickname: Option<String>,
     pub insight_count: i32,
-    #[sea_orm(column_name = "SocialType")]
     pub social_type: SocialType,
     pub created_at: DateTime,
     pub updated_at: DateTime,

@@ -2,10 +2,10 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "retro_refrence")]
+#[sea_orm(table_name = "retro_reference")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub retro_refrence_id: i64,
+    pub retro_reference_id: i64,
     pub title: String,
     pub url: String,
     pub retrospect_id: i64,
