@@ -61,11 +61,15 @@ fn should_serialize_join_response_in_camel_case() {
 
     // Act
     let json = serde_json::to_string(&response).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Assert
-    assert!(json.contains("retroRoomId"));
-    assert!(json.contains("joinedAt"));
-    assert!(!json.contains("retro_room_id"));
+    // Assert - JSON 파싱으로 키 존재 여부 확인
+    assert!(parsed.get("retroRoomId").is_some());
+    assert!(parsed.get("title").is_some());
+    assert!(parsed.get("joinedAt").is_some());
+    // snake_case 키가 없어야 함
+    assert!(parsed.get("retro_room_id").is_none());
+    assert!(parsed.get("joined_at").is_none());
 }
 
 // ============== 초대 코드 추출 테스트 ==============
@@ -138,7 +142,33 @@ fn should_generate_valid_invite_code() {
     // Act
     let code = RetrospectService::generate_invite_code();
 
-    // Assert
-    assert!(code.starts_with("INV-"));
-    assert!(code.len() > 4);
+    // Assert - INV-XXXX-XXXX 형식 검증 (정확히 13자)
+    // 인덱스: I(0) N(1) V(2) -(3) X(4) X(5) X(6) X(7) -(8) X(9) X(10) X(11) X(12)
+    assert_eq!(code.len(), 13, "초대 코드는 정확히 13자여야 함");
+    assert!(code.starts_with("INV-"), "INV- 접두사 필수");
+    assert_eq!(
+        code.chars().nth(3),
+        Some('-'),
+        "4번째 문자(인덱스 3)는 '-'여야 함"
+    );
+    assert_eq!(
+        code.chars().nth(8),
+        Some('-'),
+        "9번째 문자(인덱스 8)는 '-'여야 함"
+    );
+
+    // 숫자 부분 검증 (XXXX-XXXX)
+    let parts: Vec<&str> = code.split('-').collect();
+    assert_eq!(parts.len(), 3, "하이픈으로 구분된 3개 파트");
+    assert_eq!(parts[0], "INV");
+    assert_eq!(parts[1].len(), 4, "첫 번째 숫자 부분은 4자리");
+    assert_eq!(parts[2].len(), 4, "두 번째 숫자 부분은 4자리");
+    assert!(
+        parts[1].chars().all(|c| c.is_ascii_digit()),
+        "첫 번째 부분은 숫자만"
+    );
+    assert!(
+        parts[2].chars().all(|c| c.is_ascii_digit()),
+        "두 번째 부분은 숫자만"
+    );
 }

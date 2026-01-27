@@ -106,12 +106,18 @@ fn should_serialize_name_update_response_in_camel_case() {
 
     // Act
     let json = serde_json::to_string(&response).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Assert
-    assert!(json.contains("retroRoomId"));
-    assert!(json.contains("retroRoomName"));
-    assert!(json.contains("updatedAt"));
-    assert!(!json.contains("retro_room_id"));
+    // Assert - JSON 파싱으로 키 존재 여부 확인
+    assert!(parsed.get("retroRoomId").is_some());
+    assert!(parsed.get("retroRoomName").is_some());
+    assert!(parsed.get("updatedAt").is_some());
+    assert_eq!(parsed["retroRoomId"], 1);
+    assert_eq!(parsed["retroRoomName"], "변경된 이름");
+    // snake_case 키가 없어야 함
+    assert!(parsed.get("retro_room_id").is_none());
+    assert!(parsed.get("retro_room_name").is_none());
+    assert!(parsed.get("updated_at").is_none());
 }
 
 // ============== 역직렬화 테스트 ==============

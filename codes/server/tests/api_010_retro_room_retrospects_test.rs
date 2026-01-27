@@ -22,14 +22,19 @@ fn should_serialize_retrospect_list_item_in_camel_case() {
 
     // Act
     let json = serde_json::to_string(&item).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Assert
-    assert!(json.contains("retrospectId"));
-    assert!(json.contains("projectName"));
-    assert!(json.contains("retrospectMethod"));
-    assert!(json.contains("retrospectDate"));
-    assert!(json.contains("retrospectTime"));
-    assert!(!json.contains("retrospect_id"));
+    // Assert - JSON 파싱으로 키 존재 여부 확인
+    assert!(parsed.get("retrospectId").is_some());
+    assert!(parsed.get("projectName").is_some());
+    assert!(parsed.get("retrospectMethod").is_some());
+    assert!(parsed.get("retrospectDate").is_some());
+    assert!(parsed.get("retrospectTime").is_some());
+    assert_eq!(parsed["retrospectId"], 1);
+    assert_eq!(parsed["projectName"], "프로젝트");
+    // snake_case 키가 없어야 함
+    assert!(parsed.get("retrospect_id").is_none());
+    assert!(parsed.get("project_name").is_none());
 }
 
 #[test]

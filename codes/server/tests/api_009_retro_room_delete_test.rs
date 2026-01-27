@@ -18,11 +18,15 @@ fn should_serialize_delete_response_in_camel_case() {
 
     // Act
     let json = serde_json::to_string(&response).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Assert
-    assert!(json.contains("retroRoomId"));
-    assert!(json.contains("deletedAt"));
-    assert!(!json.contains("retro_room_id"));
+    // Assert - JSON 파싱으로 키 존재 여부 확인
+    assert!(parsed.get("retroRoomId").is_some());
+    assert!(parsed.get("deletedAt").is_some());
+    assert_eq!(parsed["retroRoomId"], 123);
+    // snake_case 키가 없어야 함
+    assert!(parsed.get("retro_room_id").is_none());
+    assert!(parsed.get("deleted_at").is_none());
 }
 
 #[test]
@@ -40,11 +44,13 @@ fn should_serialize_success_delete_response() {
 
     // Act
     let json = serde_json::to_string(&response).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Assert
-    assert!(json.contains("\"isSuccess\":true"));
-    assert!(json.contains("COMMON200"));
-    assert!(json.contains("retroRoomId"));
+    // Assert - JSON 파싱으로 검증
+    assert_eq!(parsed["isSuccess"], true);
+    assert_eq!(parsed["code"], "COMMON200");
+    assert!(parsed.get("result").is_some());
+    assert_eq!(parsed["result"]["retroRoomId"], 456);
 }
 
 #[test]

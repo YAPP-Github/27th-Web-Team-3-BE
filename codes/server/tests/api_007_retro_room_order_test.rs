@@ -132,9 +132,14 @@ fn should_serialize_order_item_in_camel_case() {
 
     // Act
     let json = serde_json::to_string(&item).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Assert
-    assert!(json.contains("retroRoomId"));
-    assert!(json.contains("orderIndex"));
-    assert!(!json.contains("retro_room_id"));
+    // Assert - JSON 파싱으로 키 존재 여부 확인
+    assert!(parsed.get("retroRoomId").is_some());
+    assert!(parsed.get("orderIndex").is_some());
+    assert_eq!(parsed["retroRoomId"], 1);
+    assert_eq!(parsed["orderIndex"], 5);
+    // snake_case 키가 없어야 함
+    assert!(parsed.get("retro_room_id").is_none());
+    assert!(parsed.get("order_index").is_none());
 }
