@@ -362,7 +362,7 @@ impl AuthService {
     ) -> Result<(), AppError> {
         let expires_at = Utc::now()
             .checked_add_signed(Duration::seconds(expiration_seconds))
-            .expect("valid timestamp")
+            .ok_or_else(|| AppError::InternalError("유효하지 않은 토큰 만료 시간입니다.".into()))?
             .naive_utc();
 
         let active_model = refresh_token::ActiveModel {
