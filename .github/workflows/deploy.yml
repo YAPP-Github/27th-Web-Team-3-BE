@@ -3,12 +3,12 @@ name: Build & Deploy
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - 'codes/**'
   pull_request:
     branches:
-      - main
+      - dev
     paths:
       - 'codes/**'
 
@@ -51,7 +51,7 @@ jobs:
         run: cargo test
 
       - name: Upload artifact
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: server-binary
@@ -62,7 +62,7 @@ jobs:
     name: Deploy to EC2
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
 
     steps:
       - name: Download artifact
