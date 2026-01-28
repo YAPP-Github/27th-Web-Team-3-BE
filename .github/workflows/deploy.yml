@@ -81,16 +81,55 @@ jobs:
 
       - name: Create .env file
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          DB_SCHEMA_UPDATE: ${{ secrets.DB_SCHEMA_UPDATE }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          RUST_LOG: ${{ secrets.RUST_LOG }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+          REFRESH_TOKEN_EXPIRATION: ${{ secrets.REFRESH_TOKEN_EXPIRATION }}
+          SIGNUP_TOKEN_EXPIRATION: ${{ secrets.SIGNUP_TOKEN_EXPIRATION }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DATABASE_URL,DATABASE_USERNAME,DATABASE_PASSWORD,DB_SCHEMA_UPDATE,SERVER_PORT,RUST_LOG,JWT_SECRET,JWT_EXPIRATION,REFRESH_TOKEN_EXPIRATION,SIGNUP_TOKEN_EXPIRATION,GOOGLE_CLIENT_ID,GOOGLE_REDIRECT_URI,KAKAO_CLIENT_ID,KAKAO_REDIRECT_URI,OPENAI_API_KEY,SECRET_KEY
           script: |
-            cat > /opt/app/.env << 'EOF'
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            RUST_LOG=${{ secrets.RUST_LOG || 'info' }}
-            SERVER_HOST=${{ secrets.SERVER_HOST || '0.0.0.0' }}
-            SERVER_PORT=${{ secrets.SERVER_PORT || '8080' }}
+            cat > /opt/app/.env << EOF
+            # Database
+            DATABASE_URL=${DATABASE_URL}
+            DATABASE_USERNAME=${DATABASE_USERNAME}
+            DATABASE_PASSWORD=${DATABASE_PASSWORD}
+            DB_SCHEMA_UPDATE=${DB_SCHEMA_UPDATE:-false}
+
+            # Server
+            SERVER_PORT=${SERVER_PORT:-8080}
+            RUST_LOG=${RUST_LOG:-info}
+
+            # Security
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRATION=${JWT_EXPIRATION:-1800}
+            REFRESH_TOKEN_EXPIRATION=${REFRESH_TOKEN_EXPIRATION:-1209600}
+            SIGNUP_TOKEN_EXPIRATION=${SIGNUP_TOKEN_EXPIRATION:-600}
+
+            # Social Login
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+            KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+            KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI}
+
+            # AI Service
+            OPENAI_API_KEY=${OPENAI_API_KEY}
+            SECRET_KEY=${SECRET_KEY}
             EOF
 
       - name: Restart application
