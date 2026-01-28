@@ -1,10 +1,10 @@
-# [API-010] GET /api/v1/teams/{teamId}/retrospects
+# [API-010] GET /api/v1/retro-rooms/{retroRoomId}/retrospects
 
-팀 내 전체 회고 목록 조회 API
+회고방 내 전체 회고 목록 조회 API
 
 ## 개요
 
-특정 팀에 속한 모든 회고 목록을 조회합니다.
+특정 회고방에 속한 모든 회고 목록을 조회합니다.
 
 - 과거, 오늘, 예정된 회고 데이터가 모두 포함됩니다.
 - 클라이언트(프론트엔드)의 유연한 UI 대응을 위해 별도의 필터링 없이 전체 목록을 제공합니다.
@@ -18,7 +18,7 @@
 ## 엔드포인트
 
 ```
-GET /api/v1/teams/{teamId}/retrospects
+GET /api/v1/retro-rooms/{retroRoomId}/retrospects
 ```
 
 ## 인증
@@ -37,7 +37,7 @@ GET /api/v1/teams/{teamId}/retrospects
 
 | Parameter | Type | Required | Description | Validation |
 |-----------|------|----------|-------------|------------|
-| teamId | long | Yes | 조회를 원하는 팀의 고유 ID | 1 이상의 양수 |
+| retroRoomId | long | Yes | 조회를 원하는 회고방의 고유 ID | 1 이상의 양수 |
 
 ## Response
 
@@ -47,7 +47,7 @@ GET /api/v1/teams/{teamId}/retrospects
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "팀 내 전체 회고 목록 조회를 성공했습니다.",
+  "message": "회고방 내 전체 회고 목록 조회를 성공했습니다.",
   "result": [
     {
       "retrospectId": 100,
@@ -97,7 +97,7 @@ GET /api/v1/teams/{teamId}/retrospects
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "팀 내 전체 회고 목록 조회를 성공했습니다.",
+  "message": "회고방 내 전체 회고 목록 조회를 성공했습니다.",
   "result": []
 }
 ```
@@ -120,19 +120,19 @@ GET /api/v1/teams/{teamId}/retrospects
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "해당 팀에 접근 권한이 없습니다.",
+  "code": "RETRO4031",
+  "message": "해당 회고방에 접근 권한이 없습니다.",
   "result": null
 }
 ```
 
-### 404 Not Found - 팀 없음
+### 404 Not Found - 회고방 없음
 
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4041",
-  "message": "존재하지 않는 팀입니다.",
+  "code": "RETRO4041",
+  "message": "존재하지 않는 회고방입니다.",
   "result": null
 }
 ```
@@ -153,8 +153,8 @@ GET /api/v1/teams/{teamId}/retrospects
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|----------|
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
-| TEAM4031 | 403 | 해당 팀에 접근 권한 없음 (멤버가 아님) | 요청자가 해당 팀의 멤버가 아닌 경우 |
-| TEAM4041 | 404 | 존재하지 않는 팀 | 존재하지 않거나 삭제된 팀의 teamId로 요청 |
+| RETRO4031 | 403 | 해당 회고방에 접근 권한 없음 (멤버가 아님) | 요청자가 해당 회고방의 멤버가 아닌 경우 |
+| RETRO4041 | 404 | 존재하지 않는 회고방 | 존재하지 않거나 삭제된 회고방의 retroRoomId로 요청 |
 | COMMON500 | 500 | 회고 목록 조회 중 서버 에러 | 데이터베이스 연결 실패, 쿼리 실행 오류 |
 
 ## 사용 예시
@@ -162,6 +162,6 @@ GET /api/v1/teams/{teamId}/retrospects
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/v1/teams/1/retrospects \
+curl -X GET https://api.example.com/api/v1/retro-rooms/1/retrospects \
   -H "Authorization: Bearer {accessToken}"
 ```

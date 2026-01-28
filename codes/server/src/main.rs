@@ -22,18 +22,23 @@ use crate::domain::auth::dto::{
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
-    DraftSaveRequest, DraftSaveResponse, EmotionRankItem, LikeToggleResponse, ListCommentsQuery,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    DeleteRetroRoomResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem,
+    JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery,
     ListCommentsResponse, MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory,
-    ResponseListItem, ResponsesListResponse, RetrospectDetailResponse, RetrospectMemberItem,
-    RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessCreateCommentResponse,
-    SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
-    SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse, SuccessLikeToggleResponse,
+    ResponseListItem, ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse,
+    RetroRoomListItem, RetroRoomOrderItem, RetrospectDetailResponse, RetrospectListItem,
+    RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessAnalysisResponse,
+    SuccessCreateCommentResponse, SuccessCreateParticipantResponse, SuccessCreateRetrospectResponse,
+    SuccessDeleteRetroRoomResponse, SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse,
+    SuccessEmptyResponse, SuccessJoinRetroRoomResponse, SuccessLikeToggleResponse,
     SuccessListCommentsResponse, SuccessReferencesListResponse, SuccessResponsesListResponse,
-    SuccessRetrospectDetailResponse, SuccessSearchResponse, SuccessStorageResponse,
-    SuccessSubmitRetrospectResponse, SuccessTeamRetrospectListResponse, TeamRetrospectListItem,
+    SuccessRetroRoomCreateResponse, SuccessRetroRoomListResponse, SuccessRetrospectDetailResponse,
+    SuccessRetrospectListResponse, SuccessSearchResponse, SuccessStorageResponse,
+    SuccessSubmitRetrospectResponse, SuccessUpdateRetroRoomNameResponse, UpdateRetroRoomNameRequest,
+    UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
 };
 use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
 use crate::state::AppState;
@@ -50,8 +55,16 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::auth::handler::logout,
         domain::auth::handler::login_by_email,
         domain::auth::handler::auth_test,
+        // RetroRoom APIs
+        domain::retrospect::handler::create_retro_room,
+        domain::retrospect::handler::join_retro_room,
+        domain::retrospect::handler::list_retro_rooms,
+        domain::retrospect::handler::update_retro_room_order,
+        domain::retrospect::handler::update_retro_room_name,
+        domain::retrospect::handler::delete_retro_room,
+        domain::retrospect::handler::list_retrospects,
+        // Retrospect APIs
         domain::retrospect::handler::create_retrospect,
-        domain::retrospect::handler::list_team_retrospects,
         domain::retrospect::handler::create_participant,
         domain::retrospect::handler::list_references,
         domain::retrospect::handler::save_draft,
@@ -86,11 +99,29 @@ use crate::utils::{BaseResponse, ErrorResponse};
             EmailLoginRequest,
             EmailLoginResponse,
             SuccessEmailLoginResponse,
+            // RetroRoom DTOs
+            RetroRoomCreateRequest,
+            RetroRoomCreateResponse,
+            SuccessRetroRoomCreateResponse,
+            JoinRetroRoomRequest,
+            JoinRetroRoomResponse,
+            SuccessJoinRetroRoomResponse,
+            RetroRoomListItem,
+            SuccessRetroRoomListResponse,
+            RetroRoomOrderItem,
+            UpdateRetroRoomOrderRequest,
+            SuccessEmptyResponse,
+            UpdateRetroRoomNameRequest,
+            UpdateRetroRoomNameResponse,
+            SuccessUpdateRetroRoomNameResponse,
+            DeleteRetroRoomResponse,
+            SuccessDeleteRetroRoomResponse,
+            RetrospectListItem,
+            SuccessRetrospectListResponse,
+            // Retrospect DTOs
             CreateRetrospectRequest,
             CreateRetrospectResponse,
             SuccessCreateRetrospectResponse,
-            TeamRetrospectListItem,
-            SuccessTeamRetrospectListResponse,
             RetrospectMethod,
             CreateParticipantResponse,
             SuccessCreateParticipantResponse,
@@ -140,6 +171,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
+        (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
         (name = "Response", description = "회고 답변 API")
     ),
@@ -239,14 +271,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[allow(deprecated)]
             axum::routing::post(domain::auth::handler::login)
         })
+        // RetroRoom routes
+        .route(
+            "/api/v1/retro-rooms",
+            axum::routing::post(domain::retrospect::handler::create_retro_room)
+                .get(domain::retrospect::handler::list_retro_rooms),
+        )
+        .route(
+            "/api/v1/retro-rooms/join",
+            axum::routing::post(domain::retrospect::handler::join_retro_room),
+        )
+        .route(
+            "/api/v1/retro-rooms/order",
+            axum::routing::patch(domain::retrospect::handler::update_retro_room_order),
+        )
+        .route(
+            "/api/v1/retro-rooms/:retro_room_id/name",
+            axum::routing::patch(domain::retrospect::handler::update_retro_room_name),
+        )
+        .route(
+            "/api/v1/retro-rooms/:retro_room_id",
+            axum::routing::delete(domain::retrospect::handler::delete_retro_room),
+        )
+        .route(
+            "/api/v1/retro-rooms/:retro_room_id/retrospects",
+            axum::routing::get(domain::retrospect::handler::list_retrospects),
+        )
         // Retrospect API
         .route(
             "/api/v1/retrospects",
             axum::routing::post(domain::retrospect::handler::create_retrospect),
-        )
-        .route(
-            "/api/v1/teams/:team_id/retrospects",
-            axum::routing::get(domain::retrospect::handler::list_team_retrospects),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/participants",

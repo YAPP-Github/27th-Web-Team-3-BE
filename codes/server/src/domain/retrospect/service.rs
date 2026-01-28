@@ -21,20 +21,24 @@ use crate::domain::retrospect::entity::response_like;
 use crate::domain::retrospect::entity::retro_reference;
 use crate::domain::retrospect::entity::retro_room;
 use crate::domain::retrospect::entity::retrospect;
-use crate::domain::team::entity::member_team;
-use crate::domain::team::entity::team;
 use crate::state::AppState;
 use crate::utils::error::AppError;
 
+use crate::domain::member::entity::member_retro_room::{Entity as MemberRetroRoom, RoomRole};
+use crate::domain::retrospect::entity::retro_room::Entity as RetroRoom;
+use crate::domain::retrospect::entity::retrospect::Entity as Retrospect;
+
 use super::dto::{
     AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse, DraftItem,
-    DraftSaveRequest, DraftSaveResponse, ListCommentsResponse, ReferenceItem, ResponseCategory,
-    ResponseListItem, ResponsesListResponse, RetrospectDetailResponse, RetrospectMemberItem,
-    RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
-    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, TeamRetrospectListItem,
-    REFERENCE_URL_MAX_LENGTH,
+    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
+    DeleteRetroRoomResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, JoinRetroRoomRequest,
+    JoinRetroRoomResponse, ListCommentsResponse, ReferenceItem, ResponseCategory, ResponseListItem,
+    ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
+    RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
+    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
+    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
+    UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -43,6 +47,538 @@ const QUESTIONS_PER_RETROSPECT: usize = 5;
 pub struct RetrospectService;
 
 impl RetrospectService {
+    // ============================================
+    // RetroRoom Service Methods (API-004 ~ API-010)
+    // ============================================
+
+    pub async fn create_retro_room(
+        state: AppState,
+        member_id: i64,
+        req: RetroRoomCreateRequest,
+    ) -> Result<RetroRoomCreateResponse, AppError> {
+        // 1. 회고 룸 이름 중복 체크
+        let existing_room = RetroRoom::find()
+            .filter(retro_room::Column::Title.eq(&req.title))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if existing_room.is_some() {
+            return Err(AppError::RetroRoomNameDuplicate(
+                "이미 사용 중인 회고방 이름입니다.".into(),
+            ));
+        }
+
+        // 2. 초대 코드 생성 (형식: INV-XXXX-XXXX) - 충돌 방지 retry 로직
+        let mut invite_code = Self::generate_invite_code();
+        const MAX_RETRY: u8 = 5;
+        let mut is_unique = false;
+
+        for _ in 0..MAX_RETRY {
+            let existing = RetroRoom::find()
+                .filter(retro_room::Column::InvitionUrl.eq(&invite_code))
+                .one(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+            if existing.is_none() {
+                is_unique = true;
+                break;
+            }
+            invite_code = Self::generate_invite_code();
+        }
+
+        // MAX_RETRY 후에도 유니크한 코드를 생성하지 못한 경우 에러 반환
+        if !is_unique {
+            return Err(AppError::InternalError(
+                "초대 코드 생성에 실패했습니다. 잠시 후 다시 시도해주세요.".into(),
+            ));
+        }
+
+        let now = Utc::now().naive_utc();
+        let title = req.title.clone();
+        let description = req.description;
+
+        // 3. 트랜잭션으로 retro_room + member_retro_room 원자적 생성
+        let result = state
+            .db
+            .transaction::<_, retro_room::Model, DbErr>(|txn| {
+                Box::pin(async move {
+                    // retro_room 생성
+                    let retro_room_active = retro_room::ActiveModel {
+                        title: Set(title),
+                        description: Set(description),
+                        invition_url: Set(invite_code),
+                        invite_code_created_at: Set(now),
+                        created_at: Set(now),
+                        updated_at: Set(now),
+                        ..Default::default()
+                    };
+
+                    let result = retro_room_active.insert(txn).await?;
+
+                    // member_retro_room 생성 (Owner 권한 부여)
+                    let member_retro_room_active = member_retro_room::ActiveModel {
+                        member_id: Set(member_id),
+                        retrospect_room_id: Set(result.retrospect_room_id),
+                        role: Set(RoomRole::Owner),
+                        ..Default::default()
+                    };
+
+                    member_retro_room_active.insert(txn).await?;
+
+                    Ok(result)
+                })
+            })
+            .await
+            .map_err(|e| AppError::InternalError(format!("회고 룸 생성 실패: {}", e)))?;
+
+        Ok(RetroRoomCreateResponse {
+            retro_room_id: result.retrospect_room_id,
+            title: result.title,
+            invite_code: result.invition_url,
+        })
+    }
+
+    pub async fn join_retro_room(
+        state: AppState,
+        member_id: i64,
+        req: JoinRetroRoomRequest,
+    ) -> Result<JoinRetroRoomResponse, AppError> {
+        // 1. 초대 코드 추출 (path segment 또는 query parameter 지원)
+        let invite_code = Self::extract_invite_code(&req.invite_url)?;
+
+        // 2. 초대 코드로 룸 조회
+        let room = RetroRoom::find()
+            .filter(retro_room::Column::InvitionUrl.eq(invite_code))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let room =
+            room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
+
+        // 3. 만료 체크 (초대 코드 생성 시점부터 7일)
+        let now = Utc::now().naive_utc();
+        let diff = now.signed_duration_since(room.invite_code_created_at);
+        if diff.num_days() >= 7 {
+            return Err(AppError::ExpiredInviteLink(
+                "만료된 초대 링크입니다. 룸 관리자에게 새로운 초대 링크를 요청해주세요.".into(),
+            ));
+        }
+
+        // 4. 이미 참여 중인지 체크
+        let existing_member = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(room.retrospect_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if existing_member.is_some() {
+            return Err(AppError::AlreadyMember(
+                "이미 해당 회고 룸의 멤버입니다.".into(),
+            ));
+        }
+
+        // 5. 멤버 추가 (DB unique constraint로 race condition 방지)
+        let member_retro_room_active = member_retro_room::ActiveModel {
+            member_id: Set(member_id),
+            retrospect_room_id: Set(room.retrospect_room_id),
+            role: Set(RoomRole::Member),
+            ..Default::default()
+        };
+
+        member_retro_room_active
+            .insert(&state.db)
+            .await
+            .map_err(|e| {
+                // Unique constraint violation 처리 (race condition 대비)
+                let err_str = e.to_string().to_lowercase();
+                if err_str.contains("duplicate")
+                    || err_str.contains("unique")
+                    || err_str.contains("constraint")
+                {
+                    AppError::AlreadyMember("이미 해당 회고 룸의 멤버입니다.".into())
+                } else {
+                    AppError::InternalError(format!("멤버 추가 실패: {}", e))
+                }
+            })?;
+
+        Ok(JoinRetroRoomResponse {
+            retro_room_id: room.retrospect_room_id,
+            title: room.title,
+            joined_at: Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
+        })
+    }
+
+    /// API-006: 사용자가 참여 중인 레트로룸 목록 조회
+    pub async fn list_retro_rooms(
+        state: AppState,
+        member_id: i64,
+    ) -> Result<Vec<RetroRoomListItem>, AppError> {
+        // JOIN을 사용하여 단일 쿼리로 member_retro_room과 retro_room을 함께 조회
+        let member_rooms_with_rooms = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .find_also_related(RetroRoom)
+            .order_by_asc(member_retro_room::Column::OrderIndex)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let result: Vec<RetroRoomListItem> = member_rooms_with_rooms
+            .into_iter()
+            .filter_map(|(member_room, room_opt)| {
+                room_opt.map(|room| RetroRoomListItem {
+                    retro_room_id: room.retrospect_room_id,
+                    retro_room_name: room.title,
+                    order_index: member_room.order_index,
+                })
+            })
+            .collect();
+
+        Ok(result)
+    }
+
+    /// API-007: 레트로룸 순서 변경
+    pub async fn update_retro_room_order(
+        state: AppState,
+        member_id: i64,
+        req: UpdateRetroRoomOrderRequest,
+    ) -> Result<(), AppError> {
+        // 중복 order_index 값 체크
+        let order_indices: HashSet<i32> = req
+            .retro_room_orders
+            .iter()
+            .map(|o| o.order_index)
+            .collect();
+        if order_indices.len() != req.retro_room_orders.len() {
+            return Err(AppError::InvalidOrderData(
+                "order_index 값이 중복되었습니다.".into(),
+            ));
+        }
+
+        // 요청된 룸 ID 목록
+        let requested_room_ids: Vec<i64> = req
+            .retro_room_orders
+            .iter()
+            .map(|o| o.retro_room_id)
+            .collect();
+
+        // 1. 요청된 모든 룸이 실제로 존재하는지 확인 (RETRO4041)
+        let existing_rooms = RetroRoom::find()
+            .filter(retro_room::Column::RetrospectRoomId.is_in(requested_room_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let existing_room_ids: HashSet<i64> = existing_rooms
+            .iter()
+            .map(|r| r.retrospect_room_id)
+            .collect();
+
+        for room_id in &requested_room_ids {
+            if !existing_room_ids.contains(room_id) {
+                return Err(AppError::RetroRoomNotFound(
+                    "존재하지 않는 회고방 정보가 포함되어 있습니다.".into(),
+                ));
+            }
+        }
+
+        // 2. 사용자가 참여 중인 룸 ID 목록 조회
+        let member_rooms = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let member_room_ids: HashSet<i64> = member_rooms
+            .iter()
+            .map(|mr| mr.retrospect_room_id)
+            .collect();
+
+        // 3. 요청된 모든 룸이 사용자가 참여 중인 룸인지 확인 (RETRO4031)
+        for order_item in &req.retro_room_orders {
+            if !member_room_ids.contains(&order_item.retro_room_id) {
+                return Err(AppError::NoPermission(
+                    "순서를 변경할 권한이 없습니다.".into(),
+                ));
+            }
+        }
+
+        // 트랜잭션으로 순서 일괄 업데이트
+        let orders = req.retro_room_orders.clone();
+        state
+            .db
+            .transaction::<_, (), DbErr>(|txn| {
+                Box::pin(async move {
+                    for order_item in orders {
+                        let member_room = MemberRetroRoom::find()
+                            .filter(member_retro_room::Column::MemberId.eq(member_id))
+                            .filter(
+                                member_retro_room::Column::RetrospectRoomId
+                                    .eq(order_item.retro_room_id),
+                            )
+                            .one(txn)
+                            .await?;
+
+                        let mr = member_room.ok_or(DbErr::RecordNotFound(
+                            "멤버십이 존재하지 않습니다.".to_string(),
+                        ))?;
+                        let mut active_model: member_retro_room::ActiveModel = mr.into();
+                        active_model.order_index = Set(order_item.order_index);
+                        active_model.update(txn).await?;
+                    }
+                    Ok(())
+                })
+            })
+            .await
+            .map_err(|e| AppError::InternalError(format!("순서 업데이트 실패: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// API-008: 레트로룸 이름 변경
+    pub async fn update_retro_room_name(
+        state: AppState,
+        member_id: i64,
+        retro_room_id: i64,
+        req: UpdateRetroRoomNameRequest,
+    ) -> Result<UpdateRetroRoomNameResponse, AppError> {
+        // 1. 룸 존재 여부 확인
+        let room = RetroRoom::find_by_id(retro_room_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let room =
+            room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
+
+        // 2. 멤버십 및 Owner 권한 확인
+        let member_room = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        // 멤버가 아닌 경우 403 (RETRO4031)
+        let member_room = member_room.ok_or_else(|| {
+            AppError::NoRoomPermission("회고방 이름을 변경할 권한이 없습니다.".into())
+        })?;
+
+        // Owner가 아닌 경우 403 (RETRO4031)
+        if member_room.role != RoomRole::Owner {
+            return Err(AppError::NoRoomPermission(
+                "회고방 이름을 변경할 권한이 없습니다.".into(),
+            ));
+        }
+
+        // 3. 이름 중복 체크 (자기 자신 제외)
+        let existing_room = RetroRoom::find()
+            .filter(retro_room::Column::Title.eq(&req.name))
+            .filter(retro_room::Column::RetrospectRoomId.ne(retro_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if existing_room.is_some() {
+            return Err(AppError::RetroRoomNameDuplicate(
+                "이미 사용 중인 회고방 이름입니다.".into(),
+            ));
+        }
+
+        // 4. 이름 변경
+        let now = Utc::now().naive_utc();
+        let mut active_model: retro_room::ActiveModel = room.into();
+        active_model.title = Set(req.name.clone());
+        active_model.updated_at = Set(now);
+
+        let updated_room = active_model
+            .update(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("이름 변경 실패: {}", e)))?;
+
+        Ok(UpdateRetroRoomNameResponse {
+            retro_room_id: updated_room.retrospect_room_id,
+            retro_room_name: updated_room.title,
+            updated_at: updated_room
+                .updated_at
+                .format("%Y-%m-%dT%H:%M:%S")
+                .to_string(),
+        })
+    }
+
+    /// API-009: 레트로룸 삭제
+    pub async fn delete_retro_room(
+        state: AppState,
+        member_id: i64,
+        retro_room_id: i64,
+    ) -> Result<DeleteRetroRoomResponse, AppError> {
+        // 1. 룸 존재 여부 확인
+        let room = RetroRoom::find_by_id(retro_room_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let room =
+            room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
+
+        // 2. 멤버십 및 Owner 권한 확인
+        let member_room = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        // 멤버가 아닌 경우 403 (RETRO4031)
+        let member_room = member_room
+            .ok_or_else(|| AppError::NoPermission("회고방을 삭제할 권한이 없습니다.".into()))?;
+
+        // Owner가 아닌 경우 403 (RETRO4031)
+        if member_room.role != RoomRole::Owner {
+            return Err(AppError::NoPermission(
+                "회고방을 삭제할 권한이 없습니다.".into(),
+            ));
+        }
+
+        let deleted_at = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+
+        // 3. 삭제 (관련 member_retro_room은 CASCADE로 삭제)
+        room.delete(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("회고방 삭제 실패: {}", e)))?;
+
+        Ok(DeleteRetroRoomResponse {
+            retro_room_id,
+            deleted_at,
+        })
+    }
+
+    /// API-010: 레트로룸 내 회고 목록 조회
+    pub async fn list_retrospects(
+        state: AppState,
+        member_id: i64,
+        retro_room_id: i64,
+    ) -> Result<Vec<RetrospectListItem>, AppError> {
+        // 1. 룸 존재 여부 확인
+        let room = RetroRoom::find_by_id(retro_room_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if room.is_none() {
+            return Err(AppError::RetroRoomNotFound(
+                "존재하지 않는 회고방입니다.".into(),
+            ));
+        }
+
+        // 2. 사용자 권한 확인 (멤버인지)
+        let member_room = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if member_room.is_none() {
+            return Err(AppError::NoPermission(
+                "해당 회고방에 접근 권한이 없습니다.".into(),
+            ));
+        }
+
+        // 3. 해당 룸의 회고 목록 조회
+        let retrospects = Retrospect::find()
+            .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
+            .order_by_desc(retrospect::Column::StartTime)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let result: Vec<RetrospectListItem> = retrospects
+            .into_iter()
+            .map(|r| RetrospectListItem {
+                retrospect_id: r.retrospect_id,
+                project_name: r.title,
+                retrospect_method: r.retrospect_method.to_string(),
+                retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
+                retrospect_time: r.start_time.format("%H:%M").to_string(),
+            })
+            .collect();
+
+        Ok(result)
+    }
+
+    /// 초대 코드 생성 (형식: INV-XXXX-XXXX)
+    pub fn generate_invite_code() -> String {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let part1: u32 = rng.gen_range(0..10000);
+        let part2: u32 = rng.gen_range(0..10000);
+        format!("INV-{:04}-{:04}", part1, part2)
+    }
+
+    /// 초대 URL에서 초대 코드 추출
+    pub fn extract_invite_code(invite_url: &str) -> Result<String, AppError> {
+        // URL에서 INV-XXXX-XXXX 패턴 찾기
+        if let Some(pos) = invite_url.find("INV-") {
+            let code = &invite_url[pos..];
+            // INV-XXXX-XXXX 형식 (13자)
+            if code.len() >= 13 {
+                let extracted = &code[..13];
+                // 형식 검증: INV-XXXX-XXXX (숫자 4자리-숫자 4자리)
+                if Self::is_valid_invite_code(extracted) {
+                    return Ok(extracted.to_string());
+                }
+            }
+        }
+
+        // query parameter에서 code= 찾기
+        if let Some(pos) = invite_url.find("code=") {
+            let after_code = &invite_url[pos + 5..];
+            let code_end = after_code.find('&').unwrap_or(after_code.len());
+            let code = &after_code[..code_end];
+            if !code.is_empty() {
+                // 형식 검증: INV-XXXX-XXXX
+                if Self::is_valid_invite_code(code) {
+                    return Ok(code.to_string());
+                }
+                // code= 값이 있지만 형식이 잘못된 경우
+                return Err(AppError::InvalidInviteLink(
+                    "유효하지 않은 초대 링크입니다.".into(),
+                ));
+            }
+        }
+
+        Err(AppError::InvalidInviteLink(
+            "유효하지 않은 초대 링크입니다.".into(),
+        ))
+    }
+
+    /// 초대 코드 형식 검증 (INV-XXXX-XXXX, X는 영문자 또는 숫자)
+    fn is_valid_invite_code(code: &str) -> bool {
+        if code.len() != 13 {
+            return false;
+        }
+        let parts: Vec<&str> = code.split('-').collect();
+        if parts.len() != 3 {
+            return false;
+        }
+        if parts[0] != "INV" {
+            return false;
+        }
+        // 영문자 또는 숫자 4자리 검증
+        parts[1].len() == 4
+            && parts[1].chars().all(|c| c.is_ascii_alphanumeric())
+            && parts[2].len() == 4
+            && parts[2].chars().all(|c| c.is_ascii_alphanumeric())
+    }
+
+    // ============================================
+    // Retrospect Service Methods
+    // ============================================
+
     /// 회고 생성
     pub async fn create_retrospect(
         state: AppState,
@@ -59,29 +595,29 @@ impl RetrospectService {
         // 3. 미래 날짜/시간 검증
         Self::validate_future_datetime(retrospect_date, retrospect_time)?;
 
-        // 4. 팀 존재 여부 확인
-        let team_exists = team::Entity::find_by_id(req.team_id)
+        // 4. 회고방 존재 여부 확인
+        let room_exists = RetroRoom::find_by_id(req.retro_room_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if team_exists.is_none() {
-            return Err(AppError::TeamNotFound(
-                "존재하지 않는 팀입니다.".to_string(),
+        if room_exists.is_none() {
+            return Err(AppError::NotFound(
+                "존재하지 않는 회고방입니다.".to_string(),
             ));
         }
 
-        // 5. 팀 멤버십 확인
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(req.team_id))
+        // 5. 회고방 멤버십 확인
+        let is_member = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(req.retro_room_id))
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 팀의 멤버가 아닙니다.".to_string(),
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방에 접근 권한이 없습니다.".to_string(),
             ));
         }
 
@@ -92,32 +628,9 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 7. 회고방 생성
         let now = Utc::now().naive_utc();
-        let base_url = std::env::var("INVITATION_BASE_URL")
-            .unwrap_or_else(|_| "https://retro.example.com".to_string());
-        let invitation_url = format!(
-            "{}/room/{}",
-            base_url.trim_end_matches('/'),
-            uuid::Uuid::new_v4()
-        );
 
-        let retro_room_model = retro_room::ActiveModel {
-            title: Set(req.project_name.clone()),
-            invitation_url: Set(invitation_url),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
-
-        let retro_room_result = retro_room_model
-            .insert(&txn)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        let retrospect_room_id = retro_room_result.retrospect_room_id;
-
-        // 8. 회고 생성
+        // 7. 회고 생성
         let start_time = NaiveDateTime::new(retrospect_date, retrospect_time);
 
         let retrospect_model = retrospect::ActiveModel {
@@ -127,8 +640,8 @@ impl RetrospectService {
             created_at: Set(now),
             updated_at: Set(now),
             start_time: Set(start_time),
-            retrospect_room_id: Set(retrospect_room_id),
-            team_id: Set(req.team_id),
+            retrospect_room_id: Set(req.retro_room_id),
+            team_id: Set(req.retro_room_id),
             ..Default::default()
         };
 
@@ -179,7 +692,7 @@ impl RetrospectService {
 
         Ok(CreateRetrospectResponse {
             retrospect_id,
-            team_id: req.team_id,
+            retro_room_id: req.retro_room_id,
             project_name: req.project_name,
         })
     }
@@ -270,55 +783,7 @@ impl RetrospectService {
         Ok(())
     }
 
-    /// 팀 회고 목록 조회 (API-010)
-    pub async fn list_team_retrospects(
-        state: AppState,
-        user_id: i64,
-        team_id: i64,
-    ) -> Result<Vec<TeamRetrospectListItem>, AppError> {
-        // 1. 팀 존재 여부 확인
-        let team_exists = team::Entity::find_by_id(team_id)
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        if team_exists.is_none() {
-            return Err(AppError::TeamNotFound(
-                "존재하지 않는 팀입니다.".to_string(),
-            ));
-        }
-
-        // 2. 팀 멤버십 확인
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(team_id))
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 팀에 접근 권한이 없습니다.".to_string(),
-            ));
-        }
-
-        // 3. 팀에 속한 회고 목록 조회 (최신순 정렬, 동일 시간일 경우 ID 역순으로 안정 정렬)
-        let retrospects = retrospect::Entity::find()
-            .filter(retrospect::Column::TeamId.eq(team_id))
-            .order_by_desc(retrospect::Column::StartTime)
-            .order_by_desc(retrospect::Column::RetrospectId)
-            .all(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        // 4. DTO 변환
-        let result: Vec<TeamRetrospectListItem> =
-            retrospects.into_iter().map(|r| r.into()).collect();
-
-        Ok(result)
-    }
-
-    /// 회고 조회 및 팀 멤버십 확인 헬퍼
+    /// 회고 조회 및 회고방 멤버십 확인 헬퍼
     /// 비멤버에게 회고 존재 여부를 노출하지 않도록
     /// "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
     async fn find_retrospect_for_member(
@@ -336,9 +801,11 @@ impl RetrospectService {
                 )
             })?;
 
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+        let is_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -358,7 +825,7 @@ impl RetrospectService {
         user_id: i64,
         retrospect_id: i64,
     ) -> Result<CreateParticipantResponse, AppError> {
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -433,7 +900,7 @@ impl RetrospectService {
         user_id: i64,
         retrospect_id: i64,
     ) -> Result<Vec<ReferenceItem>, AppError> {
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let _retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -490,7 +957,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| {
-                AppError::TeamAccessDenied("해당 회고에 작성 권한이 없습니다.".to_string())
+                AppError::RetroRoomAccessDenied("해당 회고에 작성 권한이 없습니다.".to_string())
             })?;
 
         // 4. member_response를 통해 해당 멤버의 응답(response) ID 조회
@@ -505,7 +972,7 @@ impl RetrospectService {
 
         // 4-1. 응답이 없는 경우 사전 방어 (member_response가 없으면 권한 문제)
         if member_response_ids.is_empty() {
-            return Err(AppError::TeamAccessDenied(
+            return Err(AppError::RetroRoomAccessDenied(
                 "해당 회고에 대한 응답 데이터가 존재하지 않습니다.".to_string(),
             ));
         }
@@ -779,7 +1246,10 @@ impl RetrospectService {
                 display_date,
                 title: retro.title.clone(),
                 retrospect_method: retro.retrospect_method.clone(),
-                member_count: *member_counts.get(&retro.retrospect_id).unwrap_or(&0),
+                member_count: member_counts
+                    .get(&retro.retrospect_id)
+                    .copied()
+                    .unwrap_or(0),
             };
 
             year_groups.entry(year).or_default().push(item);
@@ -824,17 +1294,17 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
 
-        // 2. 접근 권한 확인 (해당 회고가 속한 팀의 멤버인지 확인)
+        // 2. 접근 권한 확인 (해당 회고가 속한 회고방의 멤버인지 확인)
         let retrospect_room_id = retrospect_model.retrospect_room_id;
-        let is_team_member = member_retro_room::Entity::find()
+        let is_room_member = member_retro_room::Entity::find()
             .filter(member_retro_room::Column::MemberId.eq(user_id))
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if is_team_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
                 "해당 회고에 접근 권한이 없습니다.".to_string(),
             ));
         }
@@ -939,7 +1409,7 @@ impl RetrospectService {
         let start_time = retrospect_model.start_time.format("%Y-%m-%d").to_string();
 
         Ok(RetrospectDetailResponse {
-            team_id: retrospect_room_id,
+            retro_room_id: retrospect_room_id,
             title: retrospect_model.title,
             start_time,
             retro_category: retrospect_model.retrospect_method,
@@ -984,32 +1454,34 @@ impl RetrospectService {
             "회고 검색 요청"
         );
 
-        // 2. 사용자가 속한 팀 목록 조회
-        let user_teams = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
+        // 2. 사용자가 속한 회고방 목록 조회
+        let user_rooms = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if user_teams.is_empty() {
+        if user_rooms.is_empty() {
             return Ok(vec![]);
         }
 
-        let team_ids: Vec<i64> = user_teams.iter().map(|mt| mt.team_id).collect();
+        let retro_room_ids: Vec<i64> = user_rooms.iter().map(|mr| mr.retrospect_room_id).collect();
 
-        // 3. 팀 정보 조회 (팀명 매핑)
-        let teams = team::Entity::find()
-            .filter(team::Column::TeamId.is_in(team_ids.clone()))
+        // 3. 회고방 정보 조회 (회고방명 매핑)
+        let rooms = retro_room::Entity::find()
+            .filter(retro_room::Column::RetrospectRoomId.is_in(retro_room_ids.clone()))
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let team_map: HashMap<i64, String> =
-            teams.iter().map(|t| (t.team_id, t.name.clone())).collect();
+        let room_map: HashMap<i64, String> = rooms
+            .iter()
+            .map(|r| (r.retrospect_room_id, r.title.clone()))
+            .collect();
 
-        // 4. 해당 팀들의 회고 중 키워드가 포함된 회고 검색 (동일 시간대 안정 정렬을 위해 ID 보조 정렬 추가)
+        // 4. 해당 회고방들의 회고 중 키워드가 포함된 회고 검색 (동일 시간대 안정 정렬을 위해 ID 보조 정렬 추가)
         let retrospects = retrospect::Entity::find()
-            .filter(retrospect::Column::TeamId.is_in(team_ids))
+            .filter(retrospect::Column::RetrospectRoomId.is_in(retro_room_ids))
             .filter(retrospect::Column::Title.contains(&keyword))
             .order_by_desc(retrospect::Column::StartTime)
             .order_by_desc(retrospect::Column::RetrospectId)
@@ -1023,7 +1495,10 @@ impl RetrospectService {
             .map(|r| SearchRetrospectItem {
                 retrospect_id: r.retrospect_id,
                 project_name: r.title.clone(),
-                team_name: team_map.get(&r.team_id).cloned().unwrap_or_default(),
+                retro_room_name: room_map
+                    .get(&r.retrospect_room_id)
+                    .cloned()
+                    .unwrap_or_default(),
                 retrospect_method: r.retrospect_method.clone(),
                 retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
                 retrospect_time: r.start_time.format("%H:%M").to_string(),
@@ -1052,17 +1527,17 @@ impl RetrospectService {
             "회고 내보내기 요청"
         );
 
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
-        // 2. 팀 이름 조회
-        let team_model = team::Entity::find_by_id(retrospect_model.team_id)
+        // 2. 회고방 이름 조회
+        let room_model = retro_room::Entity::find_by_id(retrospect_model.retrospect_room_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
-        let team_name = team_model
-            .map(|t| t.name)
+        let room_name = room_model
+            .map(|r| r.title)
             .unwrap_or_else(|| "(알 수 없음)".to_string());
 
         // 3. 참여 멤버 조회
@@ -1116,7 +1591,7 @@ impl RetrospectService {
         // 5. PDF 생성
         let pdf_bytes = Self::generate_pdf(
             &retrospect_model,
-            &team_name,
+            &room_name,
             &member_retros,
             &member_map,
             &responses,
@@ -1134,8 +1609,8 @@ impl RetrospectService {
 
     /// 회고 삭제 (API-013)
     ///
-    /// TODO: 현재 스키마에 `created_by`(회고 생성자) 필드와 `member_team.role`(팀 역할) 필드가 없어
-    /// 팀 멤버십만 확인합니다. 스펙상 팀 Owner 또는 회고 생성자만 삭제 가능해야 하므로,
+    /// TODO: 현재 스키마에 `created_by`(회고 생성자) 필드와 `member_retro_room.role`(회고방 역할) 필드가 없어
+    /// 회고방 멤버십만 확인합니다. 스펙상 회고방 Owner 또는 회고 생성자만 삭제 가능해야 하므로,
     /// 스키마 마이그레이션 후 권한 분기를 추가해야 합니다.
     pub async fn delete_retrospect(
         state: AppState,
@@ -1148,7 +1623,7 @@ impl RetrospectService {
             "회고 삭제 요청"
         );
 
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -1296,7 +1771,7 @@ impl RetrospectService {
     /// PDF 문서 생성
     fn generate_pdf(
         retrospect_model: &retrospect::Model,
-        team_name: &str,
+        retro_room_name: &str,
         member_retros: &[member_retro::Model],
         member_map: &HashMap<i64, String>,
         responses: &[response::Model],
@@ -1379,7 +1854,7 @@ impl RetrospectService {
                 .styled(style::Style::new().bold().with_font_size(14)),
         );
         doc.push(Break::new(0.3));
-        doc.push(Paragraph::new(format!("Team: {}", team_name)));
+        doc.push(Paragraph::new(format!("Retro Room: {}", retro_room_name)));
         doc.push(Paragraph::new(format!("Date: {} {}", date_str, time_str)));
         doc.push(Paragraph::new(format!("Method: {}", method_str)));
 
@@ -1397,10 +1872,10 @@ impl RetrospectService {
         }
         doc.push(Break::new(0.5));
 
-        // ===== 팀 인사이트 섹션 =====
+        // ===== 회고방 인사이트 섹션 =====
         if let Some(ref insight) = retrospect_model.team_insight {
             doc.push(
-                Paragraph::new("Team Insight")
+                Paragraph::new("Retro Room Insight")
                     .styled(style::Style::new().bold().with_font_size(14)),
             );
             doc.push(Break::new(0.3));
@@ -1613,23 +2088,25 @@ impl RetrospectService {
             ));
         }
 
-        // 3. 팀 멤버십 확인 (팀 기반 접근 제어)
-        let is_team_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+        // 3. 회고방 멤버십 확인 (회고방 기반 접근 제어)
+        let is_room_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if is_team_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 회고에 접근 권한이 없습니다.".to_string(),
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방에 접근 권한이 없습니다.".to_string(),
             ));
         }
 
         let retrospect_room_id = retrospect_model.retrospect_room_id;
 
-        // 4. 월간 사용량 확인 (팀당 월 10회 제한)
+        // 4. 월간 사용량 확인 (회고방당 월 10회 제한)
         let kst_offset = chrono::Duration::hours(9);
         let now_kst = Utc::now().naive_utc() + kst_offset;
         let current_month_start =
@@ -1859,7 +2336,7 @@ impl RetrospectService {
             "회고 답변 카테고리별 조회 요청"
         );
 
-        // 1. 회고 조회 및 팀 멤버십 확인
+        // 1. 회고 조회 및 회고방 멤버십 확인
         let _retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
@@ -2101,9 +2578,9 @@ impl RetrospectService {
         })
     }
 
-    /// 회고 답변 조회 및 팀 멤버십 확인 헬퍼
+    /// 회고 답변 조회 및 회고방 멤버십 확인 헬퍼
     /// - 답변이 존재하지 않으면 RES4041 (404) 반환
-    /// - 팀 멤버가 아니면 TEAM4031 (403) 반환
+    /// - 회고방 멤버가 아니면 TEAM4031 (403) 반환
     async fn find_response_for_member(
         state: &AppState,
         user_id: i64,
@@ -2118,7 +2595,7 @@ impl RetrospectService {
                 AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
             })?;
 
-        // 2. response -> retrospect -> team 경로로 팀 정보 조회
+        // 2. response -> retrospect -> 회고방 경로로 회고방 정보 조회
         let retrospect_model = retrospect::Entity::find_by_id(response_model.retrospect_id)
             .one(&state.db)
             .await
@@ -2130,17 +2607,19 @@ impl RetrospectService {
                 ))
             })?;
 
-        // 3. 팀 멤버십 확인
-        let is_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+        // 3. 회고방 멤버십 확인
+        let is_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         if is_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
-                "해당 리소스에 접근 권한이 없습니다.".to_string(),
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방 리소스에 접근 권한이 없습니다.".to_string(),
             ));
         }
 
@@ -2162,7 +2641,7 @@ impl RetrospectService {
             ));
         }
 
-        // 1. 답변 조회 및 팀 멤버십 확인
+        // 1. 답변 조회 및 회고방 멤버십 확인
         let _response_model = Self::find_response_for_member(&state, user_id, response_id).await?;
 
         // 2. 댓글 목록 조회 (커서 기반 페이지네이션, 최신순 정렬)
@@ -2259,7 +2738,7 @@ impl RetrospectService {
             ));
         }
 
-        // 2. 답변 조회 및 팀 멤버십 확인
+        // 2. 답변 조회 및 회고방 멤버십 확인
         let _response_model = Self::find_response_for_member(&state, user_id, response_id).await?;
 
         // 3. 댓글 생성

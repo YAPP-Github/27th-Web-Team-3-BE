@@ -6,9 +6,13 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub retrospect_room_id: i64,
-    #[sea_orm(unique)]
+    #[sea_orm(unique, column_type = "String(StringLen::N(20))")]
     pub title: String,
-    pub invitation_url: String,
+    #[sea_orm(column_type = "String(StringLen::N(50))", nullable)]
+    pub description: Option<String>,
+    pub invition_url: String, // Keeping schema spelling
+    /// 초대 코드 생성 시각 (만료 기준)
+    pub invite_code_created_at: DateTime,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
