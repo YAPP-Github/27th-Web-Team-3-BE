@@ -64,7 +64,7 @@ variable "ec2_key_name" {
 }
 
 variable "ec2_ami_id" {
-  description = "EC2 AMI ID (빈 값이면 최신 Amazon Linux 2023 사용)"
+  description = "EC2 AMI ID (빈 값이면 최신 Ubuntu 24.04 LTS 사용)"
   type        = string
   default     = ""
 }
@@ -82,13 +82,13 @@ variable "db_instance_class" {
 variable "db_engine" {
   description = "데이터베이스 엔진"
   type        = string
-  default     = "postgres"
+  default     = "mysql"
 }
 
 variable "db_engine_version" {
   description = "데이터베이스 엔진 버전"
   type        = string
-  default     = "15.4"
+  default     = "8.0"
 }
 
 variable "db_name" {

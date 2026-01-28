@@ -30,8 +30,8 @@ ec2_key_name      = "your-key-pair-name"  # AWS에서 생성한 키 페어 이�
 # RDS Settings
 # -----------------------------------------------------------------------------
 db_instance_class        = "db.t3.micro"
-db_engine                = "postgres"
-db_engine_version        = "15.4"
+db_engine                = "mysql"
+db_engine_version        = "8.0"
 db_name                  = "webteam3db"
 db_username              = "dbadmin"           # 변경 필수!
 db_password              = "ChangeMe123!"      # 변경 필수! (안전한 비밀번호 사용)

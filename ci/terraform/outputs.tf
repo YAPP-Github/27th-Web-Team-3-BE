@@ -66,11 +66,11 @@ output "rds_database_name" {
 
 output "ssh_connection" {
   description = "SSH 접속 명령어"
-  value       = "ssh -i <your-key.pem> ec2-user@${aws_eip.app.public_ip}"
+  value       = "ssh -i <your-key.pem> ubuntu@${aws_eip.app.public_ip}"
 }
 
 output "database_connection_string" {
   description = "데이터베이스 연결 문자열 (비밀번호 제외)"
-  value       = "postgresql://${var.db_username}:<password>@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${aws_db_instance.main.db_name}"
+  value       = "mysql://${var.db_username}:<password>@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${aws_db_instance.main.db_name}"
   sensitive   = true
 }

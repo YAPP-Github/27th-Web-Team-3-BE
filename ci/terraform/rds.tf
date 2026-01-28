@@ -17,22 +17,32 @@ resource "aws_db_subnet_group" "main" {
 # =============================================================================
 
 resource "aws_db_parameter_group" "main" {
-  name        = "${var.project_name}-${var.environment}-pg15-params"
-  family      = "postgres15"
-  description = "Custom parameter group for PostgreSQL 15"
+  name        = "${var.project_name}-${var.environment}-mysql8-params"
+  family      = "mysql8.0"
+  description = "Custom parameter group for MySQL 8.0"
 
   parameter {
-    name  = "log_statement"
-    value = "all"
+    name  = "slow_query_log"
+    value = "1"
   }
 
   parameter {
-    name  = "log_min_duration_statement"
-    value = "1000" # 1초 이상 걸리는 쿼리 로깅
+    name  = "long_query_time"
+    value = "1" # 1초 이상 걸리는 쿼리 로깅
+  }
+
+  parameter {
+    name  = "character_set_server"
+    value = "utf8mb4"
+  }
+
+  parameter {
+    name  = "collation_server"
+    value = "utf8mb4_unicode_ci"
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-pg15-params"
+    Name = "${var.project_name}-${var.environment}-mysql8-params"
   }
 }
 
@@ -59,7 +69,7 @@ resource "aws_db_instance" "main" {
   db_name  = var.db_name
   username = var.db_username
   password = var.db_password
-  port     = 5432
+  port     = 3306
 
   # 네트워크 설정
   db_subnet_group_name   = aws_db_subnet_group.main.name

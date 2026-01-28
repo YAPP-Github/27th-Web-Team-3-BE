@@ -66,11 +66,11 @@ resource "aws_security_group" "rds" {
   description = "Security group for RDS instances"
   vpc_id      = aws_vpc.main.id
 
-  # PostgreSQL from EC2
+  # MySQL from EC2
   ingress {
-    description     = "PostgreSQL from EC2"
-    from_port       = 5432
-    to_port         = 5432
+    description     = "MySQL from EC2"
+    from_port       = 3306
+    to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2.id]
   }

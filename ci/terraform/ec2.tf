@@ -1,14 +1,14 @@
 # =============================================================================
-# AMI Data Source (Amazon Linux 2023)
+# AMI Data Source (Ubuntu 24.04 LTS)
 # =============================================================================
 
-data "aws_ami" "amazon_linux_2023" {
+data "aws_ami" "ubuntu_2404" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
 
   filter {
@@ -22,7 +22,7 @@ data "aws_ami" "amazon_linux_2023" {
 # =============================================================================
 
 resource "aws_instance" "app" {
-  ami                    = var.ec2_ami_id != "" ? var.ec2_ami_id : data.aws_ami.amazon_linux_2023.id
+  ami                    = var.ec2_ami_id != "" ? var.ec2_ami_id : data.aws_ami.ubuntu_2404.id
   instance_type          = var.ec2_instance_type
   key_name               = var.ec2_key_name
   subnet_id              = aws_subnet.public[0].id
@@ -40,27 +40,29 @@ resource "aws_instance" "app" {
     set -e
 
     # 시스템 업데이트
-    dnf update -y
+    apt-get update && apt-get upgrade -y
 
     # 필수 패키지 설치
-    dnf install -y git gcc openssl-devel
+    apt-get install -y git build-essential pkg-config libssl-dev curl
 
     # Docker 설치
-    dnf install -y docker
+    apt-get install -y ca-certificates curl gnupg
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     systemctl start docker
     systemctl enable docker
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
 
-    # Docker Compose 설치
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-
-    # Rust 설치 (ec2-user로)
-    su - ec2-user -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
+    # Rust 설치 (ubuntu 사용자로)
+    su - ubuntu -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
 
     # 애플리케이션 디렉토리 생성
     mkdir -p /opt/app
-    chown ec2-user:ec2-user /opt/app
+    chown ubuntu:ubuntu /opt/app
 
     echo "EC2 초기화 완료"
   EOF
