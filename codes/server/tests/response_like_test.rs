@@ -1,7 +1,7 @@
 //! API-025: 회고 답변 좋아요 토글 테스트
 //!
 //! 테스트 대상:
-//! - POST /api/v1/responses/{responseId}/like
+//! - POST /api/v1/responses/{responseId}/likes
 //! - 응답 필드 및 에러 응답 검증
 
 use axum::{
@@ -102,7 +102,7 @@ mod like_test_helpers {
             })))
         }
 
-        Router::new().route("/api/v1/responses/:response_id/like", post(test_handler))
+        Router::new().route("/api/v1/responses/:response_id/likes", post(test_handler))
     }
 }
 
@@ -114,7 +114,7 @@ async fn api025_should_return_401_when_authorization_header_missing() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/1/like")
+        .uri("/api/v1/responses/1/likes")
         .body(Body::empty())
         .unwrap();
 
@@ -137,7 +137,7 @@ async fn api025_should_return_401_when_token_format_invalid() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/1/like")
+        .uri("/api/v1/responses/1/likes")
         .header(header::AUTHORIZATION, "InvalidToken")
         .body(Body::empty())
         .unwrap();
@@ -157,7 +157,7 @@ async fn api025_should_return_400_when_response_id_is_zero() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/0/like")
+        .uri("/api/v1/responses/0/likes")
         .header(header::AUTHORIZATION, "Bearer valid_token")
         .body(Body::empty())
         .unwrap();
@@ -181,7 +181,7 @@ async fn api025_should_return_400_when_response_id_is_negative() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/-1/like")
+        .uri("/api/v1/responses/-1/likes")
         .header(header::AUTHORIZATION, "Bearer valid_token")
         .body(Body::empty())
         .unwrap();
@@ -201,7 +201,7 @@ async fn api025_should_return_404_when_response_not_found() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/999999/like")
+        .uri("/api/v1/responses/999999/likes")
         .header(header::AUTHORIZATION, "Bearer valid_token")
         .body(Body::empty())
         .unwrap();
@@ -228,7 +228,7 @@ async fn api025_should_return_403_when_not_team_member() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/888888/like")
+        .uri("/api/v1/responses/888888/likes")
         .header(header::AUTHORIZATION, "Bearer valid_token")
         .body(Body::empty())
         .unwrap();
@@ -255,7 +255,7 @@ async fn api025_should_return_200_on_successful_like_toggle() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/123/like")
+        .uri("/api/v1/responses/123/likes")
         .header(header::AUTHORIZATION, "Bearer valid_token")
         .body(Body::empty())
         .unwrap();
@@ -280,7 +280,7 @@ async fn api025_should_return_correct_response_fields() {
     let app = like_test_helpers::create_like_test_router();
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/api/v1/responses/456/like")
+        .uri("/api/v1/responses/456/likes")
         .header(header::AUTHORIZATION, "Bearer valid_token")
         .body(Body::empty())
         .unwrap();
@@ -311,7 +311,7 @@ async fn api025_should_return_response_id_in_result() {
     let response_id = 789;
     let request = Request::builder()
         .method(Method::POST)
-        .uri(format!("/api/v1/responses/{}/like", response_id))
+        .uri(format!("/api/v1/responses/{}/likes", response_id))
         .header(header::AUTHORIZATION, "Bearer valid_token")
         .body(Body::empty())
         .unwrap();

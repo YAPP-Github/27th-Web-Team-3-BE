@@ -773,6 +773,7 @@ pub async fn create_comment(
     ),
     responses(
         (status = 200, description = "좋아요 상태가 성공적으로 업데이트되었습니다.", body = SuccessLikeToggleResponse),
+        (status = 400, description = "잘못된 요청 (responseId가 1 미만)", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 403, description = "팀 멤버가 아닌 유저가 좋아요 시도", body = ErrorResponse),
         (status = 404, description = "존재하지 않는 회고 답변", body = ErrorResponse),
