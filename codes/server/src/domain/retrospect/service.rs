@@ -2796,50 +2796,47 @@ impl RetrospectService {
             )
         })?;
 
-        // 3. 팀 멤버십 확인
-        let is_team_member = member_team::Entity::find()
-            .filter(member_team::Column::MemberId.eq(user_id))
-            .filter(member_team::Column::TeamId.eq(retrospect_model.team_id))
+        // 3. 회고방 멤버십 확인
+        let is_room_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if is_team_member.is_none() {
-            return Err(AppError::TeamAccessDenied(
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
                 "해당 리소스에 접근 권한이 없습니다.".to_string(),
             ));
         }
 
         // 4. 트랜잭션으로 좋아요 토글 (Race Condition 방지)
+        // "delete first, insert if no rows affected" 패턴으로 동시성 문제 해결
         let (is_liked, total_likes) = state
             .db
             .transaction::<_, (bool, u64), DbErr>(|txn| {
                 Box::pin(async move {
-                    // 기존 좋아요 확인
-                    let existing_like = response_like::Entity::find()
+                    // 먼저 삭제 시도 (좋아요가 있으면 삭제됨)
+                    let delete_result = response_like::Entity::delete_many()
                         .filter(response_like::Column::MemberId.eq(user_id))
                         .filter(response_like::Column::ResponseId.eq(response_id))
-                        .one(txn)
+                        .exec(txn)
                         .await?;
 
-                    let is_liked = match existing_like {
-                        Some(like) => {
-                            // 좋아요가 있으면 삭제 (취소)
-                            response_like::Entity::delete_by_id(like.response_like_id)
-                                .exec(txn)
-                                .await?;
-                            false
-                        }
-                        None => {
-                            // 좋아요가 없으면 추가
-                            let new_like = response_like::ActiveModel {
-                                member_id: Set(user_id),
-                                response_id: Set(response_id),
-                                ..Default::default()
-                            };
-                            new_like.insert(txn).await?;
-                            true
-                        }
+                    let is_liked = if delete_result.rows_affected > 0 {
+                        // 삭제된 행이 있음 = 좋아요 취소됨
+                        false
+                    } else {
+                        // 삭제된 행이 없음 = 좋아요가 없었으므로 추가
+                        let new_like = response_like::ActiveModel {
+                            member_id: Set(user_id),
+                            response_id: Set(response_id),
+                            ..Default::default()
+                        };
+                        new_like.insert(txn).await?;
+                        true
                     };
 
                     // 5. 총 좋아요 개수 조회
