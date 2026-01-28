@@ -79,6 +79,20 @@ jobs:
           source: "server"
           target: "/opt/app/"
 
+      - name: Create .env file
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cat > /opt/app/.env << 'EOF'
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            RUST_LOG=${{ secrets.RUST_LOG || 'info' }}
+            SERVER_HOST=${{ secrets.SERVER_HOST || '0.0.0.0' }}
+            SERVER_PORT=${{ secrets.SERVER_PORT || '8080' }}
+            EOF
+
       - name: Restart application
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -87,4 +101,4 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             chmod +x /opt/app/server
-            sudo systemctl restart app || sudo systemctl start app
+            cd /opt/app && sudo systemctl restart app || sudo systemctl start app
