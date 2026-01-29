@@ -1,3 +1,5 @@
+//! Web Team 3 Backend Server
+
 mod config;
 mod domain;
 mod state;
