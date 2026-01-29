@@ -1,32 +1,38 @@
 # =============================================================================
 # Terraform Backend (S3 + DynamoDB)
-# 팀 협업 시 상태 파일 공유를 위해 사용
+# =============================================================================
+#
+# 🚀 사용 방법 (2단계 배포):
+#
+# [1단계] 로컬에서 S3/DynamoDB 먼저 생성:
+#   - 아래 backend "s3" 블록은 주석 상태로 유지
+#   - terraform init && terraform apply
+#   - S3 버킷과 DynamoDB 테이블이 생성됨
+#
+# [2단계] S3 Backend 활성화:
+#   - 아래 backend "s3" 블록 주석 해제
+#   - terraform init -migrate-state (state를 S3로 이동)
+#   - commit & push → 이후 GitHub Actions 정상 작동
+#
 # =============================================================================
 
-# 주의: 이 백엔드를 사용하려면 먼저 S3 버킷과 DynamoDB 테이블을 수동으로 생성해야 합니다.
-# 또는 아래 주석을 해제하지 않고 로컬 상태로 시작한 후, 나중에 마이그레이션할 수 있습니다.
-
-# terraform {
-#   backend "s3" {
-#     bucket         = "web-team-3-terraform-state"
-#     key            = "terraform.tfstate"
-#     region         = "ap-northeast-2"
-#     encrypt        = true
-#     dynamodb_table = "web-team-3-terraform-lock"
-#   }
-# }
+# 1단계 완료 후 주석 해제하세요
+terraform {
+  backend "s3" {
+    bucket         = "web-team-3-terraform-state"
+    key            = "terraform.tfstate"
+    region         = "ap-northeast-2"
+    encrypt        = true
+    dynamodb_table = "web-team-3-terraform-lock"
+  }
+}
 
 # =============================================================================
-# 백엔드 인프라 (최초 1회만 생성)
-# 아래 리소스들은 terraform state를 저장하기 위한 것입니다.
+# Backend 인프라 리소스
 # =============================================================================
 
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "${var.project_name}-terraform-state"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 
   tags = {
     Name = "${var.project_name}-terraform-state"
