@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub retrospect_room_id: i64,
-    #[sea_orm(column_type = "String(StringLen::N(20))")]
+    #[sea_orm(unique, column_type = "String(StringLen::N(20))")]
     pub title: String,
     #[sea_orm(column_type = "String(StringLen::N(50))", nullable)]
     pub description: Option<String>,

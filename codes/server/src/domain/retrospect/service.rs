@@ -5,8 +5,8 @@ use genpdf::elements::{Break, Paragraph};
 use genpdf::style;
 use genpdf::Element;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set, TransactionTrait,
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, InsertResult,
+    ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use tracing::{info, warn};
 
@@ -2764,6 +2764,110 @@ impl RetrospectService {
             response_id,
             content: inserted.content,
             created_at: created_at_kst.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        })
+    }
+
+    /// [API-025] 회고 답변 좋아요 토글
+    pub async fn toggle_like(
+        state: AppState,
+        user_id: i64,
+        response_id: i64,
+    ) -> Result<super::dto::LikeToggleResponse, AppError> {
+        // 1. 답변 존재 확인
+        let response_entity = response::Entity::find_by_id(response_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let response_model = response_entity.ok_or_else(|| {
+            AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
+        })?;
+
+        // 2. 회고 정보 조회하여 팀 멤버십 확인
+        let retrospect_entity = retrospect::Entity::find_by_id(response_model.retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let retrospect_model = retrospect_entity.ok_or_else(|| {
+            // FK 제약조건으로 인해 이 상황은 발생하지 않아야 함 (데이터 불일치)
+            AppError::InternalError(
+                "회고 데이터 불일치: 답변에 연결된 회고가 존재하지 않습니다.".to_string(),
+            )
+        })?;
+
+        // 3. 회고방 멤버십 확인
+        let is_room_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 리소스에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 4. 트랜잭션으로 좋아요 토글 (Race Condition 방지)
+        // "INSERT ON CONFLICT DO NOTHING" 패턴으로 동시성 문제 완전 해결
+        let (is_liked, total_likes) = state
+            .db
+            .transaction::<_, (bool, u64), DbErr>(|txn| {
+                Box::pin(async move {
+                    // ON CONFLICT DO NOTHING으로 삽입 시도
+                    // unique constraint (member_id, response_id)가 있으면 충돌 시 무시됨
+                    let new_like = response_like::ActiveModel {
+                        member_id: Set(user_id),
+                        response_id: Set(response_id),
+                        ..Default::default()
+                    };
+
+                    let insert_result: InsertResult<response_like::ActiveModel> =
+                        response_like::Entity::insert(new_like)
+                            .on_conflict(
+                                OnConflict::columns([
+                                    response_like::Column::MemberId,
+                                    response_like::Column::ResponseId,
+                                ])
+                                .do_nothing()
+                                .to_owned(),
+                            )
+                            .exec(txn)
+                            .await?;
+
+                    let is_liked = if insert_result.last_insert_id > 0 {
+                        // 삽입 성공 = 좋아요 추가됨
+                        true
+                    } else {
+                        // 삽입 실패 (충돌) = 이미 좋아요가 있으므로 삭제
+                        response_like::Entity::delete_many()
+                            .filter(response_like::Column::MemberId.eq(user_id))
+                            .filter(response_like::Column::ResponseId.eq(response_id))
+                            .exec(txn)
+                            .await?;
+                        false
+                    };
+
+                    // 5. 총 좋아요 개수 조회
+                    let total_likes = response_like::Entity::find()
+                        .filter(response_like::Column::ResponseId.eq(response_id))
+                        .count(txn)
+                        .await?;
+
+                    Ok((is_liked, total_likes))
+                })
+            })
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        Ok(super::dto::LikeToggleResponse {
+            response_id,
+            is_liked,
+            total_likes: total_likes as i64,
         })
     }
 }
