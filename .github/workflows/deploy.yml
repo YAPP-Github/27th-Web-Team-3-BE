@@ -1,0 +1,143 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'codes/**'
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - 'codes/**'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: codes/server
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: codes/server
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Test
+        run: cargo test
+
+      - name: Upload artifact
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-binary
+          path: codes/server/target/release/server
+          retention-days: 1
+
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-binary
+
+      - name: Deploy to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "server"
+          target: "/opt/app/"
+
+      - name: Create .env file
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          DB_SCHEMA_UPDATE: ${{ secrets.DB_SCHEMA_UPDATE }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          RUST_LOG: ${{ secrets.RUST_LOG }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+          REFRESH_TOKEN_EXPIRATION: ${{ secrets.REFRESH_TOKEN_EXPIRATION }}
+          SIGNUP_TOKEN_EXPIRATION: ${{ secrets.SIGNUP_TOKEN_EXPIRATION }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DATABASE_URL,DATABASE_USERNAME,DATABASE_PASSWORD,DB_SCHEMA_UPDATE,SERVER_PORT,RUST_LOG,JWT_SECRET,JWT_EXPIRATION,REFRESH_TOKEN_EXPIRATION,SIGNUP_TOKEN_EXPIRATION,GOOGLE_CLIENT_ID,GOOGLE_REDIRECT_URI,KAKAO_CLIENT_ID,KAKAO_REDIRECT_URI,OPENAI_API_KEY,SECRET_KEY
+          script: |
+            cat > /opt/app/.env << EOF
+            # Database
+            DATABASE_URL=${DATABASE_URL}
+            DATABASE_USERNAME=${DATABASE_USERNAME}
+            DATABASE_PASSWORD=${DATABASE_PASSWORD}
+            DB_SCHEMA_UPDATE=${DB_SCHEMA_UPDATE:-false}
+
+            # Server
+            SERVER_PORT=${SERVER_PORT:-8080}
+            RUST_LOG=${RUST_LOG:-info}
+
+            # Security
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRATION=${JWT_EXPIRATION:-1800}
+            REFRESH_TOKEN_EXPIRATION=${REFRESH_TOKEN_EXPIRATION:-1209600}
+            SIGNUP_TOKEN_EXPIRATION=${SIGNUP_TOKEN_EXPIRATION:-600}
+
+            # Social Login
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+            KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+            KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI}
+
+            # AI Service
+            OPENAI_API_KEY=${OPENAI_API_KEY}
+            SECRET_KEY=${SECRET_KEY}
+            EOF
+
+      - name: Restart application
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            chmod +x /opt/app/server
+            cd /opt/app && sudo systemctl restart app || sudo systemctl start app

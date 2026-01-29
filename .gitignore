@@ -15,3 +15,7 @@
 ### Rust ###
 codes/server/.env
 codes/server/target/
+
+### AI ###
+.gemini/
+.claude/settings.local.json

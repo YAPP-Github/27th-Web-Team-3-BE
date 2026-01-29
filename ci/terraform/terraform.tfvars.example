@@ -1,0 +1,41 @@
+# =============================================================================
+# Terraform 변수 예시 파일
+# 사용 방법: 이 파일을 terraform.tfvars로 복사하고 값을 수정하세요
+# cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# General Settings
+# -----------------------------------------------------------------------------
+project_name = "web-team-3"
+environment  = "dev"
+aws_region   = "ap-northeast-2"
+
+# -----------------------------------------------------------------------------
+# VPC Settings
+# -----------------------------------------------------------------------------
+vpc_cidr             = "10.0.0.0/16"
+availability_zones   = ["ap-northeast-2a", "ap-northeast-2c"]
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
+
+# -----------------------------------------------------------------------------
+# EC2 Settings
+# -----------------------------------------------------------------------------
+ec2_instance_type = "t3.micro"
+ec2_key_name      = "your-key-pair-name"  # AWS에서 생성한 키 페어 이름
+# ec2_ami_id      = ""  # 빈 값이면 최신 Amazon Linux 2023 사용
+
+# -----------------------------------------------------------------------------
+# RDS Settings
+# -----------------------------------------------------------------------------
+db_instance_class        = "db.t3.micro"
+db_engine                = "mysql"
+db_engine_version        = "8.0"
+db_name                  = "webteam3db"
+db_username              = "dbadmin"           # 변경 필수!
+db_password              = "ChangeMe123!"      # 변경 필수! (안전한 비밀번호 사용)
+db_allocated_storage     = 20
+db_max_allocated_storage = 100
+db_multi_az              = false               # prod에서는 true 권장
+db_skip_final_snapshot   = true                # prod에서는 false 권장
