@@ -118,7 +118,7 @@ variable "db_allocated_storage" {
 variable "db_max_allocated_storage" {
   description = "RDS 최대 자동 확장 스토리지 (GB)"
   type        = number
-  default     = 100
+  default     = 20  # 프리티어 한도에 맞춤 (자동 확장 비활성화)
 }
 
 variable "db_multi_az" {
