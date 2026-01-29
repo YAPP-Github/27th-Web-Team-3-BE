@@ -91,7 +91,7 @@ jobs:
           script: |
             echo "$ENV_FILE" > /opt/app/.env
 
-      - name: Restart application
+      - name: Setup and restart application
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -99,4 +99,28 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             chmod +x /opt/app/server
-            cd /opt/app && sudo systemctl restart app || sudo systemctl start app
+
+            # systemd 서비스 파일 생성 (없으면)
+            if [ ! -f /etc/systemd/system/app.service ]; then
+              sudo tee /etc/systemd/system/app.service > /dev/null <<EOF
+            [Unit]
+            Description=Web Team 3 Backend Server
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=ubuntu
+            WorkingDirectory=/opt/app
+            ExecStart=/opt/app/server
+            Restart=always
+            RestartSec=5
+            EnvironmentFile=/opt/app/.env
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+              sudo systemctl daemon-reload
+              sudo systemctl enable app
+            fi
+
+            sudo systemctl restart app
