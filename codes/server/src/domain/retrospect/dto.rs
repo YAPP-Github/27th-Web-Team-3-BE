@@ -780,6 +780,32 @@ pub struct ResponsesListResponse {
 }
 
 // ============================================
+// API-025: 회고 답변 좋아요 토글 DTO
+// ============================================
+
+/// 좋아요 토글 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LikeToggleResponse {
+    /// 대상 답변의 ID
+    pub response_id: i64,
+    /// 처리 후 현재 상태 (true: 좋아요 등록됨, false: 취소됨)
+    pub is_liked: bool,
+    /// 업데이트된 해당 답변의 총 좋아요 개수
+    pub total_likes: i64,
+}
+
+/// Swagger용 좋아요 토글 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessLikeToggleResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: LikeToggleResponse,
+}
+
+// ============================================
 // API-026: 회고 답변 댓글 목록 조회 DTO
 // ============================================
 

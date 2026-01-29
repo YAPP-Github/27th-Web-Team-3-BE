@@ -58,11 +58,49 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
     // 4. Dependent Entities (Level 3 & Join Tables)
     create_table_if_not_exists(db, &schema, response_comment::Entity).await?;
     create_table_if_not_exists(db, &schema, response_like::Entity).await?;
+    create_unique_index_if_not_exists(
+        db,
+        "uq_response_like_member_response",
+        "response_like",
+        &["member_id", "response_id"],
+    )
+    .await?;
     create_table_if_not_exists(db, &schema, member_response::Entity).await?;
     create_table_if_not_exists(db, &schema, member_retro::Entity).await?;
 
     info!("Database schema synchronization completed.");
     Ok(())
+}
+
+async fn create_unique_index_if_not_exists(
+    db: &DatabaseConnection,
+    index_name: &str,
+    table_name: &str,
+    columns: &[&str],
+) -> Result<(), DbErr> {
+    let backend = db.get_database_backend();
+    let cols = columns.join(", ");
+    let sql = format!(
+        "CREATE UNIQUE INDEX {} ON {} ({})",
+        index_name, table_name, cols
+    );
+    let stmt = Statement::from_string(backend, sql);
+    match db.execute(stmt).await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            // Ignore duplicate index errors for idempotency.
+            let err_str = e.to_string().to_lowercase();
+            if err_str.contains("duplicate")
+                || err_str.contains("already exists")
+                || err_str.contains("exists")
+            {
+                Ok(())
+            } else {
+                tracing::error!("Failed to create unique index {}: {}", index_name, e);
+                Err(e)
+            }
+        }
+    }
 }
 
 async fn create_table_if_not_exists<E>(
