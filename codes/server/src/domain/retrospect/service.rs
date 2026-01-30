@@ -2200,7 +2200,10 @@ impl RetrospectService {
         }
 
         // 6. 참여자 목록 조회 (member_retro + member 조인)
-        let member_ids: Vec<i64> = submitted_members.iter().filter_map(|mr| mr.member_id).collect();
+        let member_ids: Vec<i64> = submitted_members
+            .iter()
+            .filter_map(|mr| mr.member_id)
+            .collect();
 
         let members = if member_ids.is_empty() {
             vec![]
@@ -2325,11 +2328,10 @@ impl RetrospectService {
         // 9-2. 각 member_retro.personal_insight 업데이트 + status = ANALYZED
         for mr in &submitted_members {
             // personal_missions에서 해당 member_id의 미션 찾기
-            let personal_insight = mr.member_id.and_then(|member_id| {
-                personal_missions
-                    .iter()
-                    .find(|pm| pm.user_id == member_id)
-            }).map(|pm| {
+            let personal_insight = mr
+                .member_id
+                .and_then(|member_id| personal_missions.iter().find(|pm| pm.user_id == member_id))
+                .map(|pm| {
                     pm.missions
                         .iter()
                         .map(|m| format!("{}: {}", m.mission_title, m.mission_desc))
