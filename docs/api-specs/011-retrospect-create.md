@@ -13,6 +13,7 @@
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | Enum 상세 설명, 검증 규칙, 에러 조건 추가 |
 | 1.2.0 | 2025-01-25 | teamId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일, 질문 생성 로직 추가 |
+| 1.3.0 | 2026-01-30 | teamId → retroRoomId로 변경, retrospectTime 필드 추가 (실제 구현과 동기화) |
 
 ## 엔드포인트
 
@@ -37,9 +38,10 @@ POST /api/v1/retrospects
 
 ```json
 {
-  "teamId": 789,
+  "retroRoomId": 789,
   "projectName": "나만의 회고 플랫폼",
   "retrospectDate": "2026-01-24",
+  "retrospectTime": "14:00",
   "retrospectMethod": "KPT",
   "referenceUrls": [
     "https://github.com/jayson/project",
@@ -52,9 +54,10 @@ POST /api/v1/retrospects
 
 | Field | Type | Required | Description | Validation |
 |-------|------|----------|-------------|------------|
-| teamId | long | Yes | 회고가 속한 팀의 고유 ID | 1 이상의 양수 |
+| retroRoomId | long | Yes | 회고가 속한 회고방의 고유 ID | 1 이상의 양수 |
 | projectName | string | Yes | 프로젝트 이름 | 최소 1자, 최대 20자 |
-| retrospectDate | string | Yes | 회고 날짜 | ISO 8601 형식 (YYYY-MM-DD), 미래 날짜만 허용 |
+| retrospectDate | string | Yes | 회고 날짜 | ISO 8601 형식 (YYYY-MM-DD) |
+| retrospectTime | string | Yes | 회고 시간 (한국 시간 기준) | HH:mm 형식 (예: 14:00) |
 | retrospectMethod | string (Enum) | Yes | 회고 방식 | KPT, FOUR_L, FIVE_F, PMI, FREE 중 하나 |
 | referenceUrls | array[string] | No | 참고 자료 URL 리스트 | 최대 10개, 각 URL은 유효한 형식이어야 함 (http/https) |
 
@@ -78,7 +81,7 @@ POST /api/v1/retrospects
   "message": "회고가 성공적으로 생성되었습니다.",
   "result": {
     "retrospectId": 12345,
-    "teamId": 789,
+    "retroRoomId": 789,
     "projectName": "나만의 회고 플랫폼"
   }
 }
@@ -89,7 +92,7 @@ POST /api/v1/retrospects
 | Field | Type | Description |
 |-------|------|-------------|
 | retrospectId | long | 생성된 회고 고유 ID |
-| teamId | long | 회고가 속한 팀의 고유 ID |
+| retroRoomId | long | 회고가 속한 회고방의 고유 ID |
 | projectName | string | 저장된 프로젝트 이름 |
 
 ### retrospectMethod Enum 설명
@@ -180,24 +183,24 @@ POST /api/v1/retrospects
 }
 ```
 
-### 400 Bad Request - 유효하지 않은 팀 ID
+### 400 Bad Request - 유효하지 않은 회고방 ID
 
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4041",
-  "message": "존재하지 않는 팀입니다.",
+  "code": "RETRO_ROOM4041",
+  "message": "존재하지 않는 회고방입니다.",
   "result": null
 }
 ```
 
-### 403 Forbidden - 팀 접근 권한 없음
+### 403 Forbidden - 회고방 접근 권한 없음
 
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "해당 팀의 멤버가 아닙니다.",
+  "code": "RETRO_ROOM4031",
+  "message": "해당 회고방의 멤버가 아닙니다.",
   "result": null
 }
 ```
@@ -253,10 +256,10 @@ POST /api/v1/retrospects
 | RETRO4001 | 400 | 프로젝트 이름 길이 유효성 검사 실패 | projectName이 0자 또는 20자 초과 |
 | RETRO4005 | 400 | 유효하지 않은 회고 방식 | retrospectMethod가 정의된 Enum 외의 값 |
 | RETRO4006 | 400 | 유효하지 않은 URL 형식 | referenceUrls 중 http/https가 아닌 URL 포함 |
-| COMMON400 | 400 | 잘못된 요청 | 날짜 형식 오류(YYYY-MM-DD 아님), 필수 필드 누락 등 |
+| COMMON400 | 400 | 잘못된 요청 | 날짜/시간 형식 오류(YYYY-MM-DD, HH:mm), 필수 필드 누락 등 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료, 또는 잘못된 형식 |
-| TEAM4031 | 403 | 팀 접근 권한 없음 | 해당 팀의 멤버가 아닌 경우 |
-| TEAM4041 | 404 | 존재하지 않는 팀 | 유효하지 않은 teamId |
+| RETRO_ROOM4031 | 403 | 회고방 접근 권한 없음 | 해당 회고방의 멤버가 아닌 경우 |
+| RETRO_ROOM4041 | 404 | 존재하지 않는 회고방 | 유효하지 않은 retroRoomId |
 | COMMON500 | 500 | 서버 내부 에러 | DB 연결 실패, 트랜잭션 오류 등 |
 
 ## 사용 예시
@@ -268,9 +271,10 @@ curl -X POST https://api.example.com/api/v1/retrospects \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
-    "teamId": 789,
+    "retroRoomId": 789,
     "projectName": "나만의 회고 플랫폼",
     "retrospectDate": "2026-01-24",
+    "retrospectTime": "14:00",
     "retrospectMethod": "KPT",
     "referenceUrls": [
       "https://github.com/jayson/project",
