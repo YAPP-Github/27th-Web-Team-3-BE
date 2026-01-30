@@ -8,7 +8,7 @@ use sea_orm::{
     sea_query::OnConflict, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, InsertResult,
     ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::domain::member::entity::member;
 use crate::domain::member::entity::member_response;
@@ -1782,16 +1782,32 @@ impl RetrospectService {
         let font_family_name =
             std::env::var("PDF_FONT_FAMILY").unwrap_or_else(|_| "NanumGothic".to_string());
 
+        info!(
+            "PDF 생성 시작 - 회고 ID: {}, 폰트 디렉토리: {}, 폰트 패밀리: {}",
+            retrospect_model.retrospect_id, font_dir, font_family_name
+        );
+
         let font_family = match genpdf::fonts::from_files(&font_dir, &font_family_name, None) {
-            Ok(family) => family,
+            Ok(family) => {
+                info!("폰트 패밀리 로딩 성공: {}", font_family_name);
+                family
+            }
             Err(full_err) => {
                 warn!(
-                    "전체 폰트 패밀리 로딩 실패 ({}), Regular 폰트로 대체합니다.",
-                    full_err
+                    "전체 폰트 패밀리 로딩 실패 ({}), Regular 폰트로 대체합니다. 폰트 디렉토리: {}",
+                    full_err, font_dir
                 );
                 let regular_path = std::path::Path::new(&font_dir)
                     .join(format!("{}-Regular.ttf", font_family_name));
+
+                info!("Regular 폰트 경로 시도: {}", regular_path.display());
+
                 let font_bytes = std::fs::read(&regular_path).map_err(|e| {
+                    error!(
+                        "Regular 폰트 파일 읽기 실패 - 경로: {}, 에러: {}",
+                        regular_path.display(),
+                        e
+                    );
                     AppError::PdfGenerationFailed(format!(
                         "Regular 폰트 파일 읽기 실패 ({}) : {}",
                         regular_path.display(),
@@ -1960,8 +1976,19 @@ impl RetrospectService {
 
         // PDF 렌더링
         let mut buf = Vec::new();
-        doc.render(&mut buf)
-            .map_err(|e| AppError::PdfGenerationFailed(format!("PDF 렌더링 실패: {}", e)))?;
+        doc.render(&mut buf).map_err(|e| {
+            error!(
+                "PDF 렌더링 실패 - 회고 ID: {}, 에러: {}",
+                retrospect_model.retrospect_id, e
+            );
+            AppError::PdfGenerationFailed(format!("PDF 렌더링 실패: {}", e))
+        })?;
+
+        info!(
+            "PDF 생성 완료 - 회고 ID: {}, 크기: {} bytes",
+            retrospect_model.retrospect_id,
+            buf.len()
+        );
 
         Ok(buf)
     }

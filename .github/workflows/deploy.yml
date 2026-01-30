@@ -58,6 +58,14 @@ jobs:
           path: codes/server/target/release/server
           retention-days: 1
 
+      - name: Upload fonts artifact
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-fonts
+          path: codes/server/fonts/
+          retention-days: 1
+
   deploy:
     name: Deploy to EC2
     needs: build
@@ -70,6 +78,12 @@ jobs:
         with:
           name: server-binary
 
+      - name: Download fonts artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-fonts
+          path: fonts
+
       - name: Deploy to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -77,6 +91,15 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "server"
+          target: "/opt/app/"
+
+      - name: Deploy fonts to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "fonts"
           target: "/opt/app/"
 
       - name: Create .env file

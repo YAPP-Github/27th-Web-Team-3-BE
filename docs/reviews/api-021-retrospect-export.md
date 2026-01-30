@@ -106,3 +106,56 @@
 - [x] 에러 처리가 적절하게 되어 있는가? (COMMON400, AUTH4001, TEAM4031, RETRO4041, COMMON500)
 - [x] 코드가 Rust 컨벤션을 따르는가? (cargo fmt, cargo clippy -- -D warnings)
 - [x] 불필요한 의존성이 추가되지 않았는가? (genpdf만 추가 - PDF 생성에 필수)
+
+---
+
+## 버그 수정 이력
+
+### [2026-01-30] PDF 내보내기 500 에러 수정 (Issue #47)
+
+#### 문제 원인
+프로덕션 환경에서 PDF 내보내기 API 호출 시 500 Internal Server Error 발생.
+주요 원인은 배포 환경에서 폰트 파일 누락 및 환경변수 미설정.
+
+#### 수정 내용
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `.env.example` | `PDF_FONT_DIR`, `PDF_FONT_FAMILY` 환경변수 추가 |
+| `.github/workflows/deploy.yml` | 폰트 파일 아티팩트 업로드 및 EC2 배포 단계 추가 |
+| `src/main.rs` | 서버 시작 시 폰트 파일 존재 여부 검증 로직 추가 |
+| `src/domain/retrospect/service.rs` | PDF 생성 시 상세 에러 로깅 추가 |
+
+#### 수정 상세
+
+1. **환경변수 문서화** (`.env.example`)
+   ```bash
+   # PDF Generation
+   PDF_FONT_DIR=./fonts
+   PDF_FONT_FAMILY=NanumGothic
+   ```
+
+2. **배포 스크립트 개선** (`.github/workflows/deploy.yml`)
+   - 빌드 단계: `server-fonts` 아티팩트 업로드 추가
+   - 배포 단계: 폰트 아티팩트 다운로드 및 EC2로 SCP 복사 추가
+
+3. **서버 시작 시 폰트 검증** (`src/main.rs`)
+   - `validate_pdf_fonts()` 함수 추가
+   - 폰트 디렉토리 및 Regular 폰트 파일 존재 여부 확인
+   - 문제 발견 시 `warn!` 로그 출력 (서버 시작 차단하지 않음)
+
+4. **에러 로깅 개선** (`src/domain/retrospect/service.rs`)
+   - PDF 생성 시작/완료 로그 추가
+   - 폰트 로딩 성공/실패 상세 로그 추가
+   - 에러 발생 시 `error!` 레벨 로그로 원인 기록
+
+#### 테스트 결과
+- 모든 기존 테스트 통과 (122 unit + 48 integration tests)
+- `cargo fmt` 적용 완료
+- `cargo clippy -- -D warnings` 경고 없음
+
+#### 배포 후 확인사항
+- [ ] EC2에 `/opt/app/fonts/` 디렉토리 존재 확인
+- [ ] NanumGothic 폰트 파일 4개 존재 확인
+- [ ] 서버 로그에서 "PDF 폰트 검증 완료" 메시지 확인
+- [ ] PDF 내보내기 API 정상 동작 확인

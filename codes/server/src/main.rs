@@ -8,7 +8,7 @@ mod utils;
 use axum::{routing::get, Router};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa::OpenApi;
@@ -217,6 +217,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfig::from_env()?;
     let port = config.server_port;
 
+    // PDF 폰트 설정 검증
+    validate_pdf_fonts();
+
     // DB 연결 및 테이블 생성 (Auto-Schema)
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = crate::config::establish_connection(&database_url).await?;
@@ -390,6 +393,38 @@ async fn health_check() -> axum::Json<BaseResponse<HealthResponse>> {
 struct HealthResponse {
     /// 서버 상태
     status: String,
+}
+
+/// PDF 폰트 파일 존재 여부 검증
+fn validate_pdf_fonts() {
+    let font_dir = std::env::var("PDF_FONT_DIR").unwrap_or_else(|_| "./fonts".to_string());
+    let font_family =
+        std::env::var("PDF_FONT_FAMILY").unwrap_or_else(|_| "NanumGothic".to_string());
+
+    let font_path = std::path::Path::new(&font_dir);
+    let regular_font = font_path.join(format!("{}-Regular.ttf", font_family));
+
+    if !font_path.exists() {
+        warn!(
+            "PDF 폰트 디렉토리가 존재하지 않습니다: {}. PDF 내보내기 기능이 작동하지 않을 수 있습니다.",
+            font_dir
+        );
+        return;
+    }
+
+    if !regular_font.exists() {
+        warn!(
+            "PDF 폰트 파일이 존재하지 않습니다: {}. PDF 내보내기 기능이 작동하지 않을 수 있습니다.",
+            regular_font.display()
+        );
+        return;
+    }
+
+    info!(
+        "PDF 폰트 검증 완료: {} ({})",
+        font_family,
+        regular_font.display()
+    );
 }
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
