@@ -1927,10 +1927,16 @@ impl RetrospectService {
         doc.push(Paragraph::new(format!("Date: {} {}", date_str, time_str)));
         doc.push(Paragraph::new(format!("Method: {}", method_str)));
 
-        // 참여 멤버 목록
+        // 참여 멤버 목록 (탈퇴한 멤버도 포함)
         let participant_names: Vec<String> = member_retros
             .iter()
-            .filter_map(|mr| mr.member_id.and_then(|id| member_map.get(&id).cloned()))
+            .map(|mr| match mr.member_id {
+                Some(id) => member_map
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("Member #{}", id)),
+                None => "탈퇴한 멤버".to_string(),
+            })
             .collect();
         doc.push(Paragraph::new(format!(
             "Participants ({}):",
@@ -2348,6 +2354,13 @@ impl RetrospectService {
             all_responses.len(),
             members_data.len()
         );
+
+        // 탈퇴한 멤버로 인해 분석 대상이 없는 경우 에러 반환
+        if members_data.is_empty() {
+            return Err(AppError::RetroInsufficientData(
+                "분석할 멤버 데이터가 없습니다. 모든 참여자가 탈퇴했을 수 있습니다.".to_string(),
+            ));
+        }
 
         // 8. AI 서비스 호출
         let mut analysis = state
