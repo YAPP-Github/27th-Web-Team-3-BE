@@ -154,6 +154,9 @@ pub enum AppError {
     /// 회고방 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
     #[allow(dead_code)]
     RetroDeleteAccessDenied(String),
+
+    /// MEMBER4042: 존재하지 않는 사용자 (404)
+    MemberNotFound(String),
 }
 
 impl AppError {
@@ -207,6 +210,7 @@ impl AppError {
             AppError::RetroCategoryInvalid(msg) => msg.clone(),
             AppError::PdfGenerationFailed(_) => "PDF 생성 중 서버 에러가 발생했습니다.".to_string(),
             AppError::RetroDeleteAccessDenied(msg) => msg.clone(),
+            AppError::MemberNotFound(msg) => msg.clone(),
         }
     }
 
@@ -260,6 +264,7 @@ impl AppError {
             AppError::RetroCategoryInvalid(_) => "RETRO4004",
             AppError::PdfGenerationFailed(_) => "COMMON500",
             AppError::RetroDeleteAccessDenied(_) => "RETRO4031",
+            AppError::MemberNotFound(_) => "MEMBER4042",
         }
     }
 
@@ -313,6 +318,7 @@ impl AppError {
             AppError::RetroCategoryInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::PdfGenerationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::RetroDeleteAccessDenied(_) => StatusCode::FORBIDDEN,
+            AppError::MemberNotFound(_) => StatusCode::NOT_FOUND,
         }
     }
 }

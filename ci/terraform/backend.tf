@@ -16,14 +16,14 @@
 #
 # =============================================================================
 
-# 1단계 완료 후 주석 해제하세요
+# S3 Backend 활성화됨
 terraform {
   backend "s3" {
-    bucket         = "web-team-3-terraform-state"
+    bucket         = "web-team-3-tf-state-v2"
     key            = "terraform.tfstate"
     region         = "ap-northeast-2"
     encrypt        = true
-    dynamodb_table = "web-team-3-terraform-lock"
+    dynamodb_table = "web-team-3-tf-lock-v2"
   }
 }
 
@@ -32,10 +32,10 @@ terraform {
 # =============================================================================
 
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "${var.project_name}-terraform-state"
+  bucket = "web-team-3-tf-state-v2"
 
   tags = {
-    Name = "${var.project_name}-terraform-state"
+    Name = "web-team-3-tf-state-v2"
   }
 }
 
@@ -65,7 +65,7 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
 }
 
 resource "aws_dynamodb_table" "terraform_lock" {
-  name         = "${var.project_name}-terraform-lock"
+  name         = "web-team-3-tf-lock-v2"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -75,6 +75,6 @@ resource "aws_dynamodb_table" "terraform_lock" {
   }
 
   tags = {
-    Name = "${var.project_name}-terraform-lock"
+    Name = "web-team-3-tf-lock-v2"
   }
 }
