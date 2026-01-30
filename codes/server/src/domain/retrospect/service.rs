@@ -865,7 +865,14 @@ impl RetrospectService {
             .unwrap_or(&member_model.email)
             .to_string();
 
-        // 5. member_retro 테이블에 새 레코드 삽입
+        // 5. 트랜잭션 시작
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 6. member_retro 테이블에 새 레코드 삽입
         let member_retro_model = member_retro::ActiveModel {
             member_id: Set(user_id),
             retrospect_id: Set(retrospect_id),
@@ -873,7 +880,7 @@ impl RetrospectService {
             ..Default::default()
         };
 
-        let inserted = member_retro_model.insert(&state.db).await.map_err(|e| {
+        let inserted = member_retro_model.insert(&txn).await.map_err(|e| {
             // DB 유니크 제약 위반 시 409 Conflict로 매핑
             let error_msg = e.to_string().to_lowercase();
             if error_msg.contains("duplicate")
@@ -886,7 +893,45 @@ impl RetrospectService {
             }
         })?;
 
-        // 6. CreateParticipantResponse 반환
+        // 7. 해당 참석자용 response 및 member_response 생성
+        let now = Utc::now().naive_utc();
+        let questions = retrospect_model.retrospect_method.default_questions();
+
+        for question in questions {
+            // response 레코드 생성
+            let response_model = response::ActiveModel {
+                question: Set(question.to_string()),
+                content: Set(String::new()),
+                created_at: Set(now),
+                updated_at: Set(now),
+                retrospect_id: Set(retrospect_id),
+                ..Default::default()
+            };
+
+            let response_result = response_model
+                .insert(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // member_response 레코드 생성 (참석자와 response 연결)
+            let member_response_model = member_response::ActiveModel {
+                member_id: Set(user_id),
+                response_id: Set(response_result.response_id),
+                ..Default::default()
+            };
+
+            member_response_model
+                .insert(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+
+        // 8. 트랜잭션 커밋
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 9. CreateParticipantResponse 반환
         Ok(CreateParticipantResponse {
             participant_id: inserted.member_retro_id,
             member_id: user_id,
