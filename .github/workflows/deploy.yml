@@ -113,6 +113,9 @@ jobs:
           envs: ENV_FILE
           script: |
             echo "$ENV_FILE" > /opt/app/.env
+            # PDF 환경변수 자동 추가 (secrets.ENV_FILE에 없는 경우)
+            grep -q "PDF_FONT_DIR" /opt/app/.env || echo "PDF_FONT_DIR=/opt/app/fonts" >> /opt/app/.env
+            grep -q "PDF_FONT_FAMILY" /opt/app/.env || echo "PDF_FONT_FAMILY=NanumGothic" >> /opt/app/.env
 
       - name: Setup and restart application
         uses: appleboy/ssh-action@v1.0.3
