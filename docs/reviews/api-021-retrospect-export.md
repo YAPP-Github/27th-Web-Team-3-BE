@@ -159,3 +159,26 @@
 - [ ] NanumGothic 폰트 파일 4개 존재 확인
 - [ ] 서버 로그에서 "PDF 폰트 검증 완료" 메시지 확인
 - [ ] PDF 내보내기 API 정상 동작 확인
+
+### [2026-01-30] 배포 스크립트 PDF 환경변수 자동 설정 추가
+
+#### 문제 원인
+`secrets.ENV_FILE`에 PDF 환경변수가 포함되지 않을 경우, 배포 환경에서 기본값이 사용됨.
+상대 경로 `./fonts`는 `WorkingDirectory=/opt/app`에서 정상 작동하지만, 명시적 설정이 더 안전함.
+
+#### 수정 내용
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `.github/workflows/deploy.yml` | `.env` 파일 생성 시 PDF 환경변수 자동 추가 |
+
+```yaml
+# .env 파일 생성 후 PDF 환경변수 자동 추가
+grep -q "PDF_FONT_DIR" /opt/app/.env || echo "PDF_FONT_DIR=/opt/app/fonts" >> /opt/app/.env
+grep -q "PDF_FONT_FAMILY" /opt/app/.env || echo "PDF_FONT_FAMILY=NanumGothic" >> /opt/app/.env
+```
+
+#### 효과
+- `secrets.ENV_FILE`에 PDF 환경변수가 없어도 배포 시 자동 설정
+- 절대 경로 `/opt/app/fonts` 사용으로 경로 해석 오류 방지
+- 기존 설정이 있으면 덮어쓰지 않음 (`grep -q`로 체크)
