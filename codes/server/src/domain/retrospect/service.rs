@@ -915,7 +915,7 @@ impl RetrospectService {
 
             // member_response 레코드 생성 (member와 response 연결)
             let member_response_model = member_response::ActiveModel {
-                member_id: Set(user_id),
+                member_id: Set(Some(user_id)),
                 response_id: Set(inserted_response.response_id),
                 ..Default::default()
             };
