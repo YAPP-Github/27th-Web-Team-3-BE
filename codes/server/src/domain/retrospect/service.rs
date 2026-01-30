@@ -865,7 +865,14 @@ impl RetrospectService {
             .unwrap_or(&member_model.email)
             .to_string();
 
-        // 5. member_retro 테이블에 새 레코드 삽입
+        // 5. 트랜잭션 시작 (member_retro, response, member_response 원자적 생성)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 5-1. member_retro 테이블에 새 레코드 삽입
         let member_retro_model = member_retro::ActiveModel {
             member_id: Set(user_id),
             retrospect_id: Set(retrospect_id),
@@ -873,7 +880,7 @@ impl RetrospectService {
             ..Default::default()
         };
 
-        let inserted = member_retro_model.insert(&state.db).await.map_err(|e| {
+        let inserted = member_retro_model.insert(&txn).await.map_err(|e| {
             // DB 유니크 제약 위반 시 409 Conflict로 매핑
             let error_msg = e.to_string().to_lowercase();
             if error_msg.contains("duplicate")
@@ -885,6 +892,51 @@ impl RetrospectService {
                 AppError::InternalError(e.to_string())
             }
         })?;
+
+        // 5-2. 회고 방식에 따른 5개의 질문에 대한 response 레코드 생성
+        let questions = retrospect_model.retrospect_method.default_questions();
+        let now = Utc::now().naive_utc();
+
+        for question in questions {
+            // response 레코드 생성 (빈 content로 초기화)
+            let response_model = response::ActiveModel {
+                question: Set(question.to_string()),
+                content: Set(String::new()),
+                created_at: Set(now),
+                updated_at: Set(now),
+                retrospect_id: Set(retrospect_id),
+                ..Default::default()
+            };
+
+            let inserted_response = response_model
+                .insert(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // member_response 레코드 생성 (member와 response 연결)
+            let member_response_model = member_response::ActiveModel {
+                member_id: Set(user_id),
+                response_id: Set(inserted_response.response_id),
+                ..Default::default()
+            };
+
+            member_response_model
+                .insert(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+
+        // 5-3. 트랜잭션 커밋
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            participant_id = inserted.member_retro_id,
+            "회고 참석자 등록 완료 (response 5개, member_response 5개 생성)"
+        );
 
         // 6. CreateParticipantResponse 반환
         Ok(CreateParticipantResponse {
