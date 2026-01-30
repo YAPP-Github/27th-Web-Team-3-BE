@@ -21,6 +21,7 @@ use crate::domain::auth::dto::{
     SuccessSignupResponse, SuccessSocialLoginResponse, SuccessTokenRefreshResponse,
     TokenRefreshRequest, TokenRefreshResponse,
 };
+use crate::domain::member::dto::SuccessWithdrawResponse;
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
@@ -81,7 +82,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::delete_retrospect,
         domain::retrospect::handler::list_comments,
         domain::retrospect::handler::create_comment,
-        domain::retrospect::handler::toggle_like
+        domain::retrospect::handler::toggle_like,
+        // Member APIs
+        domain::member::handler::withdraw
     ),
     components(
         schemas(
@@ -168,12 +171,15 @@ use crate::utils::{BaseResponse, ErrorResponse};
             SuccessListCommentsResponse,
             CreateCommentRequest,
             CreateCommentResponse,
-            SuccessCreateCommentResponse
+            SuccessCreateCommentResponse,
+            // Member DTOs
+            SuccessWithdrawResponse
         )
     ),
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
+        (name = "Member", description = "회원 API"),
         (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
         (name = "Response", description = "회고 답변 API")
@@ -358,6 +364,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/responses/:response_id/likes",
             axum::routing::post(domain::retrospect::handler::toggle_like),
+        )
+        // [API-028] 서비스 탈퇴
+        .route(
+            "/api/v1/members/me",
+            axum::routing::delete(domain::member::handler::withdraw),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)

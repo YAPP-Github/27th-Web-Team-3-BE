@@ -119,7 +119,7 @@ impl RetrospectService {
 
                     // member_retro_room 생성 (Owner 권한 부여)
                     let member_retro_room_active = member_retro_room::ActiveModel {
-                        member_id: Set(member_id),
+                        member_id: Set(Some(member_id)),
                         retrospect_room_id: Set(result.retrospect_room_id),
                         role: Set(RoomRole::Owner),
                         ..Default::default()
@@ -183,7 +183,7 @@ impl RetrospectService {
 
         // 5. 멤버 추가 (DB unique constraint로 race condition 방지)
         let member_retro_room_active = member_retro_room::ActiveModel {
-            member_id: Set(member_id),
+            member_id: Set(Some(member_id)),
             retrospect_room_id: Set(room.retrospect_room_id),
             role: Set(RoomRole::Member),
             ..Default::default()
@@ -867,7 +867,7 @@ impl RetrospectService {
 
         // 5. member_retro 테이블에 새 레코드 삽입
         let member_retro_model = member_retro::ActiveModel {
-            member_id: Set(user_id),
+            member_id: Set(Some(user_id)),
             retrospect_id: Set(retrospect_id),
             personal_insight: Set(None),
             ..Default::default()
@@ -1317,7 +1317,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let member_ids: Vec<i64> = member_retros.iter().map(|mr| mr.member_id).collect();
+        let member_ids: Vec<i64> = member_retros.iter().filter_map(|mr| mr.member_id).collect();
 
         let members = if member_ids.is_empty() {
             vec![]
@@ -1345,16 +1345,17 @@ impl RetrospectService {
         let member_items: Vec<RetrospectMemberItem> = member_retros
             .iter()
             .filter_map(|mr| {
-                let name = member_map.get(&mr.member_id);
+                let member_id = mr.member_id?;
+                let name = member_map.get(&member_id);
                 if name.is_none() {
                     warn!(
-                        member_id = mr.member_id,
+                        member_id = member_id,
                         retrospect_id = retrospect_id,
                         "member_retro에 등록되어 있으나 member 테이블에 존재하지 않는 멤버"
                     );
                 }
                 name.map(|n| RetrospectMemberItem {
-                    member_id: mr.member_id,
+                    member_id,
                     user_name: n.clone(),
                 })
             })
@@ -1548,7 +1549,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let member_ids: Vec<i64> = member_retros.iter().map(|mr| mr.member_id).collect();
+        let member_ids: Vec<i64> = member_retros.iter().filter_map(|mr| mr.member_id).collect();
 
         let members = if member_ids.is_empty() {
             vec![]
@@ -1584,7 +1585,7 @@ impl RetrospectService {
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?
                 .into_iter()
-                .map(|mr| (mr.response_id, mr.member_id))
+                .filter_map(|mr| mr.member_id.map(|id| (mr.response_id, id)))
                 .collect()
         };
 
@@ -1877,7 +1878,7 @@ impl RetrospectService {
         // 참여 멤버 목록
         let participant_names: Vec<String> = member_retros
             .iter()
-            .filter_map(|mr| member_map.get(&mr.member_id).cloned())
+            .filter_map(|mr| mr.member_id.and_then(|id| member_map.get(&id).cloned()))
             .collect();
         doc.push(Paragraph::new(format!(
             "Participants ({}):",
@@ -1962,10 +1963,13 @@ impl RetrospectService {
             doc.push(Break::new(0.3));
 
             for mr in &members_with_insight {
-                let name = member_map
-                    .get(&mr.member_id)
-                    .cloned()
-                    .unwrap_or_else(|| format!("Member #{}", mr.member_id));
+                let name = match mr.member_id {
+                    Some(id) => member_map
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or_else(|| format!("Member #{}", id)),
+                    None => "탈퇴한 멤버".to_string(),
+                };
                 doc.push(Paragraph::new(format!("[{}]", name)).styled(style::Style::new().bold()));
                 if let Some(ref insight) = mr.personal_insight {
                     doc.push(Paragraph::new(format!("  {}", insight)));
@@ -2196,7 +2200,7 @@ impl RetrospectService {
         }
 
         // 6. 참여자 목록 조회 (member_retro + member 조인)
-        let member_ids: Vec<i64> = submitted_members.iter().map(|mr| mr.member_id).collect();
+        let member_ids: Vec<i64> = submitted_members.iter().filter_map(|mr| mr.member_id).collect();
 
         let members = if member_ids.is_empty() {
             vec![]
@@ -2230,7 +2234,7 @@ impl RetrospectService {
                 member_response::Column::MemberId.is_in(
                     submitted_members
                         .iter()
-                        .map(|mr| mr.member_id)
+                        .filter_map(|mr| mr.member_id)
                         .collect::<Vec<_>>(),
                 ),
             )
@@ -2245,21 +2249,26 @@ impl RetrospectService {
         // member_id -> Vec<response_id> 매핑
         let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
         for mr in &all_member_responses {
-            member_response_map
-                .entry(mr.member_id)
-                .or_default()
-                .push(mr.response_id);
+            if let Some(member_id) = mr.member_id {
+                member_response_map
+                    .entry(member_id)
+                    .or_default()
+                    .push(mr.response_id);
+            }
         }
 
         let mut members_data: Vec<MemberAnswerData> = Vec::new();
         for mr in &submitted_members {
+            let Some(member_id) = mr.member_id else {
+                continue;
+            };
             let username = member_map
-                .get(&mr.member_id)
+                .get(&member_id)
                 .cloned()
-                .unwrap_or_else(|| format!("사용자{}", mr.member_id));
+                .unwrap_or_else(|| format!("사용자{}", member_id));
 
             let response_ids = member_response_map
-                .get(&mr.member_id)
+                .get(&member_id)
                 .cloned()
                 .unwrap_or_default();
 
@@ -2273,7 +2282,7 @@ impl RetrospectService {
             }
 
             members_data.push(MemberAnswerData {
-                user_id: mr.member_id,
+                user_id: member_id,
                 user_name: username,
                 answers,
             });
@@ -2316,10 +2325,11 @@ impl RetrospectService {
         // 9-2. 각 member_retro.personal_insight 업데이트 + status = ANALYZED
         for mr in &submitted_members {
             // personal_missions에서 해당 member_id의 미션 찾기
-            let personal_insight = personal_missions
-                .iter()
-                .find(|pm| pm.user_id == mr.member_id)
-                .map(|pm| {
+            let personal_insight = mr.member_id.and_then(|member_id| {
+                personal_missions
+                    .iter()
+                    .find(|pm| pm.user_id == member_id)
+            }).map(|pm| {
                     pm.missions
                         .iter()
                         .map(|m| format!("{}: {}", m.mission_title, m.mission_desc))
@@ -2402,10 +2412,12 @@ impl RetrospectService {
         // member_id별로 그룹화하여 첫 번째 멤버의 응답 세트 확인
         let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
         for mr in &first_member_responses {
-            member_response_map
-                .entry(mr.member_id)
-                .or_default()
-                .push(mr.response_id);
+            if let Some(member_id) = mr.member_id {
+                member_response_map
+                    .entry(member_id)
+                    .or_default()
+                    .push(mr.response_id);
+            }
         }
 
         // 첫 번째 멤버의 응답 ID 목록 (오름차순 정렬됨)
@@ -2516,7 +2528,7 @@ impl RetrospectService {
 
         let response_to_member: HashMap<i64, i64> = member_responses_for_page
             .iter()
-            .map(|mr| (mr.response_id, mr.member_id))
+            .filter_map(|mr| mr.member_id.map(|id| (mr.response_id, id)))
             .collect();
 
         let member_ids: Vec<i64> = response_to_member

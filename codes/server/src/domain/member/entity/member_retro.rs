@@ -26,7 +26,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub member_retro_id: i64,
     pub personal_insight: Option<String>,
-    pub member_id: i64,
+    pub member_id: Option<i64>,
     pub retrospect_id: i64,
     pub status: RetrospectStatus,
     pub submitted_at: Option<DateTime>,
@@ -39,7 +39,7 @@ pub enum Relation {
         from = "Column::MemberId",
         to = "super::member::Column::MemberId",
         on_update = "NoAction",
-        on_delete = "Cascade"
+        on_delete = "SetNull"
     )]
     Member,
     #[sea_orm(
