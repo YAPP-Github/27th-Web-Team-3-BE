@@ -837,18 +837,11 @@ impl RetrospectService {
             ));
         }
 
-        // 3. 트랜잭션 시작
-        let txn = state
-            .db
-            .begin()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        // 4. 이미 참석자로 등록되어 있는지 확인
+        // 3. 이미 참석자로 등록되어 있는지 확인
         let existing_participant = member_retro::Entity::find()
             .filter(member_retro::Column::MemberId.eq(user_id))
             .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
-            .one(&txn)
+            .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
@@ -858,9 +851,9 @@ impl RetrospectService {
             ));
         }
 
-        // 5. member 정보 조회하여 nickname 추출 (이메일에서 @ 앞부분 추출)
+        // 4. member 정보 조회하여 nickname 추출 (이메일에서 @ 앞부분 추출)
         let member_model = member::Entity::find_by_id(user_id)
-            .one(&txn)
+            .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::InternalError("회원 정보를 찾을 수 없습니다.".to_string()))?;
@@ -872,7 +865,14 @@ impl RetrospectService {
             .unwrap_or(&member_model.email)
             .to_string();
 
-        // 6. member_retro 테이블에 새 레코드 삽입
+        // 5. 트랜잭션 시작 (member_retro, response, member_response 원자적 생성)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 5-1. member_retro 테이블에 새 레코드 삽입
         let member_retro_model = member_retro::ActiveModel {
             member_id: Set(user_id),
             retrospect_id: Set(retrospect_id),
@@ -893,12 +893,12 @@ impl RetrospectService {
             }
         })?;
 
-        // 7. 해당 참석자용 response 및 member_response 생성
-        let now = Utc::now().naive_utc();
+        // 5-2. 회고 방식에 따른 5개의 질문에 대한 response 레코드 생성
         let questions = retrospect_model.retrospect_method.default_questions();
+        let now = Utc::now().naive_utc();
 
         for question in questions {
-            // response 레코드 생성
+            // response 레코드 생성 (빈 content로 초기화)
             let response_model = response::ActiveModel {
                 question: Set(question.to_string()),
                 content: Set(String::new()),
@@ -908,15 +908,15 @@ impl RetrospectService {
                 ..Default::default()
             };
 
-            let response_result = response_model
+            let inserted_response = response_model
                 .insert(&txn)
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-            // member_response 레코드 생성 (참석자와 response 연결)
+            // member_response 레코드 생성 (member와 response 연결)
             let member_response_model = member_response::ActiveModel {
                 member_id: Set(user_id),
-                response_id: Set(response_result.response_id),
+                response_id: Set(inserted_response.response_id),
                 ..Default::default()
             };
 
@@ -926,12 +926,19 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
 
-        // 8. 트랜잭션 커밋
+        // 5-3. 트랜잭션 커밋
         txn.commit()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 9. CreateParticipantResponse 반환
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            participant_id = inserted.member_retro_id,
+            "회고 참석자 등록 완료 (response 5개, member_response 5개 생성)"
+        );
+
+        // 6. CreateParticipantResponse 반환
         Ok(CreateParticipantResponse {
             participant_id: inserted.member_retro_id,
             member_id: user_id,
