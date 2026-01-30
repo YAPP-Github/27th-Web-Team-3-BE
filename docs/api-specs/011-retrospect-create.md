@@ -188,7 +188,7 @@ POST /api/v1/retrospects
 ```json
 {
   "isSuccess": false,
-  "code": "RETRO_ROOM4041",
+  "code": "RETRO4041",
   "message": "존재하지 않는 회고방입니다.",
   "result": null
 }
@@ -199,7 +199,7 @@ POST /api/v1/retrospects
 ```json
 {
   "isSuccess": false,
-  "code": "RETRO_ROOM4031",
+  "code": "RETRO4031",
   "message": "해당 회고방의 멤버가 아닙니다.",
   "result": null
 }
@@ -258,8 +258,8 @@ POST /api/v1/retrospects
 | RETRO4006 | 400 | 유효하지 않은 URL 형식 | referenceUrls 중 http/https가 아닌 URL 포함 |
 | COMMON400 | 400 | 잘못된 요청 | 날짜/시간 형식 오류(YYYY-MM-DD, HH:mm), 필수 필드 누락 등 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료, 또는 잘못된 형식 |
-| RETRO_ROOM4031 | 403 | 회고방 접근 권한 없음 | 해당 회고방의 멤버가 아닌 경우 |
-| RETRO_ROOM4041 | 404 | 존재하지 않는 회고방 | 유효하지 않은 retroRoomId |
+| RETRO4031 | 403 | 회고방 접근 권한 없음 | 해당 회고방의 멤버가 아닌 경우 |
+| RETRO4041 | 404 | 존재하지 않는 회고방 | 유효하지 않은 retroRoomId |
 | COMMON500 | 500 | 서버 내부 에러 | DB 연결 실패, 트랜잭션 오류 등 |
 
 ## 사용 예시
