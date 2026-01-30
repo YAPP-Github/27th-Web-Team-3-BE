@@ -2498,10 +2498,21 @@ impl RetrospectService {
         let response_map: HashMap<i64, &response::Model> =
             all_responses.iter().map(|r| (r.response_id, r)).collect();
 
-        let question_texts: Vec<String> = question_response_ids
-            .iter()
-            .filter_map(|rid| response_map.get(rid).map(|r| r.question.clone()))
-            .collect();
+        // 질문 텍스트 추출 (member_response_map이 비어있으면 all_responses에서 직접 추출)
+        let question_texts: Vec<String> = if question_response_ids.is_empty() {
+            // 탈퇴한 멤버로 인해 member_response_map이 빈 경우, 고유한 질문 목록 추출
+            let mut seen = std::collections::HashSet::new();
+            all_responses
+                .iter()
+                .filter(|r| seen.insert(r.question.clone()))
+                .map(|r| r.question.clone())
+                .collect()
+        } else {
+            question_response_ids
+                .iter()
+                .filter_map(|rid| response_map.get(rid).map(|r| r.question.clone()))
+                .collect()
+        };
 
         // 4. 카테고리에 따른 대상 응답 ID 필터링
         let target_response_ids: Vec<i64> = match category.question_index() {
