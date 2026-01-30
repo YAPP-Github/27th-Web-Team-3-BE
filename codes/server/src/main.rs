@@ -24,16 +24,17 @@ use crate::domain::auth::dto::{
 use crate::domain::member::dto::SuccessWithdrawResponse;
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
-    AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DeleteRetroRoomResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem,
-    JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery,
-    ListCommentsResponse, MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory,
-    ResponseListItem, ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse,
-    RetroRoomListItem, RetroRoomOrderItem, RetrospectDetailResponse, RetrospectListItem,
-    RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter,
-    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessAnalysisResponse,
+    AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
+    CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
+    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
+    DraftSaveResponse, EmotionRankItem, GuideItem, GuideType, JoinRetroRoomRequest,
+    JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery, ListCommentsResponse,
+    MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem,
+    ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
+    RetroRoomOrderItem, RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem,
+    RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter, StorageResponse,
+    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessAssistantResponse,
     SuccessCreateCommentResponse, SuccessCreateParticipantResponse,
     SuccessCreateRetrospectResponse, SuccessDeleteRetroRoomResponse,
     SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse, SuccessEmptyResponse,
@@ -83,6 +84,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::list_comments,
         domain::retrospect::handler::create_comment,
         domain::retrospect::handler::toggle_like,
+        domain::retrospect::handler::assistant_guide,
         // Member APIs
         domain::member::handler::withdraw
     ),
@@ -172,6 +174,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
             CreateCommentRequest,
             CreateCommentResponse,
             SuccessCreateCommentResponse,
+            AssistantRequest,
+            AssistantResponse,
+            GuideItem,
+            GuideType,
+            SuccessAssistantResponse,
             // Member DTOs
             SuccessWithdrawResponse
         )
@@ -369,6 +376,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/members/me",
             axum::routing::delete(domain::member::handler::withdraw),
+        )
+        // [API-029] 회고 어시스턴트
+        .route(
+            "/api/v1/retrospects/:retrospect_id/questions/:question_id/assistant",
+            axum::routing::post(domain::retrospect::handler::assistant_guide),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)

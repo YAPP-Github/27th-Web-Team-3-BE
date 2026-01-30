@@ -1,5 +1,7 @@
 use crate::domain::{
-    member::entity::{member, member_response, member_retro, member_retro_room, refresh_token},
+    member::entity::{
+        assistant_usage, member, member_response, member_retro, member_retro_room, refresh_token,
+    },
     retrospect::entity::{
         response, response_comment, response_like, retro_reference, retro_room, retrospect,
     },
@@ -58,6 +60,7 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
     // 4. Dependent Entities (Level 3 & Join Tables)
     create_table_if_not_exists(db, &schema, response_comment::Entity).await?;
     create_table_if_not_exists(db, &schema, response_like::Entity).await?;
+    create_table_if_not_exists(db, &schema, assistant_usage::Entity).await?;
     create_unique_index_if_not_exists(
         db,
         "uq_response_like_member_response",

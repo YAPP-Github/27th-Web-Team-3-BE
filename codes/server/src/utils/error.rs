@@ -122,8 +122,14 @@ pub enum AppError {
     /// RETRO4091: 이미 분석 완료된 회고 (409)
     RetroAlreadyAnalyzed(String),
 
+    /// RETRO4043: 존재하지 않는 질문 (404)
+    QuestionNotFound(String),
+
     /// AI4031: 월간 분석 가능 횟수 초과 (403)
     AiMonthlyLimitExceeded(String),
+
+    /// AI4032: 월간 어시스턴트 사용 횟수 초과 (403)
+    AiAssistantLimitExceeded(String),
 
     /// RETRO4221: 분석할 회고 답변 데이터 부족 (422)
     RetroInsufficientData(String),
@@ -200,7 +206,9 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
             AppError::RetroAlreadySubmitted(msg) => msg.clone(),
             AppError::RetroAlreadyAnalyzed(msg) => msg.clone(),
+            AppError::QuestionNotFound(msg) => msg.clone(),
             AppError::AiMonthlyLimitExceeded(msg) => msg.clone(),
+            AppError::AiAssistantLimitExceeded(msg) => msg.clone(),
             AppError::RetroInsufficientData(msg) => msg.clone(),
             AppError::AiAnalysisFailed(msg) => msg.clone(),
             AppError::AiConnectionFailed(msg) => msg.clone(),
@@ -254,7 +262,9 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
             AppError::RetroAlreadySubmitted(_) => "RETRO4033",
             AppError::RetroAlreadyAnalyzed(_) => "RETRO4091",
+            AppError::QuestionNotFound(_) => "RETRO4043",
             AppError::AiMonthlyLimitExceeded(_) => "AI4031",
+            AppError::AiAssistantLimitExceeded(_) => "AI4032",
             AppError::RetroInsufficientData(_) => "RETRO4221",
             AppError::AiAnalysisFailed(_) => "AI5001",
             AppError::AiConnectionFailed(_) => "AI5002",
@@ -308,7 +318,9 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
             AppError::RetroAlreadyAnalyzed(_) => StatusCode::CONFLICT,
+            AppError::QuestionNotFound(_) => StatusCode::NOT_FOUND,
             AppError::AiMonthlyLimitExceeded(_) => StatusCode::FORBIDDEN,
+            AppError::AiAssistantLimitExceeded(_) => StatusCode::FORBIDDEN,
             AppError::RetroInsufficientData(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::AiAnalysisFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
