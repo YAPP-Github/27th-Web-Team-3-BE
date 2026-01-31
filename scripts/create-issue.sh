@@ -384,7 +384,10 @@ main() {
         local emoji
         emoji=$(get_severity_emoji "$severity")
 
-        local title="$emoji [$error_code] $(echo "$json" | jq -r '.root_cause // "Error detected"' | head -c 80)"
+        # 제목 생성 (한글 깨짐 방지: awk로 문자 단위 자르기)
+        local root_cause_summary
+        root_cause_summary=$(echo "$json" | jq -r '.root_cause // "Error detected"' | awk '{print substr($0, 1, 60)}')
+        local title="$emoji [$error_code] $root_cause_summary"
         local body
         body=$(generate_issue_body "$json")
 

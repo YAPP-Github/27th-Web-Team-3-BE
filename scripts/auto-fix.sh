@@ -34,6 +34,45 @@ sha256_hash() {
     fi
 }
 
+# 크로스 플랫폼 락 획득 함수 (macOS/Linux 호환)
+# macOS에서 flock은 기본 제공되지 않으므로 mkdir 기반 atomic lock 사용
+acquire_lock() {
+    local lock_file="$1"
+    local timeout="${2:-30}"
+
+    if command -v flock &>/dev/null; then
+        # Linux: flock 사용
+        exec 200>"$lock_file"
+        flock -w "$timeout" 200
+    else
+        # macOS fallback: mkdir은 atomic operation
+        local lock_dir="${lock_file}.lock"
+        local attempts=0
+
+        while ! mkdir "$lock_dir" 2>/dev/null; do
+            ((attempts++))
+            if [ "$attempts" -ge "$timeout" ]; then
+                return 1
+            fi
+            sleep 1
+        done
+
+        # 종료 시 락 해제
+        trap 'rmdir "$lock_dir" 2>/dev/null' EXIT
+    fi
+}
+
+# 크로스 플랫폼 락 해제 함수
+release_lock() {
+    local lock_file="$1"
+    local lock_dir="${lock_file}.lock"
+
+    # mkdir 기반 락인 경우 디렉토리 삭제
+    if [ -d "$lock_dir" ]; then
+        rmdir "$lock_dir" 2>/dev/null || true
+    fi
+}
+
 # 로깅 함수
 log_info() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $*"
@@ -248,8 +287,10 @@ apply_fix() {
 변경 사항을 최소화하고, 기존 코드 스타일을 유지하세요.
 수정 완료 후 간단한 요약을 출력하세요."
 
-    # Claude Code CLI 호출 (--dangerously-skip-permissions로 실제 수정 적용)
-    # 참고: --print는 출력만 하므로 실제 파일 수정에는 적합하지 않음
+    # Claude Code CLI 호출
+    # --dangerously-skip-permissions: CI/CD 자동화 환경에서 사용자 입력 없이 실행하기 위해 필요
+    # 보안 주의: 이 플래그는 자동화된 파이프라인 내에서만 사용되며, 수정 범위는 validate_fix_scope()에서 제한됨
+    # 참고: --print(-p)는 출력만 하므로 실제 파일 수정에는 적합하지 않음
     if ! claude --dangerously-skip-permissions -p "$prompt" 2>&1; then
         log_error "Claude Code CLI failed"
         return 1
@@ -302,9 +343,8 @@ main() {
     local target
     target=$(echo "$diagnostic_json" | jq -r '.target // "codes/server/src"')
 
-    # flock을 사용한 배타적 락 획득
-    exec 200>"$LOCK_FILE"
-    if ! flock -w "$LOCK_TIMEOUT" 200; then
+    # 크로스 플랫폼 배타적 락 획득
+    if ! acquire_lock "$LOCK_FILE" "$LOCK_TIMEOUT"; then
         log_error "Could not acquire lock (another auto-fix instance running?)"
         exit 1
     fi
@@ -365,7 +405,8 @@ main() {
     # 변경 사항 확인
     if ! git -C "$PROJECT_ROOT" diff --quiet; then
         log_info "Changes detected, staging files..."
-        git -C "$PROJECT_ROOT" add -A
+        # 안전을 위해 codes/server/ 경로만 스테이징 (의도치 않은 파일 포함 방지)
+        git -C "$PROJECT_ROOT" add "codes/server/"
     else
         log_warn "No changes detected after applying fix"
         cleanup_branch "$branch_name" "$original_branch"
@@ -432,6 +473,7 @@ $fix_suggestion
 Generated with [Claude Code](https://claude.com/claude-code)"
 
     local pr_url
+    local pr_exit_code
     pr_url=$(gh pr create \
         --base "$BASE_BRANCH" \
         --head "$branch_name" \
@@ -439,9 +481,9 @@ Generated with [Claude Code](https://claude.com/claude-code)"
         --body "$pr_body" \
         --draft \
         --label "auto-fix" \
-        --label "ai-generated" 2>&1)
+        --label "ai-generated" 2>&1) || pr_exit_code=$?
 
-    if [ $? -ne 0 ]; then
+    if [ "${pr_exit_code:-0}" -ne 0 ]; then
         log_error "Failed to create PR: $pr_url"
         # PR 생성 실패해도 브랜치는 유지 (수동 PR 생성 가능)
         send_notification "warning" \
