@@ -24,7 +24,7 @@ impl AnalysisPrompt {
 
 ## 분석 방법
 
-### 1. 팀 인사이트 (teamInsight)
+### 1. 팀 인사이트 (insight)
 - 팀 전체의 강점과 개선점을 1문장으로 요약해요.
 - 따뜻하고 공감하는 어투로, "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요" 형태를 참고하세요.
 - 예시: "이번 회고에서 팀은 목표 의식은 분명했지만, 에너지 관리 측면에서 공통적인 아쉬움이 드러났어요."
@@ -52,7 +52,7 @@ impl AnalysisPrompt {
 
 ```json
 {
-  "teamInsight": "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요.",
+  "insight": "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요.",
   "emotionRank": [
     {
       "rank": 1,
@@ -148,7 +148,7 @@ mod tests {
 
         // Assert
         assert!(prompt.contains("종합 분석"));
-        assert!(prompt.contains("teamInsight"));
+        assert!(prompt.contains("insight"));
         assert!(prompt.contains("emotionRank"));
         assert!(prompt.contains("personalMissions"));
         assert!(prompt.contains("정확히 3개"));

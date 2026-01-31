@@ -635,13 +635,13 @@ impl RetrospectService {
 
         let retrospect_model = retrospect::ActiveModel {
             title: Set(req.project_name.clone()),
-            team_insight: Set(None),
+            insight: Set(None),
             retrospect_method: Set(req.retrospect_method.clone()),
             created_at: Set(now),
             updated_at: Set(now),
             start_time: Set(start_time),
             retrospect_room_id: Set(req.retro_room_id),
-            team_id: Set(req.retro_room_id),
+            retro_room_id: Set(req.retro_room_id),
             ..Default::default()
         };
 
@@ -1948,7 +1948,7 @@ impl RetrospectService {
         doc.push(Break::new(0.5));
 
         // ===== 회고방 인사이트 섹션 =====
-        if let Some(ref insight) = retrospect_model.team_insight {
+        if let Some(ref insight) = retrospect_model.insight {
             doc.push(
                 Paragraph::new("Retro Room Insight")
                     .styled(style::Style::new().bold().with_font_size(14)),
@@ -2171,7 +2171,7 @@ impl RetrospectService {
             })?;
 
         // 2-1. 이미 분석 완료 여부 확인 (재분석 방지)
-        if retrospect_model.team_insight.is_some() {
+        if retrospect_model.insight.is_some() {
             return Err(AppError::RetroAlreadyAnalyzed(
                 "이미 분석이 완료된 회고입니다.".to_string(),
             ));
@@ -2205,10 +2205,10 @@ impl RetrospectService {
                 .ok_or_else(|| AppError::InternalError("시간 계산 오류".to_string()))?
                 - kst_offset; // UTC로 변환
 
-        // 현재 월에 team_insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
+        // 현재 월에 insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
         let monthly_analysis_count = retrospect::Entity::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
-            .filter(retrospect::Column::TeamInsight.is_not_null())
+            .filter(retrospect::Column::Insight.is_not_null())
             .filter(retrospect::Column::UpdatedAt.gte(current_month_start))
             .count(&state.db)
             .await
@@ -2371,7 +2371,7 @@ impl RetrospectService {
         // personalMissions의 userId 오름차순 정렬
         analysis.personal_missions.sort_by_key(|pm| pm.user_id);
 
-        let team_insight = analysis.team_insight.clone();
+        let insight = analysis.insight.clone();
         let personal_missions = &analysis.personal_missions;
 
         // 9. 트랜잭션으로 결과 저장
@@ -2381,9 +2381,9 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 9-1. retrospects.team_insight 업데이트
+        // 9-1. retrospects.insight 업데이트
         let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
-        retrospect_active.team_insight = Set(Some(team_insight.clone()));
+        retrospect_active.insight = Set(Some(insight.clone()));
         retrospect_active.updated_at = Set(Utc::now().naive_utc());
         retrospect_active
             .update(&txn)

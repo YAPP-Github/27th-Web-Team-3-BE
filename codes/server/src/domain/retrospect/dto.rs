@@ -610,7 +610,7 @@ pub struct PersonalMissionItem {
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisResponse {
     /// 회고방 전체를 위한 AI 분석 메시지
-    pub team_insight: String,
+    pub insight: String,
     /// 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개)
     pub emotion_rank: Vec<EmotionRankItem>,
     /// 사용자별 개인 맞춤 미션 리스트 (userId 오름차순 정렬)
