@@ -99,7 +99,7 @@ pub async fn join_retro_room(
     )))
 }
 
-/// API-006: 참여 중인 회고방 목록 조회
+/// 회고방 목록 조회 API (API-006)
 ///
 /// 현재 로그인한 사용자가 참여 중인 모든 회고방 목록을 조회합니다.
 #[utoipa::path(
@@ -126,7 +126,7 @@ pub async fn list_retro_rooms(
     )))
 }
 
-/// API-007: 회고방 순서 변경
+/// 회고방 순서 변경 API (API-007)
 ///
 /// 드래그 앤 드롭으로 변경된 회고방들의 정렬 순서를 서버에 일괄 저장합니다.
 #[utoipa::path(
@@ -159,7 +159,7 @@ pub async fn update_retro_room_order(
     )))
 }
 
-/// API-008: 회고방 이름 변경
+/// 회고방 이름 변경 API (API-008)
 ///
 /// 기존 회고방의 이름을 새로운 이름으로 변경합니다. (Owner만 가능)
 #[utoipa::path(
@@ -199,7 +199,7 @@ pub async fn update_retro_room_name(
     )))
 }
 
-/// API-009: 회고방 삭제
+/// 회고방 삭제 API (API-009)
 ///
 /// 회고방을 완전히 삭제합니다. (Owner만 가능)
 #[utoipa::path(
@@ -232,7 +232,7 @@ pub async fn delete_retro_room(
     )))
 }
 
-/// API-010: 회고방 내 회고 목록 조회
+/// 회고방 내 회고 목록 조회 API (API-010)
 ///
 /// 특정 회고방에 속한 모든 회고 목록을 조회합니다.
 #[utoipa::path(
