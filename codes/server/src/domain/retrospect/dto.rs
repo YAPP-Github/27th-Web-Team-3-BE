@@ -2309,8 +2309,9 @@ mod tests {
         // Arrange
         let guide = GuideItem {
             title: "구체적인 상황 떠올리기".to_string(),
-            description: "특정 미팅이나 작업 순간 중 잘 진행됐다고 느꼈던 장면을 떠올려 보면 좋아요"
-                .to_string(),
+            description:
+                "특정 미팅이나 작업 순간 중 잘 진행됐다고 느꼈던 장면을 떠올려 보면 좋아요"
+                    .to_string(),
         };
 
         // Act
@@ -2356,7 +2357,10 @@ mod tests {
 
         // Assert
         assert_eq!(json["questionId"], 1);
-        assert!(json["questionContent"].as_str().unwrap().contains("잘했던 점"));
+        assert!(json["questionContent"]
+            .as_str()
+            .unwrap()
+            .contains("잘했던 점"));
         assert_eq!(json["guideType"], "INITIAL");
         assert_eq!(json["guides"].as_array().unwrap().len(), 3);
         assert_eq!(json["remainingCount"], 9);

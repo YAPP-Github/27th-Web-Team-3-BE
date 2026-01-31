@@ -33,8 +33,8 @@ use super::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
     CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
-    DraftSaveResponse, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse, ListCommentsResponse,
-    ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
+    DraftSaveResponse, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
+    ListCommentsResponse, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
     RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetrospectDetailResponse,
     RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams,
     SearchRetrospectItem, StorageQueryParams, StorageResponse, StorageRetrospectItem,
@@ -3023,9 +3023,7 @@ impl RetrospectService {
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
-            .ok_or_else(|| {
-                AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string())
-            })?;
+            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
 
         // 3. 회고방 멤버십 확인 (참여자만 어시스턴트 사용 가능)
         let member_retro_model = member_retro::Entity::find()
@@ -3076,9 +3074,7 @@ impl RetrospectService {
         let question_index = (question_id - 1) as usize;
         let question_content = default_questions
             .get(question_index)
-            .ok_or_else(|| {
-                AppError::QuestionNotFound("해당 질문을 찾을 수 없습니다.".to_string())
-            })?
+            .ok_or_else(|| AppError::QuestionNotFound("해당 질문을 찾을 수 없습니다.".to_string()))?
             .to_string();
 
         // 7. AI 서비스 호출
@@ -3114,8 +3110,7 @@ impl RetrospectService {
             .filter(assistant_usage::Column::CreatedAt.gte(current_month_start))
             .count(&txn)
             .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?
-            as i32;
+            .map_err(|e| AppError::InternalError(e.to_string()))? as i32;
 
         if final_count > 10 {
             // 동시 요청으로 인한 초과 - 롤백

@@ -1023,9 +1023,14 @@ pub async fn assistant_guide(
 
     let user_id = user.user_id()?;
 
-    let result =
-        RetrospectService::generate_assistant_guide(state, user_id, retrospect_id, question_id, req)
-            .await?;
+    let result = RetrospectService::generate_assistant_guide(
+        state,
+        user_id,
+        retrospect_id,
+        question_id,
+        req,
+    )
+    .await?;
 
     Ok(Json(BaseResponse::success_with_message(
         result,
