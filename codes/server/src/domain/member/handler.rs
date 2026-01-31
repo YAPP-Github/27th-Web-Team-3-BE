@@ -6,7 +6,7 @@ use crate::utils::auth::AuthUser;
 use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
-/// [API-028] 서비스 탈퇴
+/// 서비스 탈퇴 API (API-028)
 ///
 /// 현재 로그인한 사용자의 계정을 삭제하고 서비스를 탈퇴 처리합니다.
 /// - 탈퇴 시 해당 사용자와 연결된 모든 개인 정보 및 데이터는 즉시 파기되며, 이는 복구가 불가능합니다.
@@ -22,7 +22,7 @@ use crate::utils::BaseResponse;
         (status = 404, description = "존재하지 않는 사용자", body = ErrorResponse),
         (status = 500, description = "서버 내부 오류", body = ErrorResponse)
     ),
-    tag = "Member"
+    tag = "Auth"
 )]
 pub async fn withdraw(
     State(state): State<AppState>,
