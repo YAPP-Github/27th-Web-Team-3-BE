@@ -39,7 +39,7 @@ pub enum AppError {
     /// COMMON409: 중복된 자원 (409)
     Conflict(String),
 
-    /// RETRO4041: 회고 룸 없음 (404)
+    /// RETRO4041: 회고방 없음 (404)
     NotFound(String),
 
     /// AUTH4003: 이미 로그아웃되었거나 유효하지 않은 토큰 (400)
@@ -58,13 +58,13 @@ pub enum AppError {
     /// RETRO4003: 만료된 초대 링크 (400)
     ExpiredInviteLink(String),
 
-    /// RETRO4001: 회고 룸 이름 길이 초과 (400)
+    /// RETRO4001: 회고방 이름 길이 초과 (400)
     RetroRoomNameTooLong(String),
 
-    /// RETRO4091: 회고 룸 이름 중복 (409)
+    /// RETRO4091: 회고방 이름 중복 (409)
     RetroRoomNameDuplicate(String),
 
-    /// RETRO4092: 이미 회고 룸 멤버 (409)
+    /// RETRO4092: 이미 회고방 멤버 (409)
     AlreadyMember(String),
 
     /// RETRO4004: 잘못된 순서 데이터 (400)
@@ -403,7 +403,7 @@ impl From<ValidationErrors> for AppError {
             return AppError::RetroRoomNameTooLong("회고방 이름은 1~20자여야 합니다.".to_string());
         }
 
-        // retro_room_orders 필드 검증 실패 시 TEAM4004 반환
+        // retro_room_orders 필드 검증 실패 시 RETRO4004 반환
         if field_errors.contains_key("retro_room_orders")
             || field_errors.contains_key("order_index")
         {

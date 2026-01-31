@@ -12,14 +12,14 @@
 
 ## Summary
 
-회고록 작성 서비스의 **회고 생성 API**를 구현했습니다. 사용자가 팀 내에서 새로운 회고 세션을 생성하고, 선택한 회고 방식에 따라 기본 질문이 자동 생성됩니다.
+회고록 작성 서비스의 **회고 생성 API**를 구현했습니다. 사용자가 회고방 내에서 새로운 회고 세션을 생성하고, 선택한 회고 방식에 따라 기본 질문이 자동 생성됩니다.
 
 ### 주요 기능
 - 5가지 회고 방식 지원 (KPT, 4L, 5F, PMI, FREE)
 - 회고 방식별 기본 질문 5개 자동 생성
 - 참고 URL 첨부 기능 (최대 10개)
 - 트랜잭션 기반 데이터 생성 (RetroRoom → Retrospect → Response → Reference)
-- 팀 멤버십 검증 및 권한 관리
+- 회고방 멤버십 검증 및 권한 관리
 
 ### 테스트 현황
 - **단위 테스트**: 33개 통과 (DTO 검증 12개 + Service 검증 17개 + JWT 2개 + 기타 2개)
@@ -35,10 +35,10 @@
 | 파일 | 변경 유형 | 설명 |
 |------|----------|------|
 | `src/domain/team/entity/team.rs` | 생성 | Team 엔티티 정의 |
-| `src/domain/team/entity/member_team.rs` | 생성 | Member-Team 조인 테이블 엔티티 |
+| `src/domain/team/entity/member_retro_room.rs` | 생성 | Member-Team 조인 테이블 엔티티 |
 | `src/domain/team/entity/mod.rs` | 생성 | Team 엔티티 모듈 |
 | `src/domain/team/mod.rs` | 생성 | Team 도메인 모듈 |
-| `src/domain/retrospect/entity/retrospect.rs` | 수정 | RetrospectMethod enum 확장, team_id 추가 |
+| `src/domain/retrospect/entity/retrospect.rs` | 수정 | RetrospectMethod enum 확장, retro_room_id 추가 |
 | `src/domain/retrospect/dto.rs` | 생성 | Request/Response DTO (299줄) |
 | `src/domain/retrospect/service.rs` | 생성 | 비즈니스 로직 + 단위 테스트 (510줄) |
 | `src/domain/retrospect/handler.rs` | 생성 | HTTP 핸들러 (55줄) |
@@ -69,14 +69,14 @@
 | `RETRO4001` | 400 | 프로젝트 이름 유효성 검사 실패 | 1자 미만 또는 20자 초과 |
 | `RETRO4005` | 400 | 유효하지 않은 회고 방식 | Enum 외의 값 입력 |
 | `RETRO4006` | 400 | 유효하지 않은 URL 형식 | http/https 아닌 URL |
-| `TEAM4031` | 403 | 팀 접근 권한 없음 | 팀 멤버가 아닌 경우 |
-| `TEAM4041` | 404 | 존재하지 않는 팀 | 없는 teamId 입력 |
+| `RETRO4031` | 403 | 회고방 접근 권한 없음 | 회고방 멤버가 아닌 경우 |
+| `RETRO4041` | 404 | 존재하지 않는 회고방 | 없는 retroRoomId 입력 |
 
 ### 4. 검증 규칙
 
 | 필드 | 규칙 | 에러 시 코드 |
 |------|------|------------|
-| `teamId` | 1 이상의 양수 | COMMON400 |
+| `retroRoomId` | 1 이상의 양수 | COMMON400 |
 | `projectName` | 1자 이상 20자 이하 | RETRO4001 |
 | `retrospectDate` | YYYY-MM-DD 형식, **오늘 이후 날짜만 허용 (오늘 포함)** | COMMON400 |
 | `retrospectMethod` | KPT, FOUR_L, FIVE_F, PMI, FREE 중 하나 | RETRO4005 |
@@ -87,8 +87,8 @@
 ```
 1. 참고 URL 검증 (중복, 형식, 길이)
 2. 날짜 형식 및 오늘 이후 날짜 검증 (오늘 포함)
-3. 팀 존재 여부 확인 → TeamNotFound (404)
-4. 팀 멤버십 확인 → TeamAccessDenied (403)
+3. 회고방 존재 여부 확인 → RetroRoomNotFound (404)
+4. 회고방 멤버십 확인 → RetroRoomAccessDenied (403)
 5. 트랜잭션 시작
    ├── 회고방(RetroRoom) 생성 (초대 URL 포함)
    ├── 회고(Retrospect) 생성
@@ -108,9 +108,9 @@
 - `should_fail_validation_when_project_name_is_empty`
 - `should_fail_validation_when_project_name_exceeds_20_chars`
 - `should_pass_validation_when_project_name_is_exactly_20_chars`
-- `should_fail_validation_when_team_id_is_zero`
-- `should_fail_validation_when_team_id_is_negative`
-- `should_pass_validation_when_team_id_is_positive`
+- `should_fail_validation_when_retro_room_id_is_zero`
+- `should_fail_validation_when_retro_room_id_is_negative`
+- `should_pass_validation_when_retro_room_id_is_positive`
 - `should_fail_validation_when_retrospect_date_is_too_short`
 - `should_fail_validation_when_retrospect_date_is_too_long`
 - `should_pass_validation_when_retrospect_date_has_correct_format`
@@ -153,7 +153,7 @@
 | `should_return_400_when_required_field_missing` | 필수 필드 누락 | 400 |
 | `should_return_400_when_project_name_exceeds_max_length` | 20자 초과 | 400 |
 | `should_return_400_when_project_name_is_empty` | 빈 프로젝트 이름 | 400 |
-| `should_return_400_when_team_id_is_invalid` | teamId가 0 | 400 |
+| `should_return_400_when_retro_room_id_is_invalid` | retroRoomId가 0 | 400 |
 | `should_return_200_when_request_is_valid` | 정상 요청 | 200 |
 | `should_return_400_when_content_type_missing` | Content-Type 없음 | 400 |
 | `should_return_400_when_request_body_is_empty` | 빈 요청 바디 | 400 |
@@ -190,7 +190,7 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
-    "teamId": 789,
+    "retroRoomId": 789,
     "projectName": "나만의 회고 플랫폼",
     "retrospectDate": "2026-01-30",
     "retrospectMethod": "KPT",
@@ -209,7 +209,7 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
   "message": "회고가 성공적으로 생성되었습니다.",
   "result": {
     "retrospectId": 12345,
-    "teamId": 789,
+    "retroRoomId": 789,
     "projectName": "나만의 회고 플랫폼"
   }
 }
@@ -227,22 +227,22 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
 }
 ```
 
-#### 팀 접근 권한 없음 (403)
+#### 회고방 접근 권한 없음 (403)
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "해당 팀의 멤버가 아닙니다.",
+  "code": "RETRO4031",
+  "message": "해당 회고방 멤버가 아닙니다.",
   "result": null
 }
 ```
 
-#### 존재하지 않는 팀 (404)
+#### 존재하지 않는 회고방 (404)
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4041",
-  "message": "존재하지 않는 팀입니다.",
+  "code": "RETRO4041",
+  "message": "존재하지 않는 회고방입니다.",
   "result": null
 }
 ```

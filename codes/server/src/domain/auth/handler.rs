@@ -56,7 +56,7 @@ pub async fn login_by_email(
     Ok(Json(BaseResponse::success(result)))
 }
 
-/// [API-001] 소셜 로그인
+/// 소셜 로그인 API (API-001)
 ///
 /// 카카오/구글 액세스 토큰을 받아 로그인 검증 후 JWT 토큰을 발급합니다.
 /// - 기존 회원: accessToken, refreshToken 발급
@@ -94,7 +94,7 @@ pub async fn social_login(
     }))
 }
 
-/// [API-002] 회원가입
+/// 회원가입 API (API-002)
 ///
 /// 소셜 로그인에서 발급받은 signupToken으로 회원가입을 완료합니다.
 /// Authorization 헤더에 Bearer {signupToken}이 필요합니다.
@@ -141,7 +141,7 @@ pub async fn signup(
     }))
 }
 
-/// [API-003] 토큰 갱신
+/// 토큰 갱신 API (API-003)
 ///
 /// 만료된 Access Token을 Refresh Token을 이용하여 재발급합니다.
 /// Refresh Token Rotation 정책에 따라 새로운 Refresh Token도 함께 발급됩니다.
@@ -172,7 +172,7 @@ pub async fn refresh_token(
     }))
 }
 
-/// [API-004] 로그아웃
+/// 로그아웃 API (API-029)
 ///
 /// 현재 사용자의 로그아웃을 처리합니다.
 /// 서버에 저장된 Refresh Token을 무효화하여 보안을 유지합니다.

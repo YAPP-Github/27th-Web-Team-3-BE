@@ -89,13 +89,12 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub retrospect_id: i64,
     pub title: String,
-    pub team_insight: Option<String>,
+    pub insight: Option<String>,
     pub retrospect_method: RetrospectMethod,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     pub start_time: DateTime,
     pub retrospect_room_id: i64,
-    pub team_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

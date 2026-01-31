@@ -37,7 +37,7 @@
 | 검증 | 에러 코드 | HTTP |
 |------|-----------|------|
 | retrospectId 존재 여부 | RETRO4041 | 404 |
-| member_retro 참석자 확인 | TEAM4031 | 403 |
+| member_retro 참석자 확인 | RETRO4031 | 403 |
 | Bearer 토큰 인증 | AUTH4001 | 401 |
 
 ### 저장 로직

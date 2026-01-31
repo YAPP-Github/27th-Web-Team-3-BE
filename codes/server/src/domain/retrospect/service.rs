@@ -56,7 +56,7 @@ impl RetrospectService {
         member_id: i64,
         req: RetroRoomCreateRequest,
     ) -> Result<RetroRoomCreateResponse, AppError> {
-        // 1. 회고 룸 이름 중복 체크
+        // 1. 회고방 이름 중복 체크
         let existing_room = RetroRoom::find()
             .filter(retro_room::Column::Title.eq(&req.title))
             .one(&state.db)
@@ -131,7 +131,7 @@ impl RetrospectService {
                 })
             })
             .await
-            .map_err(|e| AppError::InternalError(format!("회고 룸 생성 실패: {}", e)))?;
+            .map_err(|e| AppError::InternalError(format!("회고방 생성 실패: {}", e)))?;
 
         Ok(RetroRoomCreateResponse {
             retro_room_id: result.retrospect_room_id,
@@ -177,7 +177,7 @@ impl RetrospectService {
 
         if existing_member.is_some() {
             return Err(AppError::AlreadyMember(
-                "이미 해당 회고 룸의 멤버입니다.".into(),
+                "이미 해당 회고방의 멤버입니다.".into(),
             ));
         }
 
@@ -199,7 +199,7 @@ impl RetrospectService {
                     || err_str.contains("unique")
                     || err_str.contains("constraint")
                 {
-                    AppError::AlreadyMember("이미 해당 회고 룸의 멤버입니다.".into())
+                    AppError::AlreadyMember("이미 해당 회고방의 멤버입니다.".into())
                 } else {
                     AppError::InternalError(format!("멤버 추가 실패: {}", e))
                 }
@@ -212,7 +212,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-006: 사용자가 참여 중인 레트로룸 목록 조회
+    /// API-006: 사용자가 참여 중인 회고방 목록 조회
     pub async fn list_retro_rooms(
         state: AppState,
         member_id: i64,
@@ -240,7 +240,7 @@ impl RetrospectService {
         Ok(result)
     }
 
-    /// API-007: 레트로룸 순서 변경
+    /// API-007: 회고방 순서 변경
     pub async fn update_retro_room_order(
         state: AppState,
         member_id: i64,
@@ -338,7 +338,7 @@ impl RetrospectService {
         Ok(())
     }
 
-    /// API-008: 레트로룸 이름 변경
+    /// API-008: 회고방 이름 변경
     pub async fn update_retro_room_name(
         state: AppState,
         member_id: i64,
@@ -409,7 +409,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-009: 레트로룸 삭제
+    /// API-009: 회고방 삭제
     pub async fn delete_retro_room(
         state: AppState,
         member_id: i64,
@@ -456,7 +456,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-010: 레트로룸 내 회고 목록 조회
+    /// API-010: 회고방 내 회고 목록 조회
     pub async fn list_retrospects(
         state: AppState,
         member_id: i64,
@@ -635,13 +635,12 @@ impl RetrospectService {
 
         let retrospect_model = retrospect::ActiveModel {
             title: Set(req.project_name.clone()),
-            team_insight: Set(None),
+            insight: Set(None),
             retrospect_method: Set(req.retrospect_method.clone()),
             created_at: Set(now),
             updated_at: Set(now),
             start_time: Set(start_time),
             retrospect_room_id: Set(req.retro_room_id),
-            team_id: Set(req.retro_room_id),
             ..Default::default()
         };
 
@@ -1948,7 +1947,7 @@ impl RetrospectService {
         doc.push(Break::new(0.5));
 
         // ===== 회고방 인사이트 섹션 =====
-        if let Some(ref insight) = retrospect_model.team_insight {
+        if let Some(ref insight) = retrospect_model.insight {
             doc.push(
                 Paragraph::new("Retro Room Insight")
                     .styled(style::Style::new().bold().with_font_size(14)),
@@ -2171,7 +2170,7 @@ impl RetrospectService {
             })?;
 
         // 2-1. 이미 분석 완료 여부 확인 (재분석 방지)
-        if retrospect_model.team_insight.is_some() {
+        if retrospect_model.insight.is_some() {
             return Err(AppError::RetroAlreadyAnalyzed(
                 "이미 분석이 완료된 회고입니다.".to_string(),
             ));
@@ -2205,10 +2204,10 @@ impl RetrospectService {
                 .ok_or_else(|| AppError::InternalError("시간 계산 오류".to_string()))?
                 - kst_offset; // UTC로 변환
 
-        // 현재 월에 team_insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
+        // 현재 월에 insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
         let monthly_analysis_count = retrospect::Entity::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
-            .filter(retrospect::Column::TeamInsight.is_not_null())
+            .filter(retrospect::Column::Insight.is_not_null())
             .filter(retrospect::Column::UpdatedAt.gte(current_month_start))
             .count(&state.db)
             .await
@@ -2371,7 +2370,7 @@ impl RetrospectService {
         // personalMissions의 userId 오름차순 정렬
         analysis.personal_missions.sort_by_key(|pm| pm.user_id);
 
-        let team_insight = analysis.team_insight.clone();
+        let insight = analysis.insight.clone();
         let personal_missions = &analysis.personal_missions;
 
         // 9. 트랜잭션으로 결과 저장
@@ -2381,9 +2380,9 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 9-1. retrospects.team_insight 업데이트
+        // 9-1. retrospects.insight 업데이트
         let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
-        retrospect_active.team_insight = Set(Some(team_insight.clone()));
+        retrospect_active.insight = Set(Some(insight.clone()));
         retrospect_active.updated_at = Set(Utc::now().naive_utc());
         retrospect_active
             .update(&txn)
@@ -2697,7 +2696,7 @@ impl RetrospectService {
 
     /// 회고 답변 조회 및 회고방 멤버십 확인 헬퍼
     /// - 답변이 존재하지 않으면 RES4041 (404) 반환
-    /// - 회고방 멤버가 아니면 TEAM4031 (403) 반환
+    /// - 회고방 멤버가 아니면 RETRO4031 (403) 반환
     async fn find_response_for_member(
         state: &AppState,
         user_id: i64,
@@ -2900,7 +2899,7 @@ impl RetrospectService {
             AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
         })?;
 
-        // 2. 회고 정보 조회하여 팀 멤버십 확인
+        // 2. 회고 정보 조회하여 회고방 멤버십 확인
         let retrospect_entity = retrospect::Entity::find_by_id(response_model.retrospect_id)
             .one(&state.db)
             .await

@@ -157,44 +157,44 @@ mod tests {
     #[test]
     fn should_extract_json_from_plain_response() {
         // Arrange
-        let response = r#"{"teamInsight": "test"}"#;
+        let response = r#"{"insight": "test"}"#;
 
         // Act
         let result = AiService::extract_json(response);
 
         // Assert
-        assert_eq!(result, r#"{"teamInsight": "test"}"#);
+        assert_eq!(result, r#"{"insight": "test"}"#);
     }
 
     #[test]
     fn should_extract_json_from_code_block() {
         // Arrange
-        let response = "```json\n{\"teamInsight\": \"test\"}\n```";
+        let response = "```json\n{\"insight\": \"test\"}\n```";
 
         // Act
         let result = AiService::extract_json(response);
 
         // Assert
-        assert_eq!(result, "{\"teamInsight\": \"test\"}");
+        assert_eq!(result, "{\"insight\": \"test\"}");
     }
 
     #[test]
     fn should_extract_json_with_surrounding_text() {
         // Arrange
-        let response = "Here is the result:\n{\"teamInsight\": \"test\"}\nDone.";
+        let response = "Here is the result:\n{\"insight\": \"test\"}\nDone.";
 
         // Act
         let result = AiService::extract_json(response);
 
         // Assert
-        assert_eq!(result, "{\"teamInsight\": \"test\"}");
+        assert_eq!(result, "{\"insight\": \"test\"}");
     }
 
     #[test]
     fn should_parse_valid_analysis_response() {
         // Arrange
         let json = r#"{
-            "teamInsight": "팀이 잘했습니다",
+            "insight": "팀이 잘했습니다",
             "emotionRank": [
                 {"rank": 1, "label": "뿌듯", "description": "성취감", "count": 5},
                 {"rank": 2, "label": "피로", "description": "업무량", "count": 3},
@@ -219,7 +219,7 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let analysis = result.unwrap();
-        assert_eq!(analysis.team_insight, "팀이 잘했습니다");
+        assert_eq!(analysis.insight, "팀이 잘했습니다");
         assert_eq!(analysis.emotion_rank.len(), 3);
         assert_eq!(analysis.personal_missions.len(), 1);
         assert_eq!(analysis.personal_missions[0].missions.len(), 3);

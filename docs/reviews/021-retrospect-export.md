@@ -1,7 +1,7 @@
 # API-021: 회고 내보내기 API 구현 리뷰
 
 ## 개요
-특정 회고 세션의 전체 내용(팀 인사이트, 팀원별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드하는 API입니다.
+특정 회고 세션의 전체 내용(인사이트, 팀원별 답변 등)을 요약하여 PDF 파일로 생성하고 다운로드하는 API입니다.
 
 ## 엔드포인트
 - **Method**: `GET`
@@ -26,7 +26,7 @@
 |------|------|------|
 | COMMON400 | 400 | retrospectId 유효성 오류 (0 이하) |
 | AUTH4001 | 401 | 인증 실패 (토큰 없음/만료) |
-| TEAM4031 | 403 | 접근 권한 없음 (팀 멤버가 아님) |
+| RETRO4031 | 403 | 접근 권한 없음 (회고방 멤버가 아님) |
 | RETRO4041 | 404 | 존재하지 않는 회고 |
 | COMMON500 | 500 | PDF 생성 실패 / 서버 내부 오류 |
 
@@ -45,8 +45,8 @@
 ### 비즈니스 로직 흐름
 1. **인증 확인**: Bearer 토큰에서 사용자 ID 추출
 2. **retrospectId 검증**: 1 이상의 양수 확인
-3. **회고 조회 및 접근 제어**: `find_retrospect_for_member`로 회고 존재 및 팀 멤버십 확인 (정보 누출 방지)
-4. **팀 이름 조회**: `team` 테이블에서 팀명 조회
+3. **회고 조회 및 접근 제어**: `find_retrospect_for_member`로 회고 존재 및 회고방 멤버십 확인 (정보 누출 방지)
+4. **회고방 이름 조회**: `retro_room` 테이블에서 회고방명 조회
 5. **참여 멤버 조회**: `member_retro` + `member` 테이블 조인으로 참여자 목록 및 닉네임 조회
 6. **질문/답변 조회**: `response` 테이블에서 해당 회고의 모든 질문/답변 조회
 7. **PDF 생성**: `genpdf` 라이브러리로 PDF 문서 생성
@@ -54,8 +54,8 @@
 
 ### PDF 문서 구성
 1. **제목**: `{프로젝트명} - Retrospect Report`
-2. **기본 정보**: 팀명, 날짜/시간, 회고 방식, 참여 멤버 목록
-3. **팀 인사이트**: AI 분석 결과 (있는 경우)
+2. **기본 정보**: 회고방명, 날짜/시간, 회고 방식, 참여 멤버 목록
+3. **인사이트**: AI 분석 결과 (있는 경우)
 4. **질문/답변**: 중복 제거된 질문별 답변 목록
 5. **개인 인사이트**: 멤버별 개인 인사이트 (있는 경우)
 
@@ -89,7 +89,7 @@
 
 #### 비즈니스 에러
 - `api021_should_return_404_when_retrospect_not_found` - 존재하지 않는 회고
-- `api021_should_return_403_when_user_is_not_team_member` - 접근 권한 없음
+- `api021_should_return_403_when_user_is_not_retro_room_member` - 접근 권한 없음
 - `api021_should_return_500_when_pdf_generation_fails` - PDF 생성 실패
 
 #### 성공 케이스
@@ -103,7 +103,7 @@
 - [x] 모든 테스트가 통과하는가? (122 unit + 48 integration = 170 tests)
 - [x] API 문서가 `docs/reviews/` 디렉토리에 작성되었는가?
 - [x] 공통 유틸리티를 재사용했는가? (AppError, AuthUser, find_retrospect_for_member)
-- [x] 에러 처리가 적절하게 되어 있는가? (COMMON400, AUTH4001, TEAM4031, RETRO4041, COMMON500)
+- [x] 에러 처리가 적절하게 되어 있는가? (COMMON400, AUTH4001, RETRO4031, RETRO4041, COMMON500)
 - [x] 코드가 Rust 컨벤션을 따르는가? (cargo fmt, cargo clippy -- -D warnings)
 - [x] 불필요한 의존성이 추가되지 않았는가? (genpdf만 추가 - PDF 생성에 필수)
 
