@@ -505,9 +505,10 @@ mod tests {
 
         // Act
         let validation_result = req.validate();
-        assert!(validation_result.is_err());
-
-        let errors = validation_result.unwrap_err();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => panic!("Expected validation to fail for empty array, but it succeeded"),
+        };
         let app_error: AppError = errors.into();
 
         // Assert
@@ -527,9 +528,10 @@ mod tests {
 
         // Act
         let validation_result = req.validate();
-        assert!(validation_result.is_err());
-
-        let errors = validation_result.unwrap_err();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => panic!("Expected validation to fail for invalid order_index, but it succeeded"),
+        };
         let app_error: AppError = errors.into();
 
         // Assert
@@ -548,9 +550,10 @@ mod tests {
 
         // Act
         let validation_result = req.validate();
-        assert!(validation_result.is_err());
-
-        let errors = validation_result.unwrap_err();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => panic!("Expected validation to fail for invalid retro_room_id, but it succeeded"),
+        };
         let app_error: AppError = errors.into();
 
         // Assert
@@ -575,9 +578,10 @@ mod tests {
 
         // Act
         let validation_result = req.validate();
-        assert!(validation_result.is_err());
-
-        let errors = validation_result.unwrap_err();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => panic!("Expected validation to fail for partial invalid items, but it succeeded"),
+        };
         let app_error: AppError = errors.into();
 
         // Assert
@@ -596,9 +600,10 @@ mod tests {
 
         // Act
         let validation_result = req.validate();
-        assert!(validation_result.is_err());
-
-        let errors = validation_result.unwrap_err();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => panic!("Expected validation to fail for both fields invalid, but it succeeded"),
+        };
         let app_error: AppError = errors.into();
 
         // Assert
