@@ -101,7 +101,7 @@ pub async fn list_references(
 **비즈니스 로직 흐름:**
 ```text
 1. 회고 존재 여부 확인 → RetrospectNotFound (404)
-2. 회고의 team_id로 팀 멤버십 확인 → RetrospectNotFound (404, 동일 메시지로 존재 여부 노출 방지)
+2. 회고의 retro_room_id로 팀 멤버십 확인 → RetrospectNotFound (404, 동일 메시지로 존재 여부 노출 방지)
 3. retro_refrence 테이블에서 참고자료 조회 (referenceId 오름차순)
 4. ReferenceItem DTO로 변환하여 반환
 ```
@@ -285,7 +285,7 @@ curl -X GET http://localhost:8080/api/v1/retrospects/100/references \
 
 | 테이블 | 용도 |
 |--------|------|
-| `retrospects` | 회고 존재 확인, team_id 조회 |
+| `retrospects` | 회고 존재 확인, retro_room_id 조회 |
 | `member_team` | 팀 멤버십 확인 |
 | `retro_refrence` | 참고자료 목록 조회 |
 

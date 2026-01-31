@@ -26,7 +26,7 @@
 |------|------|------|
 | COMMON400 | 400 | retrospectId 유효성 오류 (0 이하) |
 | AUTH4001 | 401 | 인증 실패 (토큰 없음/만료) |
-| TEAM4031 | 403 | 접근 권한 없음 (팀 멤버가 아님) |
+| RETRO4031 | 403 | 접근 권한 없음 (팀 멤버가 아님) |
 | RETRO4041 | 404 | 존재하지 않는 회고 |
 | COMMON500 | 500 | PDF 생성 실패 / 서버 내부 오류 |
 
@@ -103,7 +103,7 @@
 - [x] 모든 테스트가 통과하는가? (122 unit + 48 integration = 170 tests)
 - [x] API 문서가 `docs/reviews/` 디렉토리에 작성되었는가?
 - [x] 공통 유틸리티를 재사용했는가? (AppError, AuthUser, find_retrospect_for_member)
-- [x] 에러 처리가 적절하게 되어 있는가? (COMMON400, AUTH4001, TEAM4031, RETRO4041, COMMON500)
+- [x] 에러 처리가 적절하게 되어 있는가? (COMMON400, AUTH4001, RETRO4031, RETRO4041, COMMON500)
 - [x] 코드가 Rust 컨벤션을 따르는가? (cargo fmt, cargo clippy -- -D warnings)
 - [x] 불필요한 의존성이 추가되지 않았는가? (genpdf만 추가 - PDF 생성에 필수)
 

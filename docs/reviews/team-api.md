@@ -52,11 +52,11 @@
 ### 3.2 기능 검증 포인트
 1.  **성공 케이스**:
     - 유효한 이름과 설명으로 요청 시 200 OK.
-    - `result`에 `teamId`, `teamName`, `inviteCode` 포함 확인.
+    - `result`에 `retroRoomId`, `teamName`, `inviteCode` 포함 확인.
     - DB에 `retro_room` 및 `member_retro_room` 데이터 적재 확인.
 2.  **실패 케이스**:
-    - **중복 이름**: 이미 존재하는 팀 이름으로 요청 시 409 Conflict (`TEAM4091`).
-    - **길이 초과**: 20자 넘는 이름 요청 시 400 Bad Request (`TEAM4001`).
+    - **중복 이름**: 이미 존재하는 팀 이름으로 요청 시 409 Conflict (`RETRO4091`).
+    - **길이 초과**: 20자 넘는 이름 요청 시 400 Bad Request (`RETRO4001`).
     - **인증 실패**: 토큰 없이 요청 시 401 Unauthorized.
 
 ## 4. 코드 리뷰 체크리스트 (Self-Check)

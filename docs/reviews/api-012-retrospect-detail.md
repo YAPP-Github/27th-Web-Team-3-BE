@@ -23,7 +23,7 @@
   "code": "COMMON200",
   "message": "회고 상세 정보 조회를 성공했습니다.",
   "result": {
-    "teamId": 789,
+    "retroRoomId": 789,
     "title": "3차 스프린트 회고",
     "startTime": "2026-01-24",
     "retroCategory": "KPT",
@@ -51,7 +51,7 @@
 | `src/domain/retrospect/dto.rs` | `RetrospectDetailResponse`, `RetrospectMemberItem`, `RetrospectQuestionItem`, `SuccessRetrospectDetailResponse` DTO 추가 + 단위 테스트 5개 |
 | `src/domain/retrospect/service.rs` | `get_retrospect_detail()` 메서드 추가 |
 | `src/domain/retrospect/handler.rs` | `get_retrospect_detail` 핸들러 추가 + Swagger/utoipa 문서화 |
-| `src/utils/error.rs` | `TeamAccessDenied` 에러 variant 추가 (TEAM4031) |
+| `src/utils/error.rs` | `RetroRoomAccessDenied` 에러 variant 추가 (RETRO4031) |
 | `src/main.rs` | 라우트 등록 (`/api/v1/retrospects/:retrospect_id`) + OpenAPI 스키마/경로 추가 |
 
 ## 비즈니스 로직
@@ -61,7 +61,7 @@
 1. **Path Parameter 검증**: `retrospectId`가 1 이상인지 확인 (핸들러에서 수행, COMMON400)
 2. **사용자 ID 추출**: AuthUser에서 JWT의 `sub` 클레임을 파싱하여 사용자 ID 획득
 3. **회고 존재 여부 확인**: `retrospect` 테이블에서 해당 ID로 조회 (RETRO4041)
-4. **접근 권한 확인**: `member_retro_room` 테이블에서 사용자가 해당 회고의 `retrospect_room`에 소속된 팀 멤버인지 확인 (TEAM4031)
+4. **접근 권한 확인**: `member_retro_room` 테이블에서 사용자가 해당 회고의 `retrospect_room`에 소속된 팀 멤버인지 확인 (RETRO4031)
 5. **참여 멤버 조회**: `member_retro` 테이블에서 해당 회고에 등록된 멤버 목록 조회 (등록일 기준 오름차순), `member` 테이블과 조인하여 닉네임 획득
 6. **응답(response) 조회**: `response` 테이블에서 해당 회고의 전체 응답 조회 (response_id 오름차순)
 7. **질문 리스트 추출**: 응답에서 중복 제거하여 질문 리스트 생성 (HashSet 사용, 최대 5개, index 1부터 순차 부여)
@@ -76,7 +76,7 @@
 | retrospectId가 0 이하 | 400 | COMMON400 | retrospectId는 1 이상의 양수여야 합니다. |
 | 유효하지 않은 사용자 ID | 401 | COMMON401 | 유효하지 않은 사용자 ID입니다. |
 | 인증 실패 | 401 | AUTH4001 | 인증 정보가 유효하지 않습니다. |
-| 팀 접근 권한 없음 | 403 | TEAM4031 | 해당 회고에 접근 권한이 없습니다. |
+| 팀 접근 권한 없음 | 403 | RETRO4031 | 해당 회고에 접근 권한이 없습니다. |
 | 존재하지 않는 회고 | 404 | RETRO4041 | 존재하지 않는 회고입니다. |
 | DB 오류 등 서버 에러 | 500 | COMMON500 | 서버 에러, 관리자에게 문의 바랍니다. |
 
@@ -86,7 +86,7 @@
 
 | 테스트 | 검증 내용 |
 |--------|----------|
-| `should_serialize_retrospect_detail_response_in_camel_case` | 전체 응답 camelCase 직렬화 검증 (teamId, startTime, retroCategory, totalLikeCount, totalCommentCount, members, questions) |
+| `should_serialize_retrospect_detail_response_in_camel_case` | 전체 응답 camelCase 직렬화 검증 (retroRoomId, startTime, retroCategory, totalLikeCount, totalCommentCount, members, questions) |
 | `should_serialize_retrospect_detail_with_empty_members_and_questions` | 빈 멤버/질문 리스트 + 통계 0 + FREE 카테고리 직렬화 검증 |
 | `should_serialize_all_retro_categories_correctly` | 모든 RetroCategory enum 값 (KPT, FOUR_L, FIVE_F, PMI, FREE) 직렬화 검증 |
 | `should_serialize_member_item_in_camel_case` | RetrospectMemberItem camelCase 직렬화 (memberId, userName) + snake_case 키 부재 확인 |
