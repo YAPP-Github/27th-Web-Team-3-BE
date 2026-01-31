@@ -27,9 +27,46 @@ LOCK_FILE="$STATE_DIR/log-watcher.lock"
 # 오래된 상태 파일 정리 (7일 이상)
 find "$STATE_DIR" -name "log-watcher-*" -mtime +7 -delete 2>/dev/null || true
 
-# flock을 사용한 배타적 락 획득
-exec 200>"$LOCK_FILE"
-if ! flock -w "$LOCK_TIMEOUT" 200; then
+# 크로스 플랫폼 sha256 함수 (macOS/Linux 호환)
+sha256_hash() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum | cut -d' ' -f1
+    elif command -v shasum &>/dev/null; then
+        shasum -a 256 | cut -d' ' -f1
+    elif command -v openssl &>/dev/null; then
+        openssl dgst -sha256 | awk '{print $NF}'
+    else
+        # fallback: md5 사용 (중복 방지 목적에는 충분)
+        md5 2>/dev/null || md5sum | cut -d' ' -f1
+    fi
+}
+
+# 크로스 플랫폼 락 획득 함수 (macOS/Linux 호환)
+acquire_lock() {
+    local lock_file="$1"
+    local timeout="${2:-10}"
+
+    if command -v flock &>/dev/null; then
+        exec 200>"$lock_file"
+        flock -w "$timeout" 200
+    else
+        # macOS fallback: mkdir은 atomic operation
+        local lock_dir="${lock_file}.lock"
+        local attempts=0
+
+        while ! mkdir "$lock_dir" 2>/dev/null; do
+            ((attempts++))
+            if [ "$attempts" -ge "$timeout" ]; then
+                return 1
+            fi
+            sleep 1
+        done
+        trap 'rmdir "$lock_dir" 2>/dev/null' EXIT
+    fi
+}
+
+# 배타적 락 획득
+if ! acquire_lock "$LOCK_FILE" "$LOCK_TIMEOUT"; then
     echo "[$(date)] ERROR: Could not acquire lock (another instance running?)" >&2
     exit 1
 fi
@@ -108,8 +145,8 @@ while read -r line; do
         TARGET=$(echo "$line" | jq -r '.target // "unknown"' 2>/dev/null || echo "unknown")
         REQUEST_ID=$(echo "$line" | jq -r '.fields.request_id // "N/A"' 2>/dev/null || echo "N/A")
 
-        # Fingerprint 생성 (SHA256 해시로 delimiter 문제 회피)
-        FINGERPRINT=$(echo -n "${ERROR_CODE}|${TARGET}" | sha256sum | cut -d' ' -f1)
+        # Fingerprint 생성 (SHA256 해시로 delimiter 문제 회피, macOS 호환)
+        FINGERPRINT=$(echo -n "${ERROR_CODE}|${TARGET}" | sha256_hash)
 
         # 중복 체크 (Tab 구분자 사용)
         LAST_SEEN=""
@@ -150,6 +187,18 @@ while read -r line; do
         echo "[$(date)] Running diagnostic for: $ERROR_CODE"
         DIAGNOSTIC=$(python3 "$SCRIPT_DIR/diagnostic-agent.py" "$line" 2>/dev/null)
 
+        # 진단 결과 JSON 유효성 검증
+        if [ -z "$DIAGNOSTIC" ] || ! echo "$DIAGNOSTIC" | jq -e '.' > /dev/null 2>&1; then
+            echo "[$(date)] Diagnostic returned invalid or empty JSON, sending basic alert"
+            if "$SCRIPT_DIR/discord-alert.sh" "critical" \
+                "🚨 [$ERROR_CODE] Error Detected (진단 실패)" \
+                "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$ERROR_CODE"; then
+                ALERT_COUNT=$((ALERT_COUNT + 1))
+            fi
+            continue
+        fi
+
         if echo "$DIAGNOSTIC" | jq -e '.error' > /dev/null 2>&1; then
             # 진단 실패 - 기본 알림
             echo "[$(date)] Diagnostic failed, sending basic alert"
@@ -164,6 +213,7 @@ while read -r line; do
             SEVERITY=$(echo "$DIAGNOSTIC" | jq -r '.severity // "critical"')
             ROOT_CAUSE=$(echo "$DIAGNOSTIC" | jq -r '.root_cause // "분석 중"')
             RECOMMENDATIONS=$(echo "$DIAGNOSTIC" | jq -r '.recommendations[0].action // "검토 필요"')
+            AUTO_FIXABLE=$(echo "$DIAGNOSTIC" | jq -r '.auto_fixable // false')
 
             echo "[$(date)] Diagnostic success, sending detailed alert"
             if "$SCRIPT_DIR/discord-alert.sh" "$SEVERITY" \
@@ -171,6 +221,19 @@ while read -r line; do
                 "**근본 원인**: $ROOT_CAUSE\n\n**권장 조치**: $RECOMMENDATIONS\n\n**위치**: $TARGET" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
+            fi
+
+            # Phase 4 자동화: critical/warning이면 GitHub Issue 생성, critical + auto_fixable이면 Auto-Fix 시도
+            if [ "$SEVERITY" = "critical" ] || [ "$SEVERITY" = "warning" ]; then
+                DIAGNOSTIC_WITH_CODE=$(echo "$DIAGNOSTIC" | jq --arg ec "$ERROR_CODE" '. + {error_code: $ec}')
+                echo "[$(date)] Creating GitHub Issue for $SEVERITY: $ERROR_CODE"
+                "$SCRIPT_DIR/create-issue.sh" "$DIAGNOSTIC_WITH_CODE" || true
+
+                # Auto-Fix 시도 (critical + auto_fixable인 경우만)
+                if [ "$SEVERITY" = "critical" ] && [ "$AUTO_FIXABLE" = "true" ]; then
+                    echo "[$(date)] Attempting Auto-Fix for: $ERROR_CODE"
+                    "$SCRIPT_DIR/auto-fix.sh" "$DIAGNOSTIC_WITH_CODE" || true
+                fi
             fi
         fi
     fi

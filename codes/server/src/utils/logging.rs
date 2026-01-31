@@ -23,5 +23,20 @@ pub fn init_logging() {
         .with(filter)
         .with(fmt_layer)
         .try_init()
-        .ok(); // Silently ignore if already initialized
+        .or_else(|err| {
+            // Detect "already initialized" via source downcasting
+            use std::error::Error;
+            if err
+                .source()
+                .and_then(|s| s.downcast_ref::<tracing::dispatcher::SetGlobalDefaultError>())
+                .is_some()
+            {
+                // Already initialized; this is safe to ignore
+                return Ok(());
+            }
+            // Other initialization failures should be logged
+            eprintln!("Failed to initialize tracing: {}", err);
+            Err(err)
+        })
+        .ok(); // Convert to unit, letting the server start even if logging fails
 }

@@ -7,6 +7,12 @@ TITLE="$2"
 MESSAGE="$3"
 ERROR_CODE="$4"
 
+# 필수 인자 검증
+if [ -z "$TITLE" ] || [ -z "$MESSAGE" ]; then
+    echo "[$(date)] ERROR: Usage: $0 <severity> <title> <message> [error_code]" >&2
+    exit 1
+fi
+
 # Webhook URL 검증
 if [ -z "$WEBHOOK_URL" ]; then
     echo "[$(date)] ERROR: DISCORD_WEBHOOK_URL is not set" >&2
