@@ -18,19 +18,19 @@ API 번호는 `docs/api-specs/`의 번호 체계와 동일합니다.
 
 | # | API | 폴더 | 문서 |
 |---|-----|------|:----:|
-| 010 | 팀 회고 목록 조회 | [`010-team-retrospects-list/`](./010-team-retrospects-list/) | 4개 |
-| 011 | 회고 생성 | [`011-retrospect-create/`](./011-retrospect-create/) | 1개 |
-| 012 | 회고 상세 조회 | [`012-retrospect-detail/`](./012-retrospect-detail/) | 4개 |
-| 013 | 회고 삭제 | [`013-retrospect-delete/`](./013-retrospect-delete/) | 4개 |
-| 014 | 회고 참여자 등록 | [`014-retrospect-participant-create/`](./014-retrospect-participant-create/) | 4개 |
-| 016 | 답변 임시 저장 | [`016-retrospect-draft-save/`](./016-retrospect-draft-save/) | 4개 |
-| 017 | 답변 제출 | [`017-retrospect-submit/`](./017-retrospect-submit/) | 4개 |
-| 018 | 참고자료 목록 | [`018-retrospect-references-list/`](./018-retrospect-references-list/) | 4개 |
-| 019 | 보관함 조회 | [`019-retrospect-storage/`](./019-retrospect-storage/) | 4개 |
-| 020 | 답변 카테고리별 조회 | [`020-retrospect-responses-list/`](./020-retrospect-responses-list/) | 4개 |
-| 021 | 회고 내보내기 (PDF) | [`021-retrospect-export/`](./021-retrospect-export/) | 4개 |
-| 022 | 회고 AI 분석 | - [022-retrospect-analysis](022-retrospect-analysis/spring-guide.md) | 4개 |
-| 023 | 회고 검색 | [`023-retrospect-search/`](./023-retrospect-search/) | 4개 |
+| 011 | 팀 회고 목록 조회 | [`011-team-retrospects-list/`](./011-team-retrospects-list/) | 4개 |
+| 012 | 회고 생성 | [`012-retrospect-create/`](./012-retrospect-create/) | 1개 |
+| 013 | 회고 상세 조회 | [`013-retrospect-detail/`](./013-retrospect-detail/) | 4개 |
+| 014 | 회고 삭제 | [`014-retrospect-delete/`](./014-retrospect-delete/) | 4개 |
+| 015 | 회고 참여자 등록 | [`015-retrospect-participant-create/`](./015-retrospect-participant-create/) | 4개 |
+| 017 | 답변 임시 저장 | [`017-retrospect-draft-save/`](./017-retrospect-draft-save/) | 4개 |
+| 018 | 답변 제출 | [`018-retrospect-submit/`](./018-retrospect-submit/) | 4개 |
+| 019 | 참고자료 목록 | [`019-retrospect-references-list/`](./019-retrospect-references-list/) | 4개 |
+| 020 | 보관함 조회 | [`020-retrospect-storage/`](./020-retrospect-storage/) | 4개 |
+| 021 | 답변 카테고리별 조회 | [`021-retrospect-responses-list/`](./021-retrospect-responses-list/) | 4개 |
+| 022 | 회고 내보내기 (PDF) | [`022-retrospect-export/`](./022-retrospect-export/) | 4개 |
+| 023 | 회고 AI 분석 | - [023-retrospect-analysis](023-retrospect-analysis/spring-guide.md) | 4개 |
+| 024 | 회고 검색 | [`024-retrospect-search/`](./024-retrospect-search/) | 4개 |
 
 ## 참고 자료
 - [API 스펙 문서](../api-specs/)
