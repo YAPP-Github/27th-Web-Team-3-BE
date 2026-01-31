@@ -132,3 +132,25 @@ variable "db_skip_final_snapshot" {
   type        = bool
   default     = true
 }
+
+# =============================================================================
+# Domain Variables
+# =============================================================================
+
+variable "domain_name" {
+  description = "메인 도메인 이름 (Route53 호스팅 영역)"
+  type        = string
+  default     = "moaofficial.kr"
+}
+
+variable "api_subdomain" {
+  description = "API 서브도메인"
+  type        = string
+  default     = "api"
+}
+
+variable "ssl_email" {
+  description = "SSL 인증서 알림용 이메일"
+  type        = string
+  default     = "admin@moaofficial.kr"
+}

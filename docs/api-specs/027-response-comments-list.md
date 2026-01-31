@@ -166,7 +166,7 @@ GET /api/v1/responses/{responseId}/comments
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
+  "code": "RETRO4031",
   "message": "해당 리소스에 접근 권한이 없습니다.",
   "result": null
 }
@@ -200,7 +200,7 @@ GET /api/v1/responses/{responseId}/comments
 |------|-------------|-------------|----------|
 | COMMON400 | 400 | 잘못된 요청 | responseId/cursor가 0 이하, size가 1~100 범위 벗어남 |
 | AUTH4001 | 401 | 인증 실패 | 토큰 누락, 만료 또는 잘못된 형식 |
-| TEAM4031 | 403 | 접근 권한 없음 | 팀 멤버가 아닌 유저가 댓글 조회 시도 |
+| RETRO4031 | 403 | 접근 권한 없음 | 회고방 멤버가 아닌 유저가 댓글 조회 시도 |
 | RES4041 | 404 | 리소스 없음 | 유효하지 않은 responseId 또는 존재하지 않는 회고 답변 |
 | COMMON500 | 500 | 서버 오류 | DB 조회 중 예외 발생 또는 시스템 오류 |
 

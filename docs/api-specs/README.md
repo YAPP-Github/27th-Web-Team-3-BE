@@ -19,7 +19,7 @@
 | API-001 | POST | `/api/v1/auth/social-login` | 소셜 로그인 (구글/카카오) | [001-auth-social-login.md](./001-auth-social-login.md) |
 | API-002 | POST | `/api/v1/auth/signup` | 회원가입 (닉네임 등록) | [002-auth-signup.md](./002-auth-signup.md) |
 | API-003 | POST | `/api/v1/auth/token/refresh` | 토큰 리프레시 | [003-auth-token-refresh.md](./003-auth-token-refresh.md) |
-| API-004 | POST | `/api/v1/auth/logout` | 로그아웃 | [004-auth-logout.md](./004-auth-logout.md) |
+| API-029 | POST | `/api/v1/auth/logout` | 로그아웃 | [029-auth-logout.md](./029-auth-logout.md) |
 
 ### 회고방 (Retro Room) - 005~011
 
@@ -65,12 +65,6 @@
 | API-027 | GET | `/api/v1/responses/{responseId}/comments` | 답변 댓글 조회 | [027-response-comments-list.md](./027-response-comments-list.md) |
 | API-028 | POST | `/api/v1/responses/{responseId}/comments` | 답변 댓글 작성 | [028-response-comment-create.md](./028-response-comment-create.md) |
 
-### 서비스 탈퇴 - 029
-
-| API ID | Method | Endpoint | 설명 | 문서 |
-|--------|--------|----------|------|------|
-| API-029 | DELETE | `/api/v1/members/me` | 서비스 탈퇴 (회원 탈퇴) | [029-exit-service.md](./029-exit-service.md) |
-
 ---
 
 ## 공통 응답 형식
@@ -104,8 +98,7 @@
 | 접두사 | 도메인 | 예시 |
 |--------|--------|------|
 | AUTH | 인증 | AUTH4001, AUTH4002, AUTH4003 |
-| TEAM | 팀 | TEAM4001, TEAM4031, TEAM4041, TEAM4091 |
-| RETRO | 회고 | RETRO4001, RETRO4031, RETRO4041 |
+| RETRO | 회고/회고방 | RETRO4001, RETRO4031, RETRO4041, RETRO4091 |
 | DRAFT | 임시저장 | DRAFT4001, DRAFT4002 |
 | RES | 응답/댓글 | RES4001, RES4041 |
 | MEMBER | 회원 | MEMBER4001, MEMBER4041, MEMBER4042 |

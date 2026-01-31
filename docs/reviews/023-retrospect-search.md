@@ -1,7 +1,7 @@
 # API-023: 회고 검색 API 구현 리뷰
 
 ## 개요
-사용자가 참여하는 모든 팀의 회고를 프로젝트명/회고명 기준으로 검색하는 API입니다.
+사용자가 참여하는 모든 회고방의 회고를 프로젝트명/회고명 기준으로 검색하는 API입니다.
 
 ## 엔드포인트
 - **Method**: `GET`
@@ -23,7 +23,7 @@
     {
       "retrospectId": 42,
       "projectName": "스프린트 회고",
-      "teamName": "팀A",
+      "retroRoomName": "회고방A",
       "retrospectMethod": "KPT",
       "retrospectDate": "2026-01-24",
       "retrospectTime": "14:30"
@@ -52,9 +52,9 @@
 
 ### 비즈니스 로직 흐름
 1. 키워드 검증 (`validate_search_keyword`: 빈 값, 100자 초과, trim 처리)
-2. 사용자가 속한 팀 목록 조회 (`member_team`)
-3. 팀 정보 조회 (팀명 매핑)
-4. 해당 팀들의 회고 중 키워드 포함 회고 검색 (`LIKE '%keyword%'`)
+2. 사용자가 속한 회고방 목록 조회 (`member_retro_room`)
+3. 회고방 정보 조회 (회고방명 매핑)
+4. 해당 회고방들의 회고 중 키워드 포함 회고 검색 (`LIKE '%keyword%'`)
 5. 결과를 `start_time DESC`, `retrospect_id DESC` 정렬 (안정 정렬)
 6. `start_time`은 생성 시 KST로 저장되므로 변환 없이 직접 포맷
 

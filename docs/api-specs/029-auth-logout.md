@@ -1,4 +1,4 @@
-# [API-004] POST /api/v1/auth/logout
+# [API-029] POST /api/v1/auth/logout
 
 로그아웃 API
 

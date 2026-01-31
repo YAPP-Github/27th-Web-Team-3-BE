@@ -129,7 +129,7 @@ POST /api/v1/responses/{responseId}/comments
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
+  "code": "RETRO4031",
   "message": "댓글 작성 권한이 없습니다.",
   "result": null
 }
@@ -164,7 +164,7 @@ POST /api/v1/responses/{responseId}/comments
 | COMMON400 | 400 | 잘못된 요청 | content 필드 누락, null 또는 빈 문자열 |
 | RES4001 | 400 | 댓글 길이 초과 | 댓글 내용이 200자를 초과 |
 | AUTH4001 | 401 | 인증 실패 | Authorization 헤더 누락, 만료 또는 잘못된 토큰 형식 |
-| TEAM4031 | 403 | 권한 없음 | 요청 유저가 해당 팀의 멤버가 아닌 경우 |
+| RETRO4031 | 403 | 권한 없음 | 요청 유저가 해당 회고방의 멤버가 아닌 경우 |
 | RES4041 | 404 | 답변 없음 | 유효하지 않은 responseId 또는 존재하지 않는 답변 |
 | COMMON500 | 500 | 서버 내부 오류 | 데이터베이스 오류 등 예상 밖의 서버 오류 발생 |
 

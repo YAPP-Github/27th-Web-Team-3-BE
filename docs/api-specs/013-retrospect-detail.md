@@ -14,7 +14,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | Path Parameter 검증, Enum 설명, 정렬 순서 추가 |
-| 1.2.0 | 2025-01-25 | teamId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일 |
+| 1.2.0 | 2025-01-25 | retroRoomId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일 |
 
 ## 엔드포인트
 
@@ -51,7 +51,7 @@ GET /api/v1/retrospects/{retrospectId}
   "code": "COMMON200",
   "message": "회고 상세 정보 조회를 성공했습니다.",
   "result": {
-    "teamId": 789,
+    "retroRoomId": 789,
     "title": "3차 스프린트 회고",
     "startTime": "2026-01-24",
     "retroCategory": "KPT",
@@ -83,7 +83,7 @@ GET /api/v1/retrospects/{retrospectId}
 
 | Field | Type | Description |
 |-------|------|-------------|
-| teamId | long | 회고가 속한 팀의 고유 ID |
+| retroRoomId | long | 회고가 속한 회고방의 고유 ID |
 | title | string | 회고 제목 (프로젝트명) |
 | startTime | string | 회고 시작 날짜 (YYYY-MM-DD) |
 | retroCategory | string (Enum) | 회고 유형 |
@@ -135,7 +135,7 @@ GET /api/v1/retrospects/{retrospectId}
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
+  "code": "RETRO4031",
   "message": "해당 회고에 접근 권한이 없습니다.",
   "result": null
 }
@@ -169,7 +169,7 @@ GET /api/v1/retrospects/{retrospectId}
 |------|-------------|-------------|-----------|
 | COMMON400 | 400 | 잘못된 요청 | retrospectId가 0 이하의 값 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
-| TEAM4031 | 403 | 접근 권한 없음 | 해당 회고가 속한 팀의 멤버가 아닌 경우 |
+| RETRO4031 | 403 | 접근 권한 없음 | 해당 회고가 속한 회고방의 멤버가 아닌 경우 |
 | RETRO4041 | 404 | 존재하지 않는 회고 | 해당 retrospectId의 회고가 DB에 없음 |
 | COMMON500 | 500 | 서버 내부 에러 | DB 연결 실패, 쿼리 오류 등 |
 

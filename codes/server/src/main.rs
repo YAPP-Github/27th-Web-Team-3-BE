@@ -5,8 +5,9 @@ mod domain;
 mod state;
 mod utils;
 
+use axum::http::{header, HeaderValue, Method};
 use axum::{routing::get, Router};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -179,7 +180,6 @@ use crate::utils::{BaseResponse, ErrorResponse};
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
-        (name = "Member", description = "회원 API"),
         (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
         (name = "Response", description = "회고 답변 API")
@@ -241,10 +241,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // CORS 설정
+    let allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://www.moalog.me",
+        "https://moalog.me",
+        "https://moaofficial.kr",
+    ];
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(
+            allowed_origins
+                .iter()
+                .filter_map(|origin| origin.parse::<HeaderValue>().ok())
+                .collect::<Vec<_>>(),
+        )
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            header::ORIGIN,
+        ])
+        .allow_credentials(true);
 
     // 라우터 구성
     let app = Router::new()
