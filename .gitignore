@@ -19,3 +19,6 @@ codes/server/target/
 ### AI ###
 .gemini/
 .claude/settings.local.json
+
+### Python ###
+scripts/__pycache__/
