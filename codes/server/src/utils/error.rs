@@ -332,25 +332,25 @@ impl IntoResponse for AppError {
         // 에러 로깅
         match &self {
             AppError::InternalError(msg) => {
-                error!("Internal Server Error: {}", msg);
+                error!(error_code = %error_code, "Internal Server Error: {}", msg);
             }
             AppError::AiAnalysisFailed(msg) => {
-                error!("AI Analysis Failed: {}", msg);
+                error!(error_code = %error_code, "AI Analysis Failed: {}", msg);
             }
             AppError::AiConnectionFailed(msg) => {
-                error!("AI Connection Failed: {}", msg);
+                error!(error_code = %error_code, "AI Connection Failed: {}", msg);
             }
             AppError::AiServiceUnavailable(msg) => {
-                error!("AI Service Unavailable: {}", msg);
+                error!(error_code = %error_code, "AI Service Unavailable: {}", msg);
             }
             AppError::AiGeneralError(msg) => {
-                error!("AI General Error: {}", msg);
+                error!(error_code = %error_code, "AI General Error: {}", msg);
             }
             AppError::PdfGenerationFailed(msg) => {
-                error!("PDF Generation Failed: {}", msg);
+                error!(error_code = %error_code, "PDF Generation Failed: {}", msg);
             }
             _ => {
-                error!("Error [{}]: {}", error_code, message);
+                error!(error_code = %error_code, "Error: {}", message);
             }
         }
 
