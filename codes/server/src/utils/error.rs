@@ -39,7 +39,7 @@ pub enum AppError {
     /// COMMON409: 중복된 자원 (409)
     Conflict(String),
 
-    /// RETRO4041: 회고 회고방 없음 (404)
+    /// RETRO4041: 회고방 없음 (404)
     NotFound(String),
 
     /// AUTH4003: 이미 로그아웃되었거나 유효하지 않은 토큰 (400)
