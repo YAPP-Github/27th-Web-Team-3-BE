@@ -20,6 +20,20 @@ LOCK_TIMEOUT=30
 # 상태 디렉토리 생성
 mkdir -p "$STATE_DIR"
 
+# 크로스 플랫폼 sha256 함수 (macOS/Linux 호환)
+sha256_hash() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum | cut -d' ' -f1
+    elif command -v shasum &>/dev/null; then
+        shasum -a 256 | cut -d' ' -f1
+    elif command -v openssl &>/dev/null; then
+        openssl dgst -sha256 | awk '{print $NF}'
+    else
+        # fallback: 입력을 그대로 반환 (중복 방지 약화)
+        cat
+    fi
+}
+
 # 로깅 함수
 log_info() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $*"
@@ -234,8 +248,9 @@ apply_fix() {
 변경 사항을 최소화하고, 기존 코드 스타일을 유지하세요.
 수정 완료 후 간단한 요약을 출력하세요."
 
-    # Claude Code CLI 호출
-    if ! claude --print "$prompt" 2>&1; then
+    # Claude Code CLI 호출 (--dangerously-skip-permissions로 실제 수정 적용)
+    # 참고: --print는 출력만 하므로 실제 파일 수정에는 적합하지 않음
+    if ! claude --dangerously-skip-permissions -p "$prompt" 2>&1; then
         log_error "Claude Code CLI failed"
         return 1
     fi
@@ -308,6 +323,16 @@ main() {
         send_notification "warning" \
             "Auto-Fix Skipped: Scope Violation" \
             "수정 내용이 허용 범위를 벗어납니다.\n**수정 제안**: $fix_suggestion" \
+            "$error_code"
+        exit 1
+    fi
+
+    # 작업 트리 clean 상태 확인 (미커밋 변경이 새 브랜치에 섞이는 것 방지)
+    if ! git -C "$PROJECT_ROOT" diff --quiet || ! git -C "$PROJECT_ROOT" diff --cached --quiet; then
+        log_error "Working tree is not clean. Please commit or stash changes before running auto-fix."
+        send_notification "warning" \
+            "Auto-Fix Skipped: Dirty Worktree" \
+            "작업 트리에 커밋되지 않은 변경이 있습니다.\n변경 사항을 커밋하거나 stash한 후 다시 시도하세요." \
             "$error_code"
         exit 1
     fi

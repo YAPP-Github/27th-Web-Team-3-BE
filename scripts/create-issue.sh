@@ -195,8 +195,11 @@ ensure_labels_exist() {
                 "ai-generated")
                     color="7057FF"  # 보라색
                     ;;
-                "auto-fixable")
+                "auto-fix")
                     color="1D76DB"  # 파란색
+                    ;;
+                "bug")
+                    color="D73A4A"  # GitHub 기본 bug 색상
                     ;;
                 *)
                     color="C5DEF5"  # 연한 파란색
@@ -344,13 +347,13 @@ main() {
 
     log_info "Target repository: $repo"
 
-    # 라벨 준비
+    # 라벨 준비 (bug 라벨 필수 포함, auto-fix로 통일)
     local priority_label
     priority_label=$(get_priority_label "$severity")
 
-    local labels=("ai-generated" "$priority_label")
+    local labels=("bug" "ai-generated" "$priority_label")
     if [ "$auto_fixable" = "true" ]; then
-        labels+=("auto-fixable")
+        labels+=("auto-fix")
     fi
 
     # 라벨 생성 확인
