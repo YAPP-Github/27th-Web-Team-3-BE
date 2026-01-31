@@ -10,7 +10,7 @@
 ### 2.1 도메인 구조
 `codes/server/src/domain/retrospect/`
 - `dto.rs`: `SuccessDeleteRetrospectResponse` (Swagger용)
-- `service.rs`: 회고 조회, 팀 멤버십 확인, 트랜잭션 내 연관 데이터 캐스케이드 삭제
+- `service.rs`: 회고 조회, 회고방 멤버십 확인, 트랜잭션 내 연관 데이터 캐스케이드 삭제
 - `handler.rs`: HTTP 핸들러 (`delete_retrospect`) + utoipa 문서화
 
 ### 2.2 주요 로직
@@ -19,7 +19,7 @@
 2. **인증/인가**:
    - JWT 토큰에서 user_id 추출 (AUTH4001)
    - 회고 존재 여부 확인 (RETRO4041)
-   - 팀 멤버십 확인 (RETRO4041, 보안상 존재 여부 미노출)
+   - 회고방 멤버십 확인 (RETRO4041, 보안상 존재 여부 미노출)
 3. **트랜잭션 내 캐스케이드 삭제** (외래 키 순서 준수):
    1. `response_comment` - 댓글 삭제
    2. `response_like` - 좋아요 삭제
@@ -48,7 +48,7 @@
 
 ### 2.5 권한 체계 참고
 - API 스펙은 "팀 관리자(Owner)" 또는 "회고 생성자"만 삭제 가능으로 정의
-- 현재 DB 스키마에 `member_team.role` 및 `retrospect.created_by` 필드가 없어 팀 멤버십 기반 접근 제어로 구현
+- 현재 DB 스키마에 `member_team.role` 및 `retrospect.created_by` 필드가 없어 회고방 멤버십 기반 접근 제어로 구현
 - 향후 스키마에 해당 필드 추가 시 `RETRO4031` 에러를 활용한 세밀한 권한 체크 가능
 
 ## 3. 테스트 결과

@@ -19,7 +19,7 @@
 - 회고 방식별 기본 질문 5개 자동 생성
 - 참고 URL 첨부 기능 (최대 10개)
 - 트랜잭션 기반 데이터 생성 (RetroRoom → Retrospect → Response → Reference)
-- 팀 멤버십 검증 및 권한 관리
+- 회고방 멤버십 검증 및 권한 관리
 
 ### 테스트 현황
 - **단위 테스트**: 33개 통과 (DTO 검증 12개 + Service 검증 17개 + JWT 2개 + 기타 2개)
@@ -69,7 +69,7 @@
 | `RETRO4001` | 400 | 프로젝트 이름 유효성 검사 실패 | 1자 미만 또는 20자 초과 |
 | `RETRO4005` | 400 | 유효하지 않은 회고 방식 | Enum 외의 값 입력 |
 | `RETRO4006` | 400 | 유효하지 않은 URL 형식 | http/https 아닌 URL |
-| `RETRO4031` | 403 | 팀 접근 권한 없음 | 팀 멤버가 아닌 경우 |
+| `RETRO4031` | 403 | 회고방 접근 권한 없음 | 회고방 멤버가 아닌 경우 |
 | `RETRO4041` | 404 | 존재하지 않는 팀 | 없는 retroRoomId 입력 |
 
 ### 4. 검증 규칙
@@ -88,7 +88,7 @@
 1. 참고 URL 검증 (중복, 형식, 길이)
 2. 날짜 형식 및 오늘 이후 날짜 검증 (오늘 포함)
 3. 팀 존재 여부 확인 → TeamNotFound (404)
-4. 팀 멤버십 확인 → RetroRoomAccessDenied (403)
+4. 회고방 멤버십 확인 → RetroRoomAccessDenied (403)
 5. 트랜잭션 시작
    ├── 회고방(RetroRoom) 생성 (초대 URL 포함)
    ├── 회고(Retrospect) 생성
@@ -227,12 +227,12 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
 }
 ```
 
-#### 팀 접근 권한 없음 (403)
+#### 회고방 접근 권한 없음 (403)
 ```json
 {
   "isSuccess": false,
   "code": "RETRO4031",
-  "message": "해당 팀의 멤버가 아닙니다.",
+  "message": "해당 회고방 멤버가 아닙니다.",
   "result": null
 }
 ```

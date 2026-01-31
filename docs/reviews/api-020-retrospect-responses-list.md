@@ -75,7 +75,7 @@
 ## 비즈니스 로직
 
 ### 서비스 흐름 (`RetrospectService::list_responses`)
-1. 회고 조회 및 팀 멤버십 확인 (`find_retrospect_for_member`)
+1. 회고 조회 및 회고방 멤버십 확인 (`find_retrospect_for_member`)
 2. 해당 회고의 전체 response 조회 (response_id 오름차순)
 3. `member_response`를 통해 질문 순서 결정 (첫 번째 참여자의 응답 기준)
 4. 카테고리에 따른 대상 응답 필터링 (질문 텍스트 매칭)

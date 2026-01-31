@@ -2899,7 +2899,7 @@ impl RetrospectService {
             AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
         })?;
 
-        // 2. 회고 정보 조회하여 팀 멤버십 확인
+        // 2. 회고 정보 조회하여 회고방 멤버십 확인
         let retrospect_entity = retrospect::Entity::find_by_id(response_model.retrospect_id)
             .one(&state.db)
             .await
