@@ -67,8 +67,70 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
     create_table_if_not_exists(db, &schema, member_response::Entity).await?;
     create_table_if_not_exists(db, &schema, member_retro::Entity).await?;
 
+    // Apply migrations for existing tables
+    apply_migrations(db).await?;
+
     info!("Database schema synchronization completed.");
     Ok(())
+}
+
+/// Apply ALTER TABLE migrations for existing tables.
+/// This handles adding new columns to tables that already exist.
+async fn apply_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
+    // Migration: Add refresh_token and refresh_token_expires_at columns to member table
+    add_column_if_not_exists(db, "member", "refresh_token", "VARCHAR(500) NULL").await?;
+    add_column_if_not_exists(
+        db,
+        "member",
+        "refresh_token_expires_at",
+        "DATETIME NULL",
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// Add a column to a table if it doesn't already exist.
+async fn add_column_if_not_exists(
+    db: &DatabaseConnection,
+    table_name: &str,
+    column_name: &str,
+    column_definition: &str,
+) -> Result<(), DbErr> {
+    let backend = db.get_database_backend();
+    let sql = format!(
+        "ALTER TABLE {} ADD COLUMN {} {}",
+        table_name, column_name, column_definition
+    );
+    let stmt = Statement::from_string(backend, sql);
+
+    match db.execute(stmt).await {
+        Ok(_) => {
+            info!(
+                "Added column '{}' to table '{}'",
+                column_name, table_name
+            );
+            Ok(())
+        }
+        Err(e) => {
+            // Ignore "column already exists" errors for idempotency
+            let err_str = e.to_string().to_lowercase();
+            if err_str.contains("duplicate")
+                || err_str.contains("already exists")
+                || err_str.contains("duplicate column")
+            {
+                Ok(())
+            } else {
+                tracing::error!(
+                    "Failed to add column '{}' to table '{}': {}",
+                    column_name,
+                    table_name,
+                    e
+                );
+                Err(e)
+            }
+        }
+    }
 }
 
 async fn create_unique_index_if_not_exists(
