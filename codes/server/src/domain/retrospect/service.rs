@@ -10,6 +10,7 @@ use sea_orm::{
 };
 use tracing::{error, info, warn};
 
+use crate::domain::member::entity::assistant_usage;
 use crate::domain::member::entity::member;
 use crate::domain::member::entity::member_response;
 use crate::domain::member::entity::member_retro;
@@ -29,16 +30,17 @@ use crate::domain::retrospect::entity::retro_room::Entity as RetroRoom;
 use crate::domain::retrospect::entity::retrospect::Entity as Retrospect;
 
 use super::dto::{
-    AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DeleteRetroRoomResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, JoinRetroRoomRequest,
-    JoinRetroRoomResponse, ListCommentsResponse, ReferenceItem, ResponseCategory, ResponseListItem,
-    ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
-    RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
-    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
-    UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
+    AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
+    CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
+    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
+    DraftSaveResponse, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
+    ListCommentsResponse, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
+    RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetrospectDetailResponse,
+    RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams,
+    SearchRetrospectItem, StorageQueryParams, StorageResponse, StorageRetrospectItem,
+    StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
+    REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -56,7 +58,7 @@ impl RetrospectService {
         member_id: i64,
         req: RetroRoomCreateRequest,
     ) -> Result<RetroRoomCreateResponse, AppError> {
-        // 1. 회고 룸 이름 중복 체크
+        // 1. 회고방 이름 중복 체크
         let existing_room = RetroRoom::find()
             .filter(retro_room::Column::Title.eq(&req.title))
             .one(&state.db)
@@ -131,7 +133,7 @@ impl RetrospectService {
                 })
             })
             .await
-            .map_err(|e| AppError::InternalError(format!("회고 룸 생성 실패: {}", e)))?;
+            .map_err(|e| AppError::InternalError(format!("회고방 생성 실패: {}", e)))?;
 
         Ok(RetroRoomCreateResponse {
             retro_room_id: result.retrospect_room_id,
@@ -177,7 +179,7 @@ impl RetrospectService {
 
         if existing_member.is_some() {
             return Err(AppError::AlreadyMember(
-                "이미 해당 회고 룸의 멤버입니다.".into(),
+                "이미 해당 회고방의 멤버입니다.".into(),
             ));
         }
 
@@ -199,7 +201,7 @@ impl RetrospectService {
                     || err_str.contains("unique")
                     || err_str.contains("constraint")
                 {
-                    AppError::AlreadyMember("이미 해당 회고 룸의 멤버입니다.".into())
+                    AppError::AlreadyMember("이미 해당 회고방의 멤버입니다.".into())
                 } else {
                     AppError::InternalError(format!("멤버 추가 실패: {}", e))
                 }
@@ -212,7 +214,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-006: 사용자가 참여 중인 레트로룸 목록 조회
+    /// API-006: 사용자가 참여 중인 회고방 목록 조회
     pub async fn list_retro_rooms(
         state: AppState,
         member_id: i64,
@@ -240,7 +242,7 @@ impl RetrospectService {
         Ok(result)
     }
 
-    /// API-007: 레트로룸 순서 변경
+    /// API-007: 회고방 순서 변경
     pub async fn update_retro_room_order(
         state: AppState,
         member_id: i64,
@@ -338,7 +340,7 @@ impl RetrospectService {
         Ok(())
     }
 
-    /// API-008: 레트로룸 이름 변경
+    /// API-008: 회고방 이름 변경
     pub async fn update_retro_room_name(
         state: AppState,
         member_id: i64,
@@ -409,7 +411,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-009: 레트로룸 삭제
+    /// API-009: 회고방 삭제
     pub async fn delete_retro_room(
         state: AppState,
         member_id: i64,
@@ -456,7 +458,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-010: 레트로룸 내 회고 목록 조회
+    /// API-010: 회고방 내 회고 목록 조회
     pub async fn list_retrospects(
         state: AppState,
         member_id: i64,
@@ -635,13 +637,12 @@ impl RetrospectService {
 
         let retrospect_model = retrospect::ActiveModel {
             title: Set(req.project_name.clone()),
-            team_insight: Set(None),
+            insight: Set(None),
             retrospect_method: Set(req.retrospect_method.clone()),
             created_at: Set(now),
             updated_at: Set(now),
             start_time: Set(start_time),
             retrospect_room_id: Set(req.retro_room_id),
-            team_id: Set(req.retro_room_id),
             ..Default::default()
         };
 
@@ -1948,7 +1949,7 @@ impl RetrospectService {
         doc.push(Break::new(0.5));
 
         // ===== 회고방 인사이트 섹션 =====
-        if let Some(ref insight) = retrospect_model.team_insight {
+        if let Some(ref insight) = retrospect_model.insight {
             doc.push(
                 Paragraph::new("Retro Room Insight")
                     .styled(style::Style::new().bold().with_font_size(14)),
@@ -2171,7 +2172,7 @@ impl RetrospectService {
             })?;
 
         // 2-1. 이미 분석 완료 여부 확인 (재분석 방지)
-        if retrospect_model.team_insight.is_some() {
+        if retrospect_model.insight.is_some() {
             return Err(AppError::RetroAlreadyAnalyzed(
                 "이미 분석이 완료된 회고입니다.".to_string(),
             ));
@@ -2205,10 +2206,10 @@ impl RetrospectService {
                 .ok_or_else(|| AppError::InternalError("시간 계산 오류".to_string()))?
                 - kst_offset; // UTC로 변환
 
-        // 현재 월에 team_insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
+        // 현재 월에 insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
         let monthly_analysis_count = retrospect::Entity::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
-            .filter(retrospect::Column::TeamInsight.is_not_null())
+            .filter(retrospect::Column::Insight.is_not_null())
             .filter(retrospect::Column::UpdatedAt.gte(current_month_start))
             .count(&state.db)
             .await
@@ -2371,7 +2372,7 @@ impl RetrospectService {
         // personalMissions의 userId 오름차순 정렬
         analysis.personal_missions.sort_by_key(|pm| pm.user_id);
 
-        let team_insight = analysis.team_insight.clone();
+        let insight = analysis.insight.clone();
         let personal_missions = &analysis.personal_missions;
 
         // 9. 트랜잭션으로 결과 저장
@@ -2381,9 +2382,9 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 9-1. retrospects.team_insight 업데이트
+        // 9-1. retrospects.insight 업데이트
         let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
-        retrospect_active.team_insight = Set(Some(team_insight.clone()));
+        retrospect_active.insight = Set(Some(insight.clone()));
         retrospect_active.updated_at = Set(Utc::now().naive_utc());
         retrospect_active
             .update(&txn)
@@ -2697,7 +2698,7 @@ impl RetrospectService {
 
     /// 회고 답변 조회 및 회고방 멤버십 확인 헬퍼
     /// - 답변이 존재하지 않으면 RES4041 (404) 반환
-    /// - 회고방 멤버가 아니면 TEAM4031 (403) 반환
+    /// - 회고방 멤버가 아니면 RETRO4031 (403) 반환
     async fn find_response_for_member(
         state: &AppState,
         user_id: i64,
@@ -2900,7 +2901,7 @@ impl RetrospectService {
             AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
         })?;
 
-        // 2. 회고 정보 조회하여 팀 멤버십 확인
+        // 2. 회고 정보 조회하여 회고방 멤버십 확인
         let retrospect_entity = retrospect::Entity::find_by_id(response_model.retrospect_id)
             .one(&state.db)
             .await
@@ -2985,6 +2986,169 @@ impl RetrospectService {
             response_id,
             is_liked,
             total_likes: total_likes as i64,
+        })
+    }
+
+    /// 회고 어시스턴트 가이드 생성 (API-029)
+    pub async fn generate_assistant_guide(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+        question_id: i32,
+        req: AssistantRequest,
+    ) -> Result<AssistantResponse, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            question_id = question_id,
+            "회고 어시스턴트 요청"
+        );
+
+        // 1. 파라미터 검증
+        if retrospect_id < 1 {
+            return Err(AppError::BadRequest(
+                "유효하지 않은 회고 ID입니다.".to_string(),
+            ));
+        }
+
+        if !(1..=5).contains(&question_id) {
+            return Err(AppError::QuestionNotFound(
+                "질문 ID는 1부터 5 사이여야 합니다.".to_string(),
+            ));
+        }
+
+        // 2. 회고 존재 확인
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+
+        // 3. 회고방 멤버십 확인 (참여자만 어시스턴트 사용 가능)
+        let member_retro_model = member_retro::Entity::find()
+            .filter(member_retro::Column::MemberId.eq(user_id))
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::RetroRoomAccessDenied("해당 회고에 참여 권한이 없습니다.".to_string())
+            })?;
+
+        // 4. 이미 제출된 회고는 어시스턴트 사용 불가
+        if member_retro_model.status != RetrospectStatus::Draft {
+            return Err(AppError::RetroAlreadySubmitted(
+                "이미 제출된 회고에서는 어시스턴트를 사용할 수 없습니다.".to_string(),
+            ));
+        }
+
+        // 5. 월간 사용량 계산을 위한 시간 범위 설정
+        let kst_offset = chrono::Duration::hours(9);
+        let now_kst = Utc::now().naive_utc() + kst_offset;
+        let current_month_start =
+            chrono::NaiveDate::from_ymd_opt(now_kst.year(), now_kst.month(), 1)
+                .ok_or_else(|| AppError::InternalError("날짜 계산 오류".to_string()))?
+                .and_hms_opt(0, 0, 0)
+                .ok_or_else(|| AppError::InternalError("시간 계산 오류".to_string()))?
+                - kst_offset; // UTC로 변환
+
+        // 5-1. 사전 검증 (빠른 실패 - AI 호출 전 명백한 초과 케이스 필터링)
+        let pre_check_count = assistant_usage::Entity::find()
+            .filter(assistant_usage::Column::MemberId.eq(user_id))
+            .filter(assistant_usage::Column::CreatedAt.gte(current_month_start))
+            .count(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            as i32;
+
+        if pre_check_count >= 10 {
+            return Err(AppError::AiAssistantLimitExceeded(
+                "이번 달 회고 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
+            ));
+        }
+
+        // 6. 질문 내용 조회
+        // 회고 방식에 따른 기본 질문 목록에서 직접 가져옴 (DB 조회 의존성 제거)
+        let default_questions = retrospect_model.retrospect_method.default_questions();
+        let question_index = (question_id - 1) as usize;
+        let question_content = default_questions
+            .get(question_index)
+            .ok_or_else(|| AppError::QuestionNotFound("해당 질문을 찾을 수 없습니다.".to_string()))?
+            .to_string();
+
+        // 7. AI 서비스 호출
+        let user_content = req.content.as_deref();
+        let guides = state
+            .ai_service
+            .generate_assistant_guide(&question_content, user_content)
+            .await?;
+
+        // 8. 트랜잭션으로 사용 기록 저장 및 최종 검증 (동시성 안전)
+        // - 삽입 후 카운트하여 10회 초과 시 롤백
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let usage_model = assistant_usage::ActiveModel {
+            member_id: Set(user_id),
+            retrospect_id: Set(retrospect_id),
+            question_id: Set(question_id),
+            created_at: Set(Utc::now().naive_utc()),
+            ..Default::default()
+        };
+        usage_model
+            .insert(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 삽입 후 최종 카운트 검증
+        let final_count = assistant_usage::Entity::find()
+            .filter(assistant_usage::Column::MemberId.eq(user_id))
+            .filter(assistant_usage::Column::CreatedAt.gte(current_month_start))
+            .count(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))? as i32;
+
+        if final_count > 10 {
+            // 동시 요청으로 인한 초과 - 롤백
+            txn.rollback()
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+            return Err(AppError::AiAssistantLimitExceeded(
+                "이번 달 회고 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
+            ));
+        }
+
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 9. 가이드 타입 결정
+        let guide_type = if user_content.map(|c| c.trim().is_empty()).unwrap_or(true) {
+            GuideType::Initial
+        } else {
+            GuideType::Personalized
+        };
+
+        // 10. 남은 사용 횟수 계산 (트랜잭션 커밋 후 실제 카운트 기반)
+        let remaining_count = 10 - final_count;
+
+        info!(
+            retrospect_id = retrospect_id,
+            question_id = question_id,
+            guide_type = %guide_type,
+            remaining_count = remaining_count,
+            "회고 어시스턴트 완료"
+        );
+
+        Ok(AssistantResponse {
+            question_id,
+            question_content,
+            guide_type,
+            guides,
+            remaining_count,
         })
     }
 }

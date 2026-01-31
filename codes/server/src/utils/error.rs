@@ -39,7 +39,7 @@ pub enum AppError {
     /// COMMON409: 중복된 자원 (409)
     Conflict(String),
 
-    /// RETRO4041: 회고 룸 없음 (404)
+    /// RETRO4041: 회고방 없음 (404)
     NotFound(String),
 
     /// AUTH4003: 이미 로그아웃되었거나 유효하지 않은 토큰 (400)
@@ -58,13 +58,13 @@ pub enum AppError {
     /// RETRO4003: 만료된 초대 링크 (400)
     ExpiredInviteLink(String),
 
-    /// RETRO4001: 회고 룸 이름 길이 초과 (400)
+    /// RETRO4001: 회고방 이름 길이 초과 (400)
     RetroRoomNameTooLong(String),
 
-    /// RETRO4091: 회고 룸 이름 중복 (409)
+    /// RETRO4091: 회고방 이름 중복 (409)
     RetroRoomNameDuplicate(String),
 
-    /// RETRO4092: 이미 회고 룸 멤버 (409)
+    /// RETRO4092: 이미 회고방 멤버 (409)
     AlreadyMember(String),
 
     /// RETRO4004: 잘못된 순서 데이터 (400)
@@ -122,8 +122,14 @@ pub enum AppError {
     /// RETRO4091: 이미 분석 완료된 회고 (409)
     RetroAlreadyAnalyzed(String),
 
+    /// RETRO4043: 존재하지 않는 질문 (404)
+    QuestionNotFound(String),
+
     /// AI4031: 월간 분석 가능 횟수 초과 (403)
     AiMonthlyLimitExceeded(String),
+
+    /// AI4032: 월간 어시스턴트 사용 횟수 초과 (403)
+    AiAssistantLimitExceeded(String),
 
     /// RETRO4221: 분석할 회고 답변 데이터 부족 (422)
     RetroInsufficientData(String),
@@ -200,7 +206,9 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(msg) => msg.clone(),
             AppError::RetroAlreadySubmitted(msg) => msg.clone(),
             AppError::RetroAlreadyAnalyzed(msg) => msg.clone(),
+            AppError::QuestionNotFound(msg) => msg.clone(),
             AppError::AiMonthlyLimitExceeded(msg) => msg.clone(),
+            AppError::AiAssistantLimitExceeded(msg) => msg.clone(),
             AppError::RetroInsufficientData(msg) => msg.clone(),
             AppError::AiAnalysisFailed(msg) => msg.clone(),
             AppError::AiConnectionFailed(msg) => msg.clone(),
@@ -254,7 +262,9 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => "RETRO4007",
             AppError::RetroAlreadySubmitted(_) => "RETRO4033",
             AppError::RetroAlreadyAnalyzed(_) => "RETRO4091",
+            AppError::QuestionNotFound(_) => "RETRO4043",
             AppError::AiMonthlyLimitExceeded(_) => "AI4031",
+            AppError::AiAssistantLimitExceeded(_) => "AI4032",
             AppError::RetroInsufficientData(_) => "RETRO4221",
             AppError::AiAnalysisFailed(_) => "AI5001",
             AppError::AiConnectionFailed(_) => "AI5002",
@@ -308,7 +318,9 @@ impl AppError {
             AppError::RetroAnswerWhitespaceOnly(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAlreadySubmitted(_) => StatusCode::FORBIDDEN,
             AppError::RetroAlreadyAnalyzed(_) => StatusCode::CONFLICT,
+            AppError::QuestionNotFound(_) => StatusCode::NOT_FOUND,
             AppError::AiMonthlyLimitExceeded(_) => StatusCode::FORBIDDEN,
+            AppError::AiAssistantLimitExceeded(_) => StatusCode::FORBIDDEN,
             AppError::RetroInsufficientData(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::AiAnalysisFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::AiConnectionFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -332,25 +344,25 @@ impl IntoResponse for AppError {
         // 에러 로깅
         match &self {
             AppError::InternalError(msg) => {
-                error!("Internal Server Error: {}", msg);
+                error!(error_code = %error_code, "Internal Server Error: {}", msg);
             }
             AppError::AiAnalysisFailed(msg) => {
-                error!("AI Analysis Failed: {}", msg);
+                error!(error_code = %error_code, "AI Analysis Failed: {}", msg);
             }
             AppError::AiConnectionFailed(msg) => {
-                error!("AI Connection Failed: {}", msg);
+                error!(error_code = %error_code, "AI Connection Failed: {}", msg);
             }
             AppError::AiServiceUnavailable(msg) => {
-                error!("AI Service Unavailable: {}", msg);
+                error!(error_code = %error_code, "AI Service Unavailable: {}", msg);
             }
             AppError::AiGeneralError(msg) => {
-                error!("AI General Error: {}", msg);
+                error!(error_code = %error_code, "AI General Error: {}", msg);
             }
             AppError::PdfGenerationFailed(msg) => {
-                error!("PDF Generation Failed: {}", msg);
+                error!(error_code = %error_code, "PDF Generation Failed: {}", msg);
             }
             _ => {
-                error!("Error [{}]: {}", error_code, message);
+                error!(error_code = %error_code, "Error: {}", message);
             }
         }
 
@@ -403,10 +415,16 @@ impl From<ValidationErrors> for AppError {
             return AppError::RetroRoomNameTooLong("회고방 이름은 1~20자여야 합니다.".to_string());
         }
 
-        // retro_room_orders 필드 검증 실패 시 TEAM4004 반환
-        if field_errors.contains_key("retro_room_orders")
-            || field_errors.contains_key("order_index")
-        {
+        // retro_room_orders 필드 검증 실패 시 RETRO4004 반환
+        // - 직접 필드 에러 (빈 배열 등)
+        // - nested validation 에러 (order_index, retro_room_id 검증 실패)
+        if field_errors.contains_key("retro_room_orders") {
+            return AppError::InvalidOrderData("잘못된 순서 데이터입니다.".to_string());
+        }
+
+        // nested validation 에러 확인 (retro_room_orders[].order_index 등)
+        // errors() 메서드를 통해 nested 구조 확인
+        if has_nested_retro_room_order_error(&errors) {
             return AppError::InvalidOrderData("잘못된 순서 데이터입니다.".to_string());
         }
 
@@ -422,8 +440,56 @@ impl From<ValidationErrors> for AppError {
             })
             .collect();
 
+        // 메시지가 비어있으면 nested 에러 메시지 추출 시도
+        if messages.is_empty() {
+            let nested_messages = extract_nested_error_messages(&errors);
+            if !nested_messages.is_empty() {
+                return AppError::ValidationError(nested_messages.join(", "));
+            }
+        }
+
         AppError::ValidationError(messages.join(", "))
     }
+}
+
+/// nested validation 에러 중 retro_room_orders 관련 에러가 있는지 확인
+fn has_nested_retro_room_order_error(errors: &ValidationErrors) -> bool {
+    errors.errors().iter().any(|(field, kind)| {
+        *field == "retro_room_orders"
+            && matches!(kind, validator::ValidationErrorsKind::List(list) if !list.is_empty())
+    })
+}
+
+/// nested validation 에러에서 메시지 추출
+fn extract_nested_error_messages(errors: &ValidationErrors) -> Vec<String> {
+    let mut messages = Vec::new();
+
+    for (field, kind) in errors.errors() {
+        match kind {
+            validator::ValidationErrorsKind::Field(field_errors) => {
+                for err in field_errors {
+                    let msg = err
+                        .message
+                        .as_ref()
+                        .map(|m| m.to_string())
+                        .unwrap_or_else(|| format!("{} 필드가 유효하지 않습니다", field));
+                    messages.push(msg);
+                }
+            }
+            validator::ValidationErrorsKind::List(list_errors) => {
+                for nested_errors in list_errors.values() {
+                    let nested_msgs = extract_nested_error_messages(nested_errors);
+                    messages.extend(nested_msgs);
+                }
+            }
+            validator::ValidationErrorsKind::Struct(struct_errors) => {
+                let nested_msgs = extract_nested_error_messages(struct_errors);
+                messages.extend(nested_msgs);
+            }
+        }
+    }
+
+    messages
 }
 
 /// 편의 함수들
@@ -439,5 +505,134 @@ impl AppError {
 
     pub fn validation_error(msg: impl Into<String>) -> Self {
         AppError::ValidationError(msg.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::retrospect::dto::{RetroRoomOrderItem, UpdateRetroRoomOrderRequest};
+    use validator::Validate;
+
+    #[test]
+    fn should_return_invalid_order_data_error_for_empty_array() {
+        // Arrange
+        let req = UpdateRetroRoomOrderRequest {
+            retro_room_orders: vec![],
+        };
+
+        // Act
+        let validation_result = req.validate();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => panic!("Expected validation to fail for empty array, but it succeeded"),
+        };
+        let app_error: AppError = errors.into();
+
+        // Assert
+        assert_eq!(app_error.error_code(), "RETRO4004");
+        assert_eq!(app_error.message(), "잘못된 순서 데이터입니다.");
+    }
+
+    #[test]
+    fn should_return_invalid_order_data_error_for_invalid_order_index() {
+        // Arrange
+        let req = UpdateRetroRoomOrderRequest {
+            retro_room_orders: vec![RetroRoomOrderItem {
+                retro_room_id: 1,
+                order_index: 0, // Invalid: should be >= 1
+            }],
+        };
+
+        // Act
+        let validation_result = req.validate();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => {
+                panic!("Expected validation to fail for invalid order_index, but it succeeded")
+            }
+        };
+        let app_error: AppError = errors.into();
+
+        // Assert
+        assert_eq!(app_error.error_code(), "RETRO4004");
+    }
+
+    #[test]
+    fn should_return_invalid_order_data_error_for_invalid_retro_room_id() {
+        // Arrange
+        let req = UpdateRetroRoomOrderRequest {
+            retro_room_orders: vec![RetroRoomOrderItem {
+                retro_room_id: 0, // Invalid: should be >= 1
+                order_index: 1,
+            }],
+        };
+
+        // Act
+        let validation_result = req.validate();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => {
+                panic!("Expected validation to fail for invalid retro_room_id, but it succeeded")
+            }
+        };
+        let app_error: AppError = errors.into();
+
+        // Assert
+        assert_eq!(app_error.error_code(), "RETRO4004");
+    }
+
+    #[test]
+    fn should_return_invalid_order_data_error_for_partial_invalid_items() {
+        // Arrange: 여러 아이템 중 일부만 유효하지 않은 경우
+        let req = UpdateRetroRoomOrderRequest {
+            retro_room_orders: vec![
+                RetroRoomOrderItem {
+                    retro_room_id: 1,
+                    order_index: 1,
+                }, // valid
+                RetroRoomOrderItem {
+                    retro_room_id: 0,
+                    order_index: 2,
+                }, // invalid
+            ],
+        };
+
+        // Act
+        let validation_result = req.validate();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => {
+                panic!("Expected validation to fail for partial invalid items, but it succeeded")
+            }
+        };
+        let app_error: AppError = errors.into();
+
+        // Assert
+        assert_eq!(app_error.error_code(), "RETRO4004");
+    }
+
+    #[test]
+    fn should_return_invalid_order_data_error_for_both_fields_invalid() {
+        // Arrange: 한 아이템에서 두 필드 모두 유효하지 않은 경우
+        let req = UpdateRetroRoomOrderRequest {
+            retro_room_orders: vec![RetroRoomOrderItem {
+                retro_room_id: 0, // Invalid
+                order_index: 0,   // Invalid
+            }],
+        };
+
+        // Act
+        let validation_result = req.validate();
+        let errors = match validation_result {
+            Err(errors) => errors,
+            Ok(_) => {
+                panic!("Expected validation to fail for both fields invalid, but it succeeded")
+            }
+        };
+        let app_error: AppError = errors.into();
+
+        // Assert
+        assert_eq!(app_error.error_code(), "RETRO4004");
     }
 }

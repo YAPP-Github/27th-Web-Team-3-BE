@@ -16,7 +16,7 @@
 
 ### 주요 기능
 - 회고 존재 여부 확인
-- 팀 멤버십 검증
+- 회고방 멤버십 검증
 - 참고자료 목록 조회 (referenceId 오름차순)
 - 빈 배열 반환 지원 (참고자료가 없는 경우)
 
@@ -101,7 +101,7 @@ pub async fn list_references(
 **비즈니스 로직 흐름:**
 ```text
 1. 회고 존재 여부 확인 → RetrospectNotFound (404)
-2. 회고의 team_id로 팀 멤버십 확인 → RetrospectNotFound (404, 동일 메시지로 존재 여부 노출 방지)
+2. 회고의 retro_room_id로 회고방 멤버십 확인 → RetrospectNotFound (404, 동일 메시지로 존재 여부 노출 방지)
 3. retro_refrence 테이블에서 참고자료 조회 (referenceId 오름차순)
 4. ReferenceItem DTO로 변환하여 반환
 ```
@@ -148,7 +148,7 @@ pub async fn list_references(
 | `api018_should_return_400_when_retrospect_id_is_zero` | retrospectId가 0 | 400 |
 | `api018_should_return_400_when_retrospect_id_is_negative` | retrospectId가 음수 | 400 |
 | `api018_should_return_404_when_retrospect_not_found` | 존재하지 않는 회고 | 404 |
-| `api018_should_return_404_when_not_team_member` | 팀 멤버가 아님 (존재 여부 노출 방지) | 404 |
+| `api018_should_return_404_when_not_retro_room_member` | 회고방 멤버가 아님 (존재 여부 노출 방지) | 404 |
 | `api018_should_return_200_with_empty_array_when_no_references` | 참고자료 없음 | 200 (빈 배열) |
 | `api018_should_return_200_with_references_list_when_valid_request` | 정상 요청 | 200 |
 
@@ -258,7 +258,7 @@ curl -X GET http://localhost:8080/api/v1/retrospects/100/references \
 - **응답 코드**: 200 OK (404가 아님)
 
 ### 4. 권한 검사 (IDOR 방지)
-- **결정**: 회고 존재 확인과 팀 멤버십 확인 실패 시 동일한 404 응답 반환
+- **결정**: 회고 존재 확인과 회고방 멤버십 확인 실패 시 동일한 404 응답 반환
 - **이유**: 비멤버가 retrospect_id 존재 여부를 추측할 수 없도록 방지 (IDOR 보안)
 - **구현**: 회고 미존재와 멤버십 실패 모두 `RetrospectNotFound` (404) 반환
 
@@ -273,7 +273,7 @@ curl -X GET http://localhost:8080/api/v1/retrospects/100/references \
    - `title` → `urlName` 변환의 의미 전달 명확성
 
 2. **권한 검사 로직** (`service.rs`)
-   - 회고 존재 확인과 팀 멤버십 검사 순서의 적절성
+   - 회고 존재 확인과 회고방 멤버십 검사 순서의 적절성
    - 기존 API들(014, 010)과의 일관성
 
 3. **정렬 순서** (`service.rs`)
@@ -285,8 +285,8 @@ curl -X GET http://localhost:8080/api/v1/retrospects/100/references \
 
 | 테이블 | 용도 |
 |--------|------|
-| `retrospects` | 회고 존재 확인, team_id 조회 |
-| `member_team` | 팀 멤버십 확인 |
+| `retrospects` | 회고 존재 확인, retro_room_id 조회 |
+| `member_retro_room` | 회고방 멤버십 확인 |
 | `retro_refrence` | 참고자료 목록 조회 |
 
 ---

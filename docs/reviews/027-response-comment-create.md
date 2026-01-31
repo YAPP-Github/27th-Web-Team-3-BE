@@ -44,10 +44,10 @@
    - `response::Entity::find_by_id()` 조회
    - 없으면 `RES4041` 반환
 
-6. **팀 멤버십 확인**:
-   - response → retrospect → team 경로로 팀 정보 조회
-   - `member_team` 테이블에서 사용자의 팀 소속 여부 확인
-   - 권한 없으면 `TEAM4031` 반환
+6. **회고방 멤버십 확인**:
+   - response → retrospect → retro_room 경로로 회고방 정보 조회
+   - `member_retro_room` 테이블에서 사용자의 회고방 소속 여부 확인
+   - 권한 없으면 `RETRO4031` 반환
 
 #### 2.2.2 댓글 생성
 7. **댓글 데이터 삽입**:
@@ -70,7 +70,7 @@
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | Authorization 헤더 없음, 토큰 만료 |
 | COMMON400 | 400 | 잘못된 요청 | responseId가 0 이하, content 누락/빈 값 |
 | RES4001 | 400 | 댓글 길이 초과 | content가 200자 초과 |
-| TEAM4031 | 403 | 권한 없음 | 팀 멤버가 아닌 유저가 댓글 작성 시도 |
+| RETRO4031 | 403 | 권한 없음 | 회고방 멤버가 아닌 유저가 댓글 작성 시도 |
 | RES4041 | 404 | 존재하지 않는 회고 답변 | responseId가 DB에 없음 |
 | COMMON500 | 500 | 서버 내부 오류 | DB 에러 등 |
 
@@ -97,7 +97,7 @@
 | content가 201자 | 400 RES4001 | ✅ |
 | content가 정확히 200자 | 200 성공 | ✅ |
 | 존재하지 않는 답변 | 404 RES4041 | ✅ |
-| 팀 멤버가 아님 | 403 TEAM4031 | ✅ |
+| 회고방 멤버가 아님 | 403 RETRO4031 | ✅ |
 | 유효한 요청 | 200 + 댓글 정보 | ✅ |
 | 잘못된 JSON 바디 | 400 COMMON400 | ✅ |
 | 빈 요청 바디 | 400 COMMON400 | ✅ |
@@ -137,8 +137,8 @@
 - **RES4001**: 댓글 길이 초과 (비즈니스 규칙)
 - **이유**: 클라이언트가 에러 유형에 따라 다른 UI 처리 가능
 
-### 6.3 팀 멤버십 확인 경로
-- **방식**: response → retrospect → team → member_team
+### 6.3 회고방 멤버십 확인 경로
+- **방식**: response → retrospect → retro_room → member_retro_room
 - **재사용**: `find_response_for_member` 헬퍼 (API-026과 공유)
 - **이유**: 코드 중복 제거, 일관된 접근 제어
 

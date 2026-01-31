@@ -2,7 +2,7 @@
 
 ## 1. 개요
 - **API 명**: `POST /api/v1/retrospects/{retrospectId}/analysis`
-- **구현 목적**: 회고 세션의 모든 답변을 AI 분석하여 팀 인사이트, 감정 랭킹, 개인 미션을 생성한다.
+- **구현 목적**: 회고 세션의 모든 답변을 AI 분석하여 인사이트, 감정 랭킹, 개인 미션을 생성한다.
 - **구현 일자**: 2026-01-26
 - **브랜치**: feature/api-022-retrospect-analysis
 - **API 스펙**: `docs/api-specs/022-retrospect-analysis.md`
@@ -39,16 +39,16 @@
    - 없으면 `RETRO4041` 반환
 
 3. **재분석 방지 (Idempotency)**:
-   - `retrospect.team_insight.is_some()` 체크
+   - `retrospect.insight.is_some()` 체크
    - 이미 분석 완료된 회고는 `RETRO4091` (409 Conflict) 반환
 
-4. **팀 멤버십 확인**:
-   - `member_retro_room` 테이블에서 사용자의 팀 소속 여부 확인
-   - 권한 없으면 `TEAM4031` 반환
+4. **회고방 멤버십 확인**:
+   - `member_retro_room` 테이블에서 사용자의 회고방 소속 여부 확인
+   - 권한 없으면 `RETRO4031` 반환
 
-5. **월간 사용량 확인 (팀당 월 10회 제한)**:
+5. **월간 사용량 확인 (회고방당 월 10회 제한)**:
    - KST 기준 현재 월 1일 00:00 계산 (UTC+9)
-   - 현재 월에 `team_insight IS NOT NULL AND updated_at >= 이번 달 시작` 기준 카운트
+   - 현재 월에 `insight IS NOT NULL AND updated_at >= 이번 달 시작` 기준 카운트
    - 10회 이상이면 `AI4031` 반환
 
 6. **최소 데이터 기준 확인**:
@@ -68,18 +68,18 @@
    - **프롬프트**: `AnalysisPrompt::system_prompt()` (분석 규칙) + `AnalysisPrompt::user_prompt()` (팀원 답변 데이터)
    - **AI 호출**: `AiService::call_openai()` → OpenAI gpt-4o-mini, 30초 타임아웃
    - **Output**: `AnalysisResponse` JSON 파싱 후 검증
-     - `team_insight`: 팀 전체 분석 메시지 (1개, 상냥체)
+     - `insight`: 회고방 전체 분석 메시지 (1개, 상냥체)
      - `emotion_rank`: 감정 랭킹 (정확히 3개, 2글자 키워드, count 내림차순)
      - `personal_missions`: 사용자별 개인 미션 (사용자당 정확히 3개, 동사형 타이틀)
 
 #### 2.2.4 결과 저장 (트랜잭션)
 9. **트랜잭션 내 업데이트**:
-   - `retrospect` 테이블: `team_insight` 필드 + `updated_at` 업데이트
+   - `retrospect` 테이블: `insight` 필드 + `updated_at` 업데이트
    - `member_retro` 테이블: 각 참여자의 `personal_insight` 및 `status = ANALYZED` 업데이트
    - `personal_insight` 형식: "미션제목: 미션설명\n미션제목: 미션설명\n..."
 
 10. **응답 반환**:
-    - `team_insight`: 팀 인사이트
+    - `insight`: 인사이트
     - `emotion_rank`: 감정 랭킹 배열 (3개)
     - `personal_missions`: 개인 미션 배열 (userId 오름차순 정렬)
 
@@ -87,16 +87,16 @@
 | Code | HTTP | Description | 발생 조건 |
 |------|------|-------------|----------|
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | Authorization 헤더 없음, 토큰 만료 |
-| TEAM4031 | 403 | 팀 접근 권한 없음 | 팀 멤버가 아닌 사용자가 분석 요청 |
-| AI4031 | 403 | 월간 분석 가능 횟수 초과 | 현재 월(KST) 팀의 분석 횟수 >= 10회 |
+| RETRO4031 | 403 | 회고방 접근 권한 없음 | 회고방 멤버가 아닌 사용자가 분석 요청 |
+| AI4031 | 403 | 월간 분석 가능 횟수 초과 | 현재 월(KST) 회고방의 분석 횟수 >= 10회 |
 | RETRO4041 | 404 | 존재하지 않는 회고 세션 | retrospectId가 DB에 없음 |
 | RETRO4221 | 422 | 분석 데이터 부족 | 참여자 < 1명 또는 답변 < 3개 |
-| RETRO4091 | 409 | 이미 분석 완료된 회고 | team_insight가 이미 존재 |
+| RETRO4091 | 409 | 이미 분석 완료된 회고 | insight가 이미 존재 |
 | AI5001 | 500 | AI 분석 실패 | AI 서비스 호출 실패 (현재는 사용되지 않음) |
 | COMMON500 | 500 | 서버 내부 오류 | DB 에러 등 |
 
 ### 2.4 데이터베이스 변경
-- **retrospect 테이블**: `team_insight` 필드 사용 (기존 컬럼), `updated_at` 분석 시점 기록
+- **retrospect 테이블**: `insight` 필드 사용 (기존 컬럼), `updated_at` 분석 시점 기록
 - **member_retro 테이블**: `personal_insight` 필드 사용, `status = ANALYZED`로 업데이트
 
 ## 3. 개선 이력
@@ -106,7 +106,7 @@
 | 우선순위 | 항목 | 변경 내용 |
 |---------|------|----------|
 | High | 월간 한도 카운트 기준 수정 | `CreatedAt` → `UpdatedAt` 기준으로 변경. 분석 실행 시 `updated_at`이 함께 갱신되므로, 분석 시점 기준으로 월간 한도를 카운트 |
-| Medium | 재분석 방지 (Idempotency) | `team_insight` 이미 존재 시 `RETRO4091` (409 Conflict) 반환. 에러 코드 추가 |
+| Medium | 재분석 방지 (Idempotency) | `insight` 이미 존재 시 `RETRO4091` (409 Conflict) 반환. 에러 코드 추가 |
 | Medium | user_name을 nickname으로 변경 | `email.split('@')` 로직을 `m.nickname.clone()`으로 교체. 다른 API와 응답 일관성 확보, PII 노출 방지 |
 | Low | 미사용 member_response 조회 제거 | 불필요한 `member_response` DB 조회 및 HashMap 구성 코드 삭제. DB 호출 1건 감소 |
 | Low | AuthUser 패턴 일관성 | `AuthUser(claims)` 패턴을 다른 핸들러와 동일한 `user: AuthUser` + `user.0.sub` 패턴으로 통일 |
@@ -117,7 +117,7 @@
 
 **문제**: `domain/ai/` 모듈에 분석과 무관한 말투 정제(Refine) 코드가 혼재
 - RefinePrompt: Input(텍스트 1건 + ToneStyle) → Output(어투 변환 텍스트) — 개별 문장 말투 변환 용도
-- AnalysisPrompt: Input(팀원 전체 답변 데이터) → Output(인사이트 + 감정 + 미션 JSON) — 팀 종합 분석 용도
+- AnalysisPrompt: Input(팀원 전체 답변 데이터) → Output(인사이트 + 감정 + 미션 JSON) — 회고방 종합 분석 용도
 
 **조치**: 분석 방향성과 맞지 않는 Refine 관련 코드 전체 제거
 
@@ -151,9 +151,9 @@
 - 인증 실패 (401): Authorization 헤더 없음, 잘못된 토큰
 - Path Parameter 검증 (400): retrospectId = 0, 음수
 - 회고 없음 (404): 존재하지 않는 retrospectId
-- 이미 분석 완료 (409): team_insight이 이미 존재하는 회고에 재분석 시도
-- 팀 접근 권한 없음 (403): 다른 팀의 회고 분석 시도
-- 월간 한도 초과 (403): 동일 팀의 10회 분석 후 추가 요청
+- 이미 분석 완료 (409): insight이 이미 존재하는 회고에 재분석 시도
+- 회고방 접근 권한 없음 (403): 다른 회고방의 회고 분석 시도
+- 월간 한도 초과 (403): 동일 회고방의 10회 분석 후 추가 요청
 - 데이터 부족 (422): 참여자 0명, 답변 2개 이하
 - 분석 성공 (200): 정상 요청
 
@@ -189,18 +189,18 @@
 - **구조**: `prompt.rs`(AnalysisPrompt) + `service.rs`(AiService) — 분석 전용
 - **Input**: `MemberAnswerData[]` → `[{ userId, userName, answers: [(질문, 답변)] }]`
 - **AI 호출**: OpenAI gpt-4o-mini, temperature=0.7, max_tokens=4000, 30초 타임아웃
-- **Output**: `AnalysisResponse` JSON → teamInsight + emotionRank(3개) + personalMissions(사용자당 3개)
+- **Output**: `AnalysisResponse` JSON → insight + emotionRank(3개) + personalMissions(사용자당 3개)
 - **프롬프트 규칙**: 상냥체(~어요), 2글자 감정 키워드, 동사형 미션 타이틀, count 내림차순
 - **응답 검증**: emotionRank 정확히 3개, 사용자별 missions 정확히 3개 검증 후 반환
 
 ### 7.2 월간 사용량 추적 방식
-- **방식**: `team_insight IS NOT NULL AND updated_at >= 이번달 시작` 카운트
+- **방식**: `insight IS NOT NULL AND updated_at >= 이번달 시작` 카운트
 - **장점**: 별도 테이블 없이 기존 컬럼으로 추적 가능, 분석 시점(updated_at) 기준으로 정확한 카운트
-- **단점**: team_insight가 NULL로 업데이트되면 카운트 누락 가능 (재분석 방지 로직이 이를 방어)
+- **단점**: insight가 NULL로 업데이트되면 카운트 누락 가능 (재분석 방지 로직이 이를 방어)
 - **대안**: 별도 `analysis_usage` 테이블 생성 (추후 검토)
 
 ### 7.3 재분석 방지
-- **방식**: `team_insight IS NOT NULL` 체크 → 409 Conflict 반환
+- **방식**: `insight IS NOT NULL` 체크 → 409 Conflict 반환
 - **장점**: 단순하고 명확한 idempotency 보장
 - **제한**: 재분석 기능이 필요한 경우 별도 설계 필요
 
@@ -276,4 +276,4 @@
 ### 10.4 데이터 일관성
 - 분석 완료 후 `member_retro.status = ANALYZED`로 업데이트
 - 이후 재제출 방지 (`submit_retrospect`에서 ANALYZED 상태 체크)
-- 재분석 방지 (`team_insight IS NOT NULL` 체크 → 409 Conflict)
+- 재분석 방지 (`insight IS NOT NULL` 체크 → 409 Conflict)

@@ -1,0 +1,273 @@
+{
+  "nodes": [
+    {
+      "id": "main-title",
+      "type": "text",
+      "text": "# AI 자율 모니터링",
+      "x": 400,
+      "y": -600,
+      "width": 280,
+      "height": 60,
+      "color": "0"
+    },
+    {
+      "id": "group-flow",
+      "type": "group",
+      "label": "Runtime Flow",
+      "x": -50,
+      "y": -500,
+      "width": 1180,
+      "height": 320
+    },
+    {
+      "id": "n1",
+      "type": "text",
+      "text": "# 1\n## Rust Server\n\n`tracing` JSON",
+      "x": 0,
+      "y": -450,
+      "width": 160,
+      "height": 120,
+      "color": "4"
+    },
+    {
+      "id": "n2",
+      "type": "text",
+      "text": "# 2\n## Log File\n\n`.log` 저장",
+      "x": 240,
+      "y": -450,
+      "width": 160,
+      "height": 120,
+      "color": "3"
+    },
+    {
+      "id": "n3",
+      "type": "text",
+      "text": "# 3\n## Log Watcher\n\nCron 5분\nERROR 필터",
+      "x": 480,
+      "y": -450,
+      "width": 160,
+      "height": 120,
+      "color": "5"
+    },
+    {
+      "id": "n4",
+      "type": "text",
+      "text": "# 4\n## AI 진단\n\nClaude API\n근본원인 분석",
+      "x": 720,
+      "y": -450,
+      "width": 160,
+      "height": 120,
+      "color": "1"
+    },
+    {
+      "id": "n5",
+      "type": "text",
+      "text": "# 5\n## 자동 대응",
+      "x": 960,
+      "y": -450,
+      "width": 120,
+      "height": 80,
+      "color": "2"
+    },
+    {
+      "id": "out-discord",
+      "type": "text",
+      "text": "Discord\n알림",
+      "x": 880,
+      "y": -320,
+      "width": 100,
+      "height": 60,
+      "color": "2"
+    },
+    {
+      "id": "out-issue",
+      "type": "text",
+      "text": "GitHub\nIssue",
+      "x": 1000,
+      "y": -320,
+      "width": 100,
+      "height": 60,
+      "color": "2"
+    },
+    {
+      "id": "out-pr",
+      "type": "text",
+      "text": "Auto-Fix\nPR",
+      "x": 940,
+      "y": -230,
+      "width": 100,
+      "height": 60,
+      "color": "2"
+    },
+    {
+      "id": "group-phase",
+      "type": "group",
+      "label": "Implementation Phases",
+      "x": -50,
+      "y": -120,
+      "width": 980,
+      "height": 200
+    },
+    {
+      "id": "ph1",
+      "type": "text",
+      "text": "## Phase 1\n`Week 1-2`\n\n- JSON 로깅\n- ErrorCode\n- Request ID",
+      "x": 0,
+      "y": -80,
+      "width": 200,
+      "height": 140,
+      "color": "4"
+    },
+    {
+      "id": "ph2",
+      "type": "text",
+      "text": "## Phase 2\n`Week 3-4`\n\n- Log Watcher\n- Discord 알림\n- Cron 설정",
+      "x": 250,
+      "y": -80,
+      "width": 200,
+      "height": 140,
+      "color": "4"
+    },
+    {
+      "id": "ph3",
+      "type": "text",
+      "text": "## Phase 3\n`Week 5-6`\n\n- Claude 연동\n- 컨텍스트 수집\n- 진단 보고서",
+      "x": 500,
+      "y": -80,
+      "width": 200,
+      "height": 140,
+      "color": "4"
+    },
+    {
+      "id": "ph4",
+      "type": "text",
+      "text": "## Phase 4\n`Week 7-8`\n\n- GitHub Issue\n- Auto-Fix PR\n- 안전장치",
+      "x": 750,
+      "y": -80,
+      "width": 200,
+      "height": 140,
+      "color": "4"
+    },
+    {
+      "id": "group-info",
+      "type": "group",
+      "label": "Key Info",
+      "x": -50,
+      "y": 120,
+      "width": 980,
+      "height": 180
+    },
+    {
+      "id": "info-cost",
+      "type": "text",
+      "text": "## 비용\n\nMVP: **$0**\nProd: **~$30/월**",
+      "x": 0,
+      "y": 160,
+      "width": 180,
+      "height": 100,
+      "color": "6"
+    },
+    {
+      "id": "info-tech",
+      "type": "text",
+      "text": "## 기술\n\nLoki + Discord\nClaude API + gh CLI",
+      "x": 220,
+      "y": 160,
+      "width": 200,
+      "height": 100,
+      "color": "6"
+    },
+    {
+      "id": "info-safety",
+      "type": "text",
+      "text": "## 안전장치\n\n중복방지 5분 | API 10회/h\nDraft PR만 | 테스트 필수",
+      "x": 460,
+      "y": 160,
+      "width": 240,
+      "height": 100,
+      "color": "6"
+    },
+    {
+      "id": "info-goal",
+      "type": "text",
+      "text": "## 목표\n\n감지 <5분 | 정확도 >70%\nAuto-Fix >50%",
+      "x": 740,
+      "y": 160,
+      "width": 200,
+      "height": 100,
+      "color": "6"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "fromNode": "n1",
+      "toNode": "n2",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e2",
+      "fromNode": "n2",
+      "toNode": "n3",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e3",
+      "fromNode": "n3",
+      "toNode": "n4",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e4",
+      "fromNode": "n4",
+      "toNode": "n5",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e5",
+      "fromNode": "n5",
+      "toNode": "out-discord",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e6",
+      "fromNode": "n5",
+      "toNode": "out-issue",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e7",
+      "fromNode": "n5",
+      "toNode": "out-pr",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "p1",
+      "fromNode": "ph1",
+      "toNode": "ph2",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "p2",
+      "fromNode": "ph2",
+      "toNode": "ph3",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "p3",
+      "fromNode": "ph3",
+      "toNode": "ph4",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ]
+}

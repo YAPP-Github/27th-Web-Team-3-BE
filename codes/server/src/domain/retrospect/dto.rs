@@ -15,10 +15,10 @@ use crate::domain::member::entity::member_retro::RetrospectStatus;
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetroRoomCreateRequest {
-    #[validate(length(min = 1, max = 20, message = "회고 룸 이름은 1~20자여야 합니다."))]
+    #[validate(length(min = 1, max = 20, message = "회고방 이름은 1~20자여야 합니다."))]
     pub title: String,
 
-    #[validate(length(max = 50, message = "회고 룸 한 줄 소개는 50자를 초과할 수 없습니다."))]
+    #[validate(length(max = 50, message = "회고방 한 줄 소개는 50자를 초과할 수 없습니다."))]
     pub description: Option<String>,
 }
 
@@ -63,7 +63,7 @@ pub struct SuccessJoinRetroRoomResponse {
     pub result: JoinRetroRoomResponse,
 }
 
-// ============== API-006: 레트로룸 목록 조회 ==============
+// ============== API-006: 회고방 목록 조회 ==============
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +82,7 @@ pub struct SuccessRetroRoomListResponse {
     pub result: Vec<RetroRoomListItem>,
 }
 
-// ============== API-007: 레트로룸 순서 변경 ==============
+// ============== API-007: 회고방 순서 변경 ==============
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -110,7 +110,7 @@ pub struct SuccessEmptyResponse {
     pub result: Option<()>,
 }
 
-// ============== API-008: 레트로룸 이름 변경 ==============
+// ============== API-008: 회고방 이름 변경 ==============
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -136,7 +136,7 @@ pub struct SuccessUpdateRetroRoomNameResponse {
     pub result: UpdateRetroRoomNameResponse,
 }
 
-// ============== API-009: 레트로룸 삭제 ==============
+// ============== API-009: 회고방 삭제 ==============
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -154,7 +154,7 @@ pub struct SuccessDeleteRetroRoomResponse {
     pub result: DeleteRetroRoomResponse,
 }
 
-// ============== API-010: 레트로룸 내 회고 목록 조회 ==============
+// ============== API-010: 회고방 내 회고 목록 조회 ==============
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -610,7 +610,7 @@ pub struct PersonalMissionItem {
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisResponse {
     /// 회고방 전체를 위한 AI 분석 메시지
-    pub team_insight: String,
+    pub insight: String,
     /// 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개)
     pub emotion_rank: Vec<EmotionRankItem>,
     /// 사용자별 개인 맞춤 미션 리스트 (userId 오름차순 정렬)
@@ -902,6 +902,75 @@ pub struct SuccessCreateCommentResponse {
     pub code: String,
     pub message: String,
     pub result: CreateCommentResponse,
+}
+
+// ============================================
+// API-029: 회고 어시스턴트 DTO
+// ============================================
+
+/// 어시스턴트 요청 DTO
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AssistantRequest {
+    /// 현재 입력된 답변 내용 (최대 1000자, 선택)
+    #[validate(length(max = 1000, message = "content는 1000자를 초과할 수 없습니다."))]
+    #[serde(default)]
+    pub content: Option<String>,
+}
+
+/// 가이드 유형
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GuideType {
+    /// 초기 가이드 - 답변 작성을 시작할 때 참고할 일반적인 가이드
+    Initial,
+    /// 맞춤 가이드 - 입력된 내용을 분석하여 제공하는 개선 가이드
+    Personalized,
+}
+
+impl fmt::Display for GuideType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GuideType::Initial => write!(f, "INITIAL"),
+            GuideType::Personalized => write!(f, "PERSONALIZED"),
+        }
+    }
+}
+
+/// 가이드 아이템
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GuideItem {
+    /// 가이드 제목 (행동 지침)
+    pub title: String,
+    /// 가이드 상세 설명
+    pub description: String,
+}
+
+/// 어시스턴트 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AssistantResponse {
+    /// 질문 ID
+    pub question_id: i32,
+    /// 질문 내용
+    pub question_content: String,
+    /// 가이드 유형 (INITIAL 또는 PERSONALIZED)
+    pub guide_type: GuideType,
+    /// 가이드 목록 (최대 3개)
+    pub guides: Vec<GuideItem>,
+    /// 이번 달 남은 사용 횟수
+    pub remaining_count: i32,
+}
+
+/// Swagger용 어시스턴트 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessAssistantResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: AssistantResponse,
 }
 
 #[cfg(test)]
@@ -2102,5 +2171,264 @@ mod tests {
         assert!("QUESTION_6".parse::<ResponseCategory>().is_err());
         assert!("all".parse::<ResponseCategory>().is_err());
         assert!("".parse::<ResponseCategory>().is_err());
+    }
+
+    // ========================================
+    // API-029: AssistantRequest 테스트
+    // ========================================
+
+    #[test]
+    fn should_deserialize_assistant_request_with_content() {
+        // Arrange
+        let json = r#"{"content": "오래전부터 시작해서 끝까지 잘 참여했습니다."}"#;
+
+        // Act
+        let req: AssistantRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert_eq!(
+            req.content.as_deref(),
+            Some("오래전부터 시작해서 끝까지 잘 참여했습니다.")
+        );
+    }
+
+    #[test]
+    fn should_deserialize_assistant_request_with_null_content() {
+        // Arrange
+        let json = r#"{"content": null}"#;
+
+        // Act
+        let req: AssistantRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert!(req.content.is_none());
+    }
+
+    #[test]
+    fn should_deserialize_assistant_request_without_content() {
+        // Arrange
+        let json = r#"{}"#;
+
+        // Act
+        let req: AssistantRequest = serde_json::from_str(json).unwrap();
+
+        // Assert
+        assert!(req.content.is_none());
+    }
+
+    #[test]
+    fn should_validate_assistant_request_when_content_is_within_limit() {
+        // Arrange
+        let req = AssistantRequest {
+            content: Some("가".repeat(1000)),
+        };
+
+        // Act
+        let result = req.validate();
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_validation_when_content_exceeds_1000_chars() {
+        // Arrange
+        let req = AssistantRequest {
+            content: Some("가".repeat(1001)),
+        };
+
+        // Act
+        let result = req.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("content"));
+    }
+
+    // ========================================
+    // API-029: GuideType 테스트
+    // ========================================
+
+    #[test]
+    fn should_serialize_guide_type_initial() {
+        // Arrange
+        let guide_type = GuideType::Initial;
+
+        // Act
+        let json = serde_json::to_value(&guide_type).unwrap();
+
+        // Assert
+        assert_eq!(json, "INITIAL");
+    }
+
+    #[test]
+    fn should_serialize_guide_type_personalized() {
+        // Arrange
+        let guide_type = GuideType::Personalized;
+
+        // Act
+        let json = serde_json::to_value(&guide_type).unwrap();
+
+        // Assert
+        assert_eq!(json, "PERSONALIZED");
+    }
+
+    #[test]
+    fn should_deserialize_guide_type_initial() {
+        // Arrange & Act
+        let guide_type: GuideType = serde_json::from_str("\"INITIAL\"").unwrap();
+
+        // Assert
+        assert_eq!(guide_type, GuideType::Initial);
+    }
+
+    #[test]
+    fn should_deserialize_guide_type_personalized() {
+        // Arrange & Act
+        let guide_type: GuideType = serde_json::from_str("\"PERSONALIZED\"").unwrap();
+
+        // Assert
+        assert_eq!(guide_type, GuideType::Personalized);
+    }
+
+    #[test]
+    fn should_display_guide_type_correctly() {
+        // Assert
+        assert_eq!(GuideType::Initial.to_string(), "INITIAL");
+        assert_eq!(GuideType::Personalized.to_string(), "PERSONALIZED");
+    }
+
+    // ========================================
+    // API-029: GuideItem 테스트
+    // ========================================
+
+    #[test]
+    fn should_serialize_guide_item_in_camel_case() {
+        // Arrange
+        let guide = GuideItem {
+            title: "구체적인 상황 떠올리기".to_string(),
+            description:
+                "특정 미팅이나 작업 순간 중 잘 진행됐다고 느꼈던 장면을 떠올려 보면 좋아요"
+                    .to_string(),
+        };
+
+        // Act
+        let json = serde_json::to_value(&guide).unwrap();
+
+        // Assert
+        assert_eq!(json["title"], "구체적인 상황 떠올리기");
+        assert!(json["description"].as_str().unwrap().contains("미팅"));
+        // snake_case 키가 없는지 확인
+        assert!(json.get("_title").is_none());
+    }
+
+    // ========================================
+    // API-029: AssistantResponse 테스트
+    // ========================================
+
+    #[test]
+    fn should_serialize_assistant_response_in_camel_case() {
+        // Arrange
+        let response = AssistantResponse {
+            question_id: 1,
+            question_content: "이번 작업/프로젝트에서 잘했던 점은 무엇인가요?".to_string(),
+            guide_type: GuideType::Initial,
+            guides: vec![
+                GuideItem {
+                    title: "구체적인 상황 떠올리기".to_string(),
+                    description: "특정 미팅이나 작업 순간을 떠올려 보면 좋아요".to_string(),
+                },
+                GuideItem {
+                    title: "나의 역할 중심으로 생각하기".to_string(),
+                    description: "내가 직접 기여한 부분에 초점을 맞춰 적어보면 좋아요".to_string(),
+                },
+                GuideItem {
+                    title: "결과보다 과정 돌아보기".to_string(),
+                    description: "최종 결과물보다 과정에서 했던 시도를 적어보면 좋아요".to_string(),
+                },
+            ],
+            remaining_count: 9,
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["questionId"], 1);
+        assert!(json["questionContent"]
+            .as_str()
+            .unwrap()
+            .contains("잘했던 점"));
+        assert_eq!(json["guideType"], "INITIAL");
+        assert_eq!(json["guides"].as_array().unwrap().len(), 3);
+        assert_eq!(json["remainingCount"], 9);
+        // snake_case 키가 없는지 확인
+        assert!(json.get("question_id").is_none());
+        assert!(json.get("question_content").is_none());
+        assert!(json.get("guide_type").is_none());
+        assert!(json.get("remaining_count").is_none());
+    }
+
+    #[test]
+    fn should_serialize_assistant_response_with_personalized_type() {
+        // Arrange
+        let response = AssistantResponse {
+            question_id: 2,
+            question_content: "개선이 필요한 문제점은 무엇인가요?".to_string(),
+            guide_type: GuideType::Personalized,
+            guides: vec![
+                GuideItem {
+                    title: "시작 배경 구체화하기".to_string(),
+                    description: "마감 기한을 맞추기 위해 어떻게 준비했는지 덧붙이면 좋아요"
+                        .to_string(),
+                },
+                GuideItem {
+                    title: "과정에서의 변화 담기".to_string(),
+                    description: "힘들었던 순간과 그때 선택한 대응을 함께 적으면 좋아요"
+                        .to_string(),
+                },
+                GuideItem {
+                    title: "결과의 의미 연결하기".to_string(),
+                    description: "결과가 나에게 어떤 의미였는지 한 문장으로 정리해 보면 좋아요"
+                        .to_string(),
+                },
+            ],
+            remaining_count: 5,
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["questionId"], 2);
+        assert_eq!(json["guideType"], "PERSONALIZED");
+        assert_eq!(json["remainingCount"], 5);
+    }
+
+    #[test]
+    fn should_serialize_success_assistant_response_in_camel_case() {
+        // Arrange
+        let response = SuccessAssistantResponse {
+            is_success: true,
+            code: "COMMON200".to_string(),
+            message: "가이드가 성공적으로 생성되었습니다.".to_string(),
+            result: AssistantResponse {
+                question_id: 1,
+                question_content: "질문 내용".to_string(),
+                guide_type: GuideType::Initial,
+                guides: vec![],
+                remaining_count: 10,
+            },
+        };
+
+        // Act
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Assert
+        assert_eq!(json["isSuccess"], true);
+        assert_eq!(json["code"], "COMMON200");
+        assert!(json["result"]["questionId"].is_number());
     }
 }

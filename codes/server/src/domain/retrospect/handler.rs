@@ -13,15 +13,15 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    AnalysisResponse, CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
-    CreateRetrospectRequest, CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest,
-    DraftSaveResponse, JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse,
-    ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
-    ResponsesListResponse, ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse,
-    RetroRoomListItem, RetrospectDetailResponse, RetrospectListItem, SearchQueryParams,
-    SearchRetrospectItem, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
-    UpdateRetroRoomOrderRequest,
+    AnalysisResponse, AssistantRequest, AssistantResponse, CreateCommentRequest,
+    CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
+    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest, DraftSaveResponse,
+    JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery,
+    ListCommentsResponse, ReferenceItem, ResponseCategory, ResponsesListResponse,
+    ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
+    RetrospectDetailResponse, RetrospectListItem, SearchQueryParams, SearchRetrospectItem,
+    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
 };
 use super::service::RetrospectService;
 
@@ -29,9 +29,9 @@ use super::service::RetrospectService;
 // RetroRoom Handlers (API-004 ~ API-010)
 // ============================================
 
-/// 회고 룸 생성 API
+/// 회고방 생성 API (API-004)
 ///
-/// 새로운 회고 룸을 생성하고 생성자를 관리자로 설정합니다.
+/// 새로운 회고방을 생성하고 생성자를 관리자로 설정합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/retro-rooms",
@@ -40,7 +40,7 @@ use super::service::RetrospectService;
         ("bearer_auth" = [])
     ),
     responses(
-        (status = 200, description = "회고 룸 생성 성공", body = SuccessRetroRoomCreateResponse),
+        (status = 200, description = "회고방 생성 성공", body = SuccessRetroRoomCreateResponse),
         (status = 400, description = "잘못된 요청", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 409, description = "이름 중복", body = ErrorResponse)
@@ -64,9 +64,9 @@ pub async fn create_retro_room(
     )))
 }
 
-/// 회고 룸 참여 API (초대 코드)
+/// 회고방 참여 API (API-005)
 ///
-/// 초대 링크(코드)를 통해 회고 룸에 참여합니다.
+/// 초대 링크(코드)를 통해 회고방에 참여합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/retro-rooms/join",
@@ -75,9 +75,9 @@ pub async fn create_retro_room(
         ("bearer_auth" = [])
     ),
     responses(
-        (status = 200, description = "회고 룸 참여 성공", body = SuccessJoinRetroRoomResponse),
+        (status = 200, description = "회고방 참여 성공", body = SuccessJoinRetroRoomResponse),
         (status = 400, description = "잘못된 초대 링크 또는 만료됨", body = ErrorResponse),
-        (status = 404, description = "존재하지 않는 룸", body = ErrorResponse),
+        (status = 404, description = "존재하지 않는 회고방", body = ErrorResponse),
         (status = 409, description = "이미 참여 중", body = ErrorResponse)
     ),
     tag = "RetroRoom"
@@ -99,15 +99,15 @@ pub async fn join_retro_room(
     )))
 }
 
-/// API-006: 참여 중인 레트로룸 목록 조회
+/// 회고방 목록 조회 API (API-006)
 ///
-/// 현재 로그인한 사용자가 참여 중인 모든 레트로룸 목록을 조회합니다.
+/// 현재 로그인한 사용자가 참여 중인 모든 회고방 목록을 조회합니다.
 #[utoipa::path(
     get,
     path = "/api/v1/retro-rooms",
     security(("bearer_auth" = [])),
     responses(
-        (status = 200, description = "레트로룸 목록 조회 성공", body = SuccessRetroRoomListResponse),
+        (status = 200, description = "회고방 목록 조회 성공", body = SuccessRetroRoomListResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse)
     ),
     tag = "RetroRoom"
@@ -126,9 +126,9 @@ pub async fn list_retro_rooms(
     )))
 }
 
-/// API-007: 레트로룸 순서 변경
+/// 회고방 순서 변경 API (API-007)
 ///
-/// 드래그 앤 드롭으로 변경된 레트로룸들의 정렬 순서를 서버에 일괄 저장합니다.
+/// 드래그 앤 드롭으로 변경된 회고방들의 정렬 순서를 서버에 일괄 저장합니다.
 #[utoipa::path(
     patch,
     path = "/api/v1/retro-rooms/order",
@@ -159,15 +159,15 @@ pub async fn update_retro_room_order(
     )))
 }
 
-/// API-008: 레트로룸 이름 변경
+/// 회고방 이름 변경 API (API-008)
 ///
-/// 기존 레트로룸의 이름을 새로운 이름으로 변경합니다. (Owner만 가능)
+/// 기존 회고방의 이름을 새로운 이름으로 변경합니다. (Owner만 가능)
 #[utoipa::path(
     patch,
     path = "/api/v1/retro-rooms/{retro_room_id}/name",
     request_body = UpdateRetroRoomNameRequest,
     params(
-        ("retro_room_id" = i64, Path, description = "레트로룸 ID")
+        ("retro_room_id" = i64, Path, description = "회고방 ID")
     ),
     security(("bearer_auth" = [])),
     responses(
@@ -175,7 +175,7 @@ pub async fn update_retro_room_order(
         (status = 400, description = "이름 길이 초과", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 403, description = "권한 없음", body = ErrorResponse),
-        (status = 404, description = "룸 없음", body = ErrorResponse),
+        (status = 404, description = "회고방 없음", body = ErrorResponse),
         (status = 409, description = "이름 중복", body = ErrorResponse)
     ),
     tag = "RetroRoom"
@@ -199,21 +199,21 @@ pub async fn update_retro_room_name(
     )))
 }
 
-/// API-009: 레트로룸 삭제
+/// 회고방 삭제 API (API-009)
 ///
-/// 레트로룸을 완전히 삭제합니다. (Owner만 가능)
+/// 회고방을 완전히 삭제합니다. (Owner만 가능)
 #[utoipa::path(
     delete,
     path = "/api/v1/retro-rooms/{retro_room_id}",
     params(
-        ("retro_room_id" = i64, Path, description = "레트로룸 ID")
+        ("retro_room_id" = i64, Path, description = "회고방 ID")
     ),
     security(("bearer_auth" = [])),
     responses(
         (status = 200, description = "삭제 성공", body = SuccessDeleteRetroRoomResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 403, description = "권한 없음", body = ErrorResponse),
-        (status = 404, description = "룸 없음", body = ErrorResponse)
+        (status = 404, description = "회고방 없음", body = ErrorResponse)
     ),
     tag = "RetroRoom"
 )]
@@ -232,21 +232,21 @@ pub async fn delete_retro_room(
     )))
 }
 
-/// API-010: 레트로룸 내 회고 목록 조회
+/// 회고방 내 회고 목록 조회 API (API-010)
 ///
-/// 특정 레트로룸에 속한 모든 회고 목록을 조회합니다.
+/// 특정 회고방에 속한 모든 회고 목록을 조회합니다.
 #[utoipa::path(
     get,
     path = "/api/v1/retro-rooms/{retro_room_id}/retrospects",
     params(
-        ("retro_room_id" = i64, Path, description = "레트로룸 ID")
+        ("retro_room_id" = i64, Path, description = "회고방 ID")
     ),
     security(("bearer_auth" = [])),
     responses(
         (status = 200, description = "회고 목록 조회 성공", body = SuccessRetrospectListResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
         (status = 403, description = "권한 없음", body = ErrorResponse),
-        (status = 404, description = "룸 없음", body = ErrorResponse)
+        (status = 404, description = "회고방 없음", body = ErrorResponse)
     ),
     tag = "RetroRoom"
 )]
@@ -269,7 +269,7 @@ pub async fn list_retrospects(
 // Retrospect Handlers
 // ============================================
 
-/// 회고 생성 API
+/// 회고 생성 API (API-011)
 ///
 /// 진행한 프로젝트에 대한 회고 세션을 생성합니다.
 /// 프로젝트 정보, 회고 방식, 참고 자료 등을 포함하며 생성된 회고의 고유 식별자를 반환합니다.
@@ -954,7 +954,7 @@ pub async fn create_comment(
         (status = 200, description = "좋아요 상태가 성공적으로 업데이트되었습니다.", body = SuccessLikeToggleResponse),
         (status = 400, description = "잘못된 요청 (responseId가 1 미만)", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "팀 멤버가 아닌 유저가 좋아요 시도", body = ErrorResponse),
+        (status = 403, description = "회고방 멤버가 아닌 유저가 좋아요 시도", body = ErrorResponse),
         (status = 404, description = "존재하지 않는 회고 답변", body = ErrorResponse),
         (status = 500, description = "서버 내부 오류", body = ErrorResponse)
     ),
@@ -985,5 +985,55 @@ pub async fn toggle_like(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "좋아요 상태가 성공적으로 업데이트되었습니다.",
+    )))
+}
+
+/// 회고 어시스턴트 API (API-029)
+///
+/// 회고 작성 시 특정 질문에 대해 AI 어시스턴트가 작성 가이드를 제공합니다.
+/// 사용자의 현재 입력 내용에 따라 초기 가이드(INITIAL) 또는 맞춤 가이드(PERSONALIZED)를 반환합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant",
+    params(
+        ("retrospectId" = i64, Path, description = "회고의 고유 ID"),
+        ("questionId" = i32, Path, description = "질문 번호 (1~5)")
+    ),
+    request_body = AssistantRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "가이드 생성 성공", body = SuccessAssistantResponse),
+        (status = 400, description = "잘못된 요청 (content 길이 초과 등)", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "접근 권한 없음 또는 월간 사용 한도 초과", body = ErrorResponse),
+        (status = 404, description = "회고 또는 질문을 찾을 수 없음", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류 또는 AI 서비스 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn assistant_guide(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path((retrospect_id, question_id)): Path<(i64, i32)>,
+    Json(req): Json<AssistantRequest>,
+) -> Result<Json<BaseResponse<AssistantResponse>>, AppError> {
+    req.validate()?;
+
+    let user_id = user.user_id()?;
+
+    let result = RetrospectService::generate_assistant_guide(
+        state,
+        user_id,
+        retrospect_id,
+        question_id,
+        req,
+    )
+    .await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "가이드가 성공적으로 생성되었습니다.",
     )))
 }

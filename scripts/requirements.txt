@@ -1,0 +1,2 @@
+# AI Diagnostic Agent dependencies
+anthropic>=0.35.0

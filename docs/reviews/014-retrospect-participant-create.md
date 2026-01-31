@@ -12,10 +12,10 @@
 
 ## Summary
 
-회고 참석자 등록 API를 구현했습니다. 사용자가 팀 멤버인 경우, 진행 예정인 회고에 참석자로 등록할 수 있습니다.
+회고 참석자 등록 API를 구현했습니다. 사용자가 회고방 멤버인 경우, 진행 예정인 회고에 참석자로 등록할 수 있습니다.
 
 ### 주요 기능
-- 회고 존재 여부 및 팀 멤버십 검증
+- 회고 존재 여부 및 회고방 멤버십 검증
 - 진행 예정인 회고만 참석 가능 (과거/진행중 불가)
 - 중복 참석 방지 (애플리케이션 레벨 + DB 제약)
 - 닉네임 자동 추출 (이메일 @ 앞부분)
@@ -78,7 +78,7 @@ pub struct CreateParticipantResponse {
 | `RETRO4041` | 404 | 존재하지 않는 회고 | 없는 retrospectId 입력 |
 | `RETRO4002` | 400 | 이미 시작된 회고 | 과거/진행중인 회고에 참석 시도 |
 | `RETRO4091` | 409 | 중복 참석 등록 | 이미 참석자로 등록된 경우 |
-| `TEAM4031` | 403 | 팀 접근 권한 없음 | 팀 멤버가 아닌 경우 |
+| `RETRO4031` | 403 | 회고방 접근 권한 없음 | 회고방 멤버가 아닌 경우 |
 
 ### 4. 서비스 로직 (`service.rs`)
 
@@ -94,7 +94,7 @@ pub async fn create_participant(
 **비즈니스 로직 흐름:**
 ```text
 1. 회고 존재 여부 확인 → RetrospectNotFound (404)
-2. 회고의 team_id로 팀 멤버십 확인 → TeamAccessDenied (403)
+2. 회고의 retro_room_id로 회고방 멤버십 확인 → RetroRoomAccessDenied (403)
 3. 진행 예정인 회고인지 확인 (start_time > now_kst) → RetrospectAlreadyStarted (400)
 4. 이미 참석 등록 여부 확인 → ParticipantDuplicate (409)
 5. 멤버 정보 조회
@@ -148,7 +148,7 @@ pub async fn create_participant(
 | `api014_should_return_400_when_retrospect_id_is_zero` | retrospectId가 0 | 400 |
 | `api014_should_return_400_when_retrospect_id_is_negative` | retrospectId가 음수 | 400 |
 | `api014_should_return_404_when_retrospect_not_found` | 존재하지 않는 회고 | 404 |
-| `api014_should_return_403_when_not_team_member` | 팀 멤버가 아님 | 403 |
+| `api014_should_return_403_when_not_retro_room_member` | 회고방 멤버가 아님 | 403 |
 | `api014_should_return_400_when_retrospect_already_started` | 과거/진행중 회고 | 400 |
 | `api014_should_return_409_when_already_participant` | 중복 참석 | 409 |
 | `api014_should_return_200_when_valid_request` | 정상 요청 | 200 |
@@ -220,12 +220,12 @@ curl -X POST http://localhost:8080/api/v1/retrospects/123/participants \
 }
 ```
 
-#### 팀 멤버 아님 (403)
+#### 회고방 멤버 아님 (403)
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "해당 회고가 속한 팀의 멤버가 아닙니다.",
+  "code": "RETRO4031",
+  "message": "해당 회고가 속한 회고방 멤버가 아닙니다.",
   "result": null
 }
 ```
@@ -304,8 +304,8 @@ curl -X POST http://localhost:8080/api/v1/retrospects/123/participants \
 
 | 테이블 | 용도 |
 |--------|------|
-| `retrospects` | 회고 존재 확인, team_id 조회 |
-| `member_team` | 팀 멤버십 확인 |
+| `retrospects` | 회고 존재 확인, retro_room_id 조회 |
+| `member_retro_room` | 회고방 멤버십 확인 |
 | `member` | 멤버 정보 (이메일) 조회 |
 | `member_retro` | 참석자 등록 (INSERT) |
 
@@ -316,8 +316,8 @@ curl -X POST http://localhost:8080/api/v1/retrospects/123/participants \
 API-014는 API-010, API-011과 동일한 도메인(retrospect)에서 작동합니다:
 
 - **공유 엔티티**: Retrospect, MemberTeam, Member
-- **공유 에러 코드**: `TEAM4031` (팀 접근 권한 없음)
-- **검증 로직 재사용**: 팀 멤버십 확인
+- **공유 에러 코드**: `RETRO4031` (회고방 접근 권한 없음)
+- **검증 로직 재사용**: 회고방 멤버십 확인
 
 ---
 

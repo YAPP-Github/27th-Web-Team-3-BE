@@ -43,6 +43,8 @@ pub enum Relation {
     MemberRetro,
     #[sea_orm(has_many = "super::member_retro_room::Entity")]
     MemberRetroRoom,
+    #[sea_orm(has_many = "super::assistant_usage::Entity")]
+    AssistantUsage,
 }
 
 impl Related<crate::domain::retrospect::entity::response_comment::Entity> for Entity {
@@ -72,6 +74,12 @@ impl Related<super::member_retro::Entity> for Entity {
 impl Related<super::member_retro_room::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::MemberRetroRoom.def()
+    }
+}
+
+impl Related<super::assistant_usage::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AssistantUsage.def()
     }
 }
 

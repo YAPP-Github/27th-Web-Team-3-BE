@@ -2,14 +2,15 @@
 
 mod config;
 mod domain;
+mod global;
 mod state;
 mod utils;
 
+use axum::http::{header, HeaderValue, Method};
 use axum::{routing::get, Router};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -24,16 +25,17 @@ use crate::domain::auth::dto::{
 use crate::domain::member::dto::SuccessWithdrawResponse;
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
-    AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
-    CreateParticipantResponse, CreateRetrospectRequest, CreateRetrospectResponse,
-    DeleteRetroRoomResponse, DraftItem, DraftSaveRequest, DraftSaveResponse, EmotionRankItem,
-    JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery,
-    ListCommentsResponse, MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory,
-    ResponseListItem, ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse,
-    RetroRoomListItem, RetroRoomOrderItem, RetrospectDetailResponse, RetrospectListItem,
-    RetrospectMemberItem, RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter,
-    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, SuccessAnalysisResponse,
+    AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
+    CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
+    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
+    DraftSaveResponse, EmotionRankItem, GuideItem, GuideType, JoinRetroRoomRequest,
+    JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery, ListCommentsResponse,
+    MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem,
+    ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
+    RetroRoomOrderItem, RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem,
+    RetrospectQuestionItem, SearchRetrospectItem, StorageRangeFilter, StorageResponse,
+    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, SuccessAnalysisResponse, SuccessAssistantResponse,
     SuccessCreateCommentResponse, SuccessCreateParticipantResponse,
     SuccessCreateRetrospectResponse, SuccessDeleteRetroRoomResponse,
     SuccessDeleteRetrospectResponse, SuccessDraftSaveResponse, SuccessEmptyResponse,
@@ -83,6 +85,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::list_comments,
         domain::retrospect::handler::create_comment,
         domain::retrospect::handler::toggle_like,
+        domain::retrospect::handler::assistant_guide,
         // Member APIs
         domain::member::handler::withdraw
     ),
@@ -172,6 +175,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
             CreateCommentRequest,
             CreateCommentResponse,
             SuccessCreateCommentResponse,
+            AssistantRequest,
+            AssistantResponse,
+            GuideItem,
+            GuideType,
+            SuccessAssistantResponse,
             // Member DTOs
             SuccessWithdrawResponse
         )
@@ -179,7 +187,6 @@ use crate::utils::{BaseResponse, ErrorResponse};
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
-        (name = "Member", description = "회원 API"),
         (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
         (name = "Response", description = "회고 답변 API")
@@ -212,12 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // 로깅 초기화
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
-        ))
-        .init();
+    utils::init_logging();
 
     // 설정 로드
     let config = AppConfig::from_env()?;
@@ -241,10 +243,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // CORS 설정
+    let allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://www.moalog.me",
+        "https://moalog.me",
+        "https://moaofficial.kr",
+    ];
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(
+            allowed_origins
+                .iter()
+                .filter_map(|origin| origin.parse::<HeaderValue>().ok())
+                .collect::<Vec<_>>(),
+        )
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            header::ORIGIN,
+        ])
+        .allow_credentials(true);
 
     // 라우터 구성
     let app = Router::new()
@@ -370,9 +399,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/v1/members/me",
             axum::routing::delete(domain::member::handler::withdraw),
         )
+        // [API-029] 회고 어시스턴트
+        .route(
+            "/api/v1/retrospects/:retrospect_id/questions/:question_id/assistant",
+            axum::routing::post(domain::retrospect::handler::assistant_guide),
+        )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .layer(cors)
+        // 레이어 순서: 아래에서 위로 적용됨 (request_id → cors → TraceLayer → handler)
         .layer(TraceLayer::new_for_http())
+        .layer(cors)
+        .layer(axum::middleware::from_fn(global::request_id_middleware))
         .with_state(app_state);
 
     // 서버 시작

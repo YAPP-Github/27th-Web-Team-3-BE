@@ -11,10 +11,16 @@ use async_openai::{
 use tracing::{info, instrument, warn};
 
 use crate::config::AppConfig;
-use crate::domain::retrospect::dto::AnalysisResponse;
+use crate::domain::retrospect::dto::{AnalysisResponse, GuideItem};
 use crate::utils::AppError;
 
-use super::prompt::{AnalysisPrompt, MemberAnswerData};
+use super::prompt::{AnalysisPrompt, AssistantPrompt, MemberAnswerData};
+
+/// 어시스턴트 가이드 응답 (내부용)
+#[derive(Debug, serde::Deserialize)]
+pub struct AssistantGuideRaw {
+    pub guides: Vec<GuideItem>,
+}
 
 /// AI 서비스
 #[derive(Clone)]
@@ -48,7 +54,10 @@ impl AiService {
         let json_str = Self::extract_json(&raw_response);
         let analysis: AnalysisResponse = serde_json::from_str(json_str).map_err(|e| {
             warn!("AI 응답 JSON 파싱 실패: {}", e);
-            warn!("AI 원본 응답: {}", raw_response);
+            warn!(
+                "AI 원본 응답 길이: {} (내용은 개인정보 보호를 위해 생략)",
+                raw_response.len()
+            );
             AppError::AiAnalysisFailed(format!("AI 응답을 파싱할 수 없습니다: {}", e))
         })?;
 
@@ -73,6 +82,56 @@ impl AiService {
 
         info!("회고 종합 분석 완료");
         Ok(analysis)
+    }
+
+    /// 회고 어시스턴트 가이드 생성 (API-029)
+    #[instrument(skip(self))]
+    pub async fn generate_assistant_guide(
+        &self,
+        question_content: &str,
+        user_content: Option<&str>,
+    ) -> Result<Vec<GuideItem>, AppError> {
+        let (system_prompt, user_prompt) = match user_content {
+            Some(content) if !content.trim().is_empty() => {
+                info!("맞춤 가이드 생성 요청");
+                (
+                    AssistantPrompt::personalized_system_prompt(),
+                    AssistantPrompt::personalized_user_prompt(question_content, content),
+                )
+            }
+            _ => {
+                info!("초기 가이드 생성 요청");
+                (
+                    AssistantPrompt::initial_system_prompt(),
+                    AssistantPrompt::initial_user_prompt(question_content),
+                )
+            }
+        };
+
+        let raw_response = self.call_openai(&system_prompt, &user_prompt).await?;
+
+        // JSON 파싱
+        let json_str = Self::extract_json(&raw_response);
+        let guide_response: AssistantGuideRaw = serde_json::from_str(json_str).map_err(|e| {
+            warn!("AI 응답 JSON 파싱 실패: {}", e);
+            warn!(
+                "AI 원본 응답 길이: {} (내용은 개인정보 보호를 위해 생략)",
+                raw_response.len()
+            );
+            AppError::AiAnalysisFailed(format!("AI 응답을 파싱할 수 없습니다: {}", e))
+        })?;
+
+        // 응답 검증: guides 1~3개
+        let guide_count = guide_response.guides.len();
+        if guide_count == 0 || guide_count > 3 {
+            return Err(AppError::AiAnalysisFailed(format!(
+                "가이드는 1~3개여야 하지만 {}개입니다",
+                guide_count
+            )));
+        }
+
+        info!("어시스턴트 가이드 생성 완료");
+        Ok(guide_response.guides)
     }
 
     /// AI 응답에서 JSON 부분 추출 (코드 블록 제거)
@@ -157,44 +216,44 @@ mod tests {
     #[test]
     fn should_extract_json_from_plain_response() {
         // Arrange
-        let response = r#"{"teamInsight": "test"}"#;
+        let response = r#"{"insight": "test"}"#;
 
         // Act
         let result = AiService::extract_json(response);
 
         // Assert
-        assert_eq!(result, r#"{"teamInsight": "test"}"#);
+        assert_eq!(result, r#"{"insight": "test"}"#);
     }
 
     #[test]
     fn should_extract_json_from_code_block() {
         // Arrange
-        let response = "```json\n{\"teamInsight\": \"test\"}\n```";
+        let response = "```json\n{\"insight\": \"test\"}\n```";
 
         // Act
         let result = AiService::extract_json(response);
 
         // Assert
-        assert_eq!(result, "{\"teamInsight\": \"test\"}");
+        assert_eq!(result, "{\"insight\": \"test\"}");
     }
 
     #[test]
     fn should_extract_json_with_surrounding_text() {
         // Arrange
-        let response = "Here is the result:\n{\"teamInsight\": \"test\"}\nDone.";
+        let response = "Here is the result:\n{\"insight\": \"test\"}\nDone.";
 
         // Act
         let result = AiService::extract_json(response);
 
         // Assert
-        assert_eq!(result, "{\"teamInsight\": \"test\"}");
+        assert_eq!(result, "{\"insight\": \"test\"}");
     }
 
     #[test]
     fn should_parse_valid_analysis_response() {
         // Arrange
         let json = r#"{
-            "teamInsight": "팀이 잘했습니다",
+            "insight": "팀이 잘했습니다",
             "emotionRank": [
                 {"rank": 1, "label": "뿌듯", "description": "성취감", "count": 5},
                 {"rank": 2, "label": "피로", "description": "업무량", "count": 3},
@@ -219,7 +278,7 @@ mod tests {
         // Assert
         assert!(result.is_ok());
         let analysis = result.unwrap();
-        assert_eq!(analysis.team_insight, "팀이 잘했습니다");
+        assert_eq!(analysis.insight, "팀이 잘했습니다");
         assert_eq!(analysis.emotion_rank.len(), 3);
         assert_eq!(analysis.personal_missions.len(), 1);
         assert_eq!(analysis.personal_missions[0].missions.len(), 3);

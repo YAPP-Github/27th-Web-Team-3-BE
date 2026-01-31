@@ -1,3 +1,4 @@
+pub mod assistant_usage;
 pub mod member;
 pub mod member_response;
 pub mod member_retro;
