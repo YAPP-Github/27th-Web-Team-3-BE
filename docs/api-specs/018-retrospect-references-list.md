@@ -119,8 +119,8 @@ GET /api/v1/retrospects/{retrospectId}/references
 ```json
 {
   "isSuccess": false,
-  "code": "TEAM4031",
-  "message": "해당 팀에 접근 권한이 없습니다.",
+  "code": "RETRO4031",
+  "message": "해당 회고방에 접근 권한이 없습니다.",
   "result": null
 }
 ```
@@ -153,7 +153,7 @@ GET /api/v1/retrospects/{retrospectId}/references
 |------|-------------|-------------|-----------|
 | COMMON400 | 400 | 잘못된 요청 | retrospectId가 0 이하의 값 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료 또는 잘못된 Bearer 토큰 |
-| TEAM4031 | 403 | 접근 권한 없음 | JWT의 유저가 해당 회고가 속한 팀의 멤버가 아닌 경우 |
+| RETRO4031 | 403 | 접근 권한 없음 | JWT의 유저가 해당 회고가 속한 회고방의 멤버가 아닌 경우 |
 | RETRO4041 | 404 | 존재하지 않는 회고 세션 | 해당 retrospectId의 회고가 DB에 없음 |
 | COMMON500 | 500 | 서버 내부 에러 | DB 연결 실패, 쿼리 오류 등 |
 

@@ -4,10 +4,10 @@
 
 ## 개요
 
-내가 참여한 모든 팀의 회고 중, 프로젝트 이름(회고 이름)에 검색 키워드가 포함된 회고 목록을 조회합니다.
+내가 참여한 모든 회고방의 회고 중, 프로젝트 이름(회고 이름)에 검색 키워드가 포함된 회고 목록을 조회합니다.
 
 - 과거, 오늘, 예정된 회고가 모두 검색 대상에 포함됩니다.
-- 보관함(아카이브) 성격상 특정 팀에 국한되지 않고, **내가 속한 모든 팀**에서 검색합니다.
+- 보관함(아카이브) 성격상 특정 회고방에 국한되지 않고, **내가 속한 모든 회고방**에서 검색합니다.
 - 검색 결과는 `retrospectDate` 기준 내림차순(최신순)으로 정렬됩니다.
 
 ## 버전
@@ -54,7 +54,7 @@ GET /api/v1/retrospects/search
     {
       "retrospectId": 201,
       "projectName": "AI 서비스 1차 릴리즈 회고",
-      "teamName": "AI 사이드팀",
+      "retroRoomName": "AI 사이드팀",
       "retrospectMethod": "KPT",
       "retrospectDate": "2026-01-10",
       "retrospectTime": "14:00"
@@ -62,7 +62,7 @@ GET /api/v1/retrospects/search
     {
       "retrospectId": 305,
       "projectName": "AI 챗봇 고도화 회고",
-      "teamName": "코드 마스터즈",
+      "retroRoomName": "코드 마스터즈",
       "retrospectMethod": "FOUR_L",
       "retrospectDate": "2026-02-05",
       "retrospectTime": "11:30"
@@ -77,7 +77,7 @@ GET /api/v1/retrospects/search
 |-------|------|-------------|
 | retrospectId | long | 회고 고유 ID |
 | projectName | string | 회고 이름 (프로젝트명) |
-| teamName | string | 해당 회고가 속한 팀 이름 |
+| retroRoomName | string | 해당 회고가 속한 회고방 이름 |
 | retrospectMethod | string | 회고 방식 |
 | retrospectDate | string | 회고 날짜 (ISO 8601 형식: YYYY-MM-DD) |
 | retrospectTime | string | 회고 시간 (HH:mm) |

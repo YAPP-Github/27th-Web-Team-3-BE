@@ -403,7 +403,7 @@ impl From<ValidationErrors> for AppError {
             return AppError::RetroRoomNameTooLong("회고방 이름은 1~20자여야 합니다.".to_string());
         }
 
-        // retro_room_orders 필드 검증 실패 시 TEAM4004 반환
+        // retro_room_orders 필드 검증 실패 시 RETRO4004 반환
         if field_errors.contains_key("retro_room_orders")
             || field_errors.contains_key("order_index")
         {
