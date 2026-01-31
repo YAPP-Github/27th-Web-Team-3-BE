@@ -125,15 +125,68 @@ tail -n +$((LAST_LINE + 1)) "$LOG_FILE" | while read -r line; do
         } > "${DEDUP_FILE}.tmp"
         mv "${DEDUP_FILE}.tmp" "$DEDUP_FILE"
 
-        # Discord 알림
-        echo "[$(date)] Sending alert for: $ERROR_CODE"
-        if ./scripts/discord-alert.sh "critical" \
-            "🚨 [$ERROR_CODE] Error Detected" \
-            "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
-            "$ERROR_CODE"; then
-            ALERT_COUNT=$((ALERT_COUNT + 1))
+        # 비용 제한 체크 (진단 호출 전 필수)
+        if ! python3 -c "
+import time
+from pathlib import Path
+
+RATE_LIMIT_FILE = Path('/tmp/diagnostic-rate-limit')
+MAX_CALLS_PER_HOUR = 10
+
+now = time.time()
+hour_ago = now - 3600
+
+if not RATE_LIMIT_FILE.exists():
+    RATE_LIMIT_FILE.write_text(str(now))
+    exit(0)  # 허용
+
+calls = [float(t) for t in RATE_LIMIT_FILE.read_text().split('\n') if t]
+recent_calls = [t for t in calls if t > hour_ago]
+
+if len(recent_calls) >= MAX_CALLS_PER_HOUR:
+    exit(1)  # 제한 초과
+
+recent_calls.append(now)
+RATE_LIMIT_FILE.write_text('\n'.join(str(t) for t in recent_calls))
+exit(0)  # 허용
+"; then
+            # 비용 제한 초과 - 기본 알림만 발송
+            echo "[$(date)] Rate limit exceeded, skipping diagnostic"
+            if ./scripts/discord-alert.sh "critical" \
+                "🚨 [$ERROR_CODE] Error Detected (진단 제한 초과)" \
+                "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$ERROR_CODE"; then
+                ALERT_COUNT=$((ALERT_COUNT + 1))
+            fi
+            continue
+        fi
+
+        # Diagnostic Agent 호출 (비용 제한 통과 후)
+        echo "[$(date)] Running diagnostic for: $ERROR_CODE"
+        DIAGNOSTIC=$(python3 ./scripts/diagnostic-agent.py "$line" 2>/dev/null)
+
+        if echo "$DIAGNOSTIC" | jq -e '.error' > /dev/null 2>&1; then
+            # 진단 실패 - 기본 알림
+            echo "[$(date)] Diagnostic failed, sending basic alert"
+            if ./scripts/discord-alert.sh "critical" \
+                "🚨 [$ERROR_CODE] Error Detected" \
+                "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$ERROR_CODE"; then
+                ALERT_COUNT=$((ALERT_COUNT + 1))
+            fi
         else
-            echo "[$(date)] WARNING: Failed to send alert for $ERROR_CODE" >&2
+            # 진단 성공 - 상세 알림
+            SEVERITY=$(echo "$DIAGNOSTIC" | jq -r '.severity // "critical"')
+            ROOT_CAUSE=$(echo "$DIAGNOSTIC" | jq -r '.root_cause // "분석 중"')
+            RECOMMENDATIONS=$(echo "$DIAGNOSTIC" | jq -r '.recommendations[0].action // "검토 필요"')
+
+            echo "[$(date)] Diagnostic success, sending detailed alert"
+            if ./scripts/discord-alert.sh "$SEVERITY" \
+                "🔍 [$ERROR_CODE] AI 진단 완료" \
+                "**근본 원인**: $ROOT_CAUSE\n\n**권장 조치**: $RECOMMENDATIONS\n\n**위치**: $TARGET" \
+                "$ERROR_CODE"; then
+                ALERT_COUNT=$((ALERT_COUNT + 1))
+            fi
         fi
     fi
 done
