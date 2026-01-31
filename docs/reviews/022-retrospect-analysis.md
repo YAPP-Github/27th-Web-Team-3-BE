@@ -189,7 +189,7 @@
 - **구조**: `prompt.rs`(AnalysisPrompt) + `service.rs`(AiService) — 분석 전용
 - **Input**: `MemberAnswerData[]` → `[{ userId, userName, answers: [(질문, 답변)] }]`
 - **AI 호출**: OpenAI gpt-4o-mini, temperature=0.7, max_tokens=4000, 30초 타임아웃
-- **Output**: `AnalysisResponse` JSON → teamInsight + emotionRank(3개) + personalMissions(사용자당 3개)
+- **Output**: `AnalysisResponse` JSON → insight + emotionRank(3개) + personalMissions(사용자당 3개)
 - **프롬프트 규칙**: 상냥체(~어요), 2글자 감정 키워드, 동사형 미션 타이틀, count 내림차순
 - **응답 검증**: emotionRank 정확히 3개, 사용자별 missions 정확히 3개 검증 후 반환
 
