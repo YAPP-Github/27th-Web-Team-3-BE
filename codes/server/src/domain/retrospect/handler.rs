@@ -13,15 +13,15 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    AnalysisResponse, CreateCommentRequest, CreateCommentResponse, CreateParticipantResponse,
-    CreateRetrospectRequest, CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest,
-    DraftSaveResponse, JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse,
-    ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
-    ResponsesListResponse, ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse,
-    RetroRoomListItem, RetrospectDetailResponse, RetrospectListItem, SearchQueryParams,
-    SearchRetrospectItem, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
-    UpdateRetroRoomOrderRequest,
+    AnalysisResponse, AssistantRequest, AssistantResponse, CreateCommentRequest,
+    CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
+    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest, DraftSaveResponse,
+    JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery,
+    ListCommentsResponse, ReferenceItem, ResponseCategory, ResponsesListResponse,
+    ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
+    RetrospectDetailResponse, RetrospectListItem, SearchQueryParams, SearchRetrospectItem,
+    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
+    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
 };
 use super::service::RetrospectService;
 
@@ -985,5 +985,55 @@ pub async fn toggle_like(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "좋아요 상태가 성공적으로 업데이트되었습니다.",
+    )))
+}
+
+/// 회고 어시스턴트 API (API-029)
+///
+/// 회고 작성 시 특정 질문에 대해 AI 어시스턴트가 작성 가이드를 제공합니다.
+/// 사용자의 현재 입력 내용에 따라 초기 가이드(INITIAL) 또는 맞춤 가이드(PERSONALIZED)를 반환합니다.
+#[utoipa::path(
+    post,
+    path = "/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant",
+    params(
+        ("retrospectId" = i64, Path, description = "회고의 고유 ID"),
+        ("questionId" = i32, Path, description = "질문 번호 (1~5)")
+    ),
+    request_body = AssistantRequest,
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "가이드 생성 성공", body = SuccessAssistantResponse),
+        (status = 400, description = "잘못된 요청 (content 길이 초과 등)", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "접근 권한 없음 또는 월간 사용 한도 초과", body = ErrorResponse),
+        (status = 404, description = "회고 또는 질문을 찾을 수 없음", body = ErrorResponse),
+        (status = 500, description = "서버 내부 오류 또는 AI 서비스 오류", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn assistant_guide(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path((retrospect_id, question_id)): Path<(i64, i32)>,
+    Json(req): Json<AssistantRequest>,
+) -> Result<Json<BaseResponse<AssistantResponse>>, AppError> {
+    req.validate()?;
+
+    let user_id = user.user_id()?;
+
+    let result = RetrospectService::generate_assistant_guide(
+        state,
+        user_id,
+        retrospect_id,
+        question_id,
+        req,
+    )
+    .await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "가이드가 성공적으로 생성되었습니다.",
     )))
 }

@@ -65,6 +65,12 @@
 | API-027 | GET | `/api/v1/responses/{responseId}/comments` | 답변 댓글 조회 | [026-response-comments-list.md](./026-response-comments-list.md) |
 | API-028 | POST | `/api/v1/responses/{responseId}/comments` | 답변 댓글 작성 | [027-response-comment-create.md](./027-response-comment-create.md) |
 
+### AI 어시스턴트 (AI Assistant) - 029
+
+| API ID | Method | Endpoint | 설명 | 문서 |
+|--------|--------|----------|------|------|
+| API-029 | POST | `/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant` | 회고 질문별 AI 어시스턴트 | [028-retrospect-assistant.md](./028-retrospect-assistant.md) |
+
 ---
 
 ## 공통 응답 형식
@@ -98,11 +104,11 @@
 | 접두사 | 도메인 | 예시 |
 |--------|--------|------|
 | AUTH | 인증 | AUTH4001, AUTH4002, AUTH4003 |
-| RETRO | 회고/회고방 | RETRO4001, RETRO4031, RETRO4041, RETRO4091 |
+| RETRO | 회고/회고방 | RETRO4001, RETRO4031, RETRO4041, RETRO4043, RETRO4091 |
 | DRAFT | 임시저장 | DRAFT4001, DRAFT4002 |
 | RES | 응답/댓글 | RES4001, RES4041 |
 | MEMBER | 회원 | MEMBER4001, MEMBER4041, MEMBER4042 |
-| AI | AI 분석 | AI4031, AI5001 |
+| AI | AI 분석/어시스턴트 | AI4031, AI4032, AI5001 |
 | SEARCH | 검색 | SEARCH4001 |
 | COMMON | 공통 | COMMON400, COMMON500 |
 
