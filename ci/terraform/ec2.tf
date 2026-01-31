@@ -43,7 +43,7 @@ resource "aws_instance" "app" {
     apt-get update && apt-get upgrade -y
 
     # 필수 패키지 설치
-    apt-get install -y git build-essential pkg-config libssl-dev curl
+    apt-get install -y git build-essential pkg-config libssl-dev curl dnsutils
 
     # Docker 설치
     apt-get install -y ca-certificates curl gnupg
@@ -57,6 +57,52 @@ resource "aws_instance" "app" {
     systemctl enable docker
     usermod -aG docker ubuntu
 
+    # Nginx 설치
+    apt-get install -y nginx
+    systemctl start nginx
+    systemctl enable nginx
+
+    # Certbot 설치 (snap 기반 - Ubuntu 24.04 권장)
+    snap install core
+    snap refresh core
+    snap install --classic certbot
+    ln -sf /snap/bin/certbot /usr/bin/certbot
+
+    # Nginx 설정 배치 (HTTP only - SSL은 수동 설정)
+    cat <<'NGINX_CONF' > /etc/nginx/sites-available/api.conf
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${var.api_subdomain}.${var.domain_name};
+
+    # Certbot webroot 인증용
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    # 리버스 프록시 (SSL 설정 전)
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+NGINX_CONF
+
+    # 사이트 활성화
+    ln -sf /etc/nginx/sites-available/api.conf /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default
+
+    # Nginx 설정 테스트 및 재시작
+    nginx -t && systemctl reload nginx
+
     # Rust 설치 (ubuntu 사용자로)
     su - ubuntu -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
 
@@ -64,7 +110,12 @@ resource "aws_instance" "app" {
     mkdir -p /opt/app
     chown ubuntu:ubuntu /opt/app
 
+    echo "=============================================="
     echo "EC2 초기화 완료"
+    echo ""
+    echo "SSL 인증서 발급 (DNS 전파 후 수동 실행):"
+    echo "  sudo certbot --nginx -d ${var.api_subdomain}.${var.domain_name}"
+    echo "=============================================="
   EOF
 
   tags = {
