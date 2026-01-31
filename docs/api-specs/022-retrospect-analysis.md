@@ -82,7 +82,7 @@ Request Body 없음
   "code": "COMMON200",
   "message": "회고 분석이 성공적으로 완료되었습니다.",
   "result": {
-    "teamInsight": "이번 회고에서 팀은 목표 의식은 분명했지만, 에너지 관리 측면에서 아쉬움이 있었습니다.",
+    "insight": "이번 회고에서 팀은 목표 의식은 분명했지만, 에너지 관리 측면에서 아쉬움이 있었습니다.",
     "emotionRank": [
       {
         "rank": 1,
@@ -149,7 +149,7 @@ Request Body 없음
 
 | Field | Type | Description | 용도 |
 |-------|------|-------------|------|
-| teamInsight | string | 팀 전체를 위한 AI 분석 메시지 | 팀 레벨의 통찰력 및 개선점 제시 |
+| insight | string | 팀 전체를 위한 AI 분석 메시지 | 팀 레벨의 통찰력 및 개선점 제시 |
 | emotionRank | array[object] | 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개) | 팀원들이 느낀 주요 감정 상태 파악 |
 | emotionRank[].rank | integer | 순위 (1부터 시작, 감정 빈도 기준 내림차순) | 감정 우선순위 표시 |
 | emotionRank[].label | string | 감정 키워드 (예: "피로", "뿌듯") | 감정 카테고리 식별 |
