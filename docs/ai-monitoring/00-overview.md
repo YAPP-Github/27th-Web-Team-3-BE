@@ -51,7 +51,7 @@ MVP:        $0/월     (파일 기반 + Shell Script)
 Production: ~$30/월   (Claude API 호출 비용만)
 ```
 
-> 상세 비교: [[design/00-tool-comparison|도구 비교 문서]]
+> 상세 비교: [도구 비교 문서](design/00-tool-comparison.md)
 
 ---
 
@@ -159,10 +159,10 @@ flowchart LR
 
 | Phase | 이름 | 산출물 | 문서 |
 |-------|------|--------|------|
-| 1 | Foundation | JSON 로그, 에러 코드, Request ID | [[phases/phase-1-log-foundation]] |
-| 2 | MVP | ERROR 알림, 중복 방지, Cron | [[phases/phase-2-monitoring-mvp]] |
-| 3 | AI | AI 진단, 근본원인 분석, 권장 조치 | [[phases/phase-3-ai-diagnostic]] |
-| 4 | Production | 자동 Issue, Auto-Fix PR | [[phases/phase-4-automation]] |
+| 1 | Foundation | JSON 로그, 에러 코드, Request ID | [Phase 1](phases/phase-1-log-foundation.md) |
+| 2 | MVP | ERROR 알림, 중복 방지, Cron | [Phase 2](phases/phase-2-monitoring-mvp.md) |
+| 3 | AI | AI 진단, 근본원인 분석, 권장 조치 | [Phase 3](phases/phase-3-ai-diagnostic.md) |
+| 4 | Production | 자동 Issue, Auto-Fix PR | [Phase 4](phases/phase-4-automation.md) |
 
 ---
 
@@ -332,9 +332,9 @@ Output:
 
 ## 관련 문서
 
-- [[design/01-architecture|아키텍처 상세]]
-- [[design/03-agents|Agent 설계]]
-- [[phases/phase-1-log-foundation|Phase 1 시작하기]]
+- [아키텍처 상세](design/01-architecture.md)
+- [Agent 설계](design/03-agents.md)
+- [Phase 1 시작하기](phases/phase-1-log-foundation.md)
 
 ---
 

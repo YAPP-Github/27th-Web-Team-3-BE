@@ -190,6 +190,7 @@ Diagnostic Agent 결과
 ### Diagnostic Agent
 - **역할**: 에러 컨텍스트 분석 및 진단
 - **사용 모델**: Claude API (환경변수 `DIAGNOSTIC_MODEL`, 기본값: `claude-sonnet-4-20250514`)
+  - **기본값 선택 근거**: Sonnet은 코드 분석과 복잡한 맥락 이해에 적합. 비용 절감이 우선이면 `claude-haiku-3-5-20241022`로 변경 시 약 90% 비용 절감 가능 (정확도 다소 감소 가능)
 - **입력 데이터**:
   - 에러 로그 (최근 100줄)
   - 관련 소스 코드
