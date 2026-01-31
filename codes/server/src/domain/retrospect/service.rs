@@ -2697,7 +2697,7 @@ impl RetrospectService {
 
     /// 회고 답변 조회 및 회고방 멤버십 확인 헬퍼
     /// - 답변이 존재하지 않으면 RES4041 (404) 반환
-    /// - 회고방 멤버가 아니면 TEAM4031 (403) 반환
+    /// - 회고방 멤버가 아니면 RETRO4031 (403) 반환
     async fn find_response_for_member(
         state: &AppState,
         user_id: i64,
