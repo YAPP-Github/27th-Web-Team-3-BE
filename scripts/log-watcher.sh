@@ -164,6 +164,7 @@ while read -r line; do
             SEVERITY=$(echo "$DIAGNOSTIC" | jq -r '.severity // "critical"')
             ROOT_CAUSE=$(echo "$DIAGNOSTIC" | jq -r '.root_cause // "분석 중"')
             RECOMMENDATIONS=$(echo "$DIAGNOSTIC" | jq -r '.recommendations[0].action // "검토 필요"')
+            AUTO_FIXABLE=$(echo "$DIAGNOSTIC" | jq -r '.auto_fixable // false')
 
             echo "[$(date)] Diagnostic success, sending detailed alert"
             if "$SCRIPT_DIR/discord-alert.sh" "$SEVERITY" \
@@ -171,6 +172,26 @@ while read -r line; do
                 "**근본 원인**: $ROOT_CAUSE\n\n**권장 조치**: $RECOMMENDATIONS\n\n**위치**: $TARGET" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
+            fi
+
+            # Phase 4 자동화: critical이면 GitHub Issue 생성 및 Auto-Fix 시도
+            if [ "$SEVERITY" = "critical" ]; then
+                DIAGNOSTIC_WITH_CODE=$(echo "$DIAGNOSTIC" | jq --arg ec "$ERROR_CODE" '. + {error_code: $ec}')
+                echo "[$(date)] Creating GitHub Issue for critical error: $ERROR_CODE"
+                "$SCRIPT_DIR/create-issue.sh" "$DIAGNOSTIC_WITH_CODE" || true
+
+                # Auto-Fix 시도 (auto_fixable이 true인 경우)
+                if [ "$AUTO_FIXABLE" = "true" ]; then
+                    echo "[$(date)] Attempting Auto-Fix for: $ERROR_CODE"
+                    "$SCRIPT_DIR/auto-fix.sh" "$DIAGNOSTIC_WITH_CODE" || true
+                fi
+            fi
+
+            # Phase 4 자동화: warning이면 Issue만 생성 (Auto-Fix 없음)
+            if [ "$SEVERITY" = "warning" ]; then
+                DIAGNOSTIC_WITH_CODE=$(echo "$DIAGNOSTIC" | jq --arg ec "$ERROR_CODE" '. + {error_code: $ec}')
+                echo "[$(date)] Creating GitHub Issue for warning: $ERROR_CODE"
+                "$SCRIPT_DIR/create-issue.sh" "$DIAGNOSTIC_WITH_CODE" || true
             fi
         fi
     fi
