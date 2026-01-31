@@ -179,7 +179,6 @@ use crate::utils::{BaseResponse, ErrorResponse};
     tags(
         (name = "Health", description = "헬스 체크 API"),
         (name = "Auth", description = "인증 API"),
-        (name = "Member", description = "회원 API"),
         (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
         (name = "Response", description = "회고 답변 API")
