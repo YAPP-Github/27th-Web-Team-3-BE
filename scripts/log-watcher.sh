@@ -2,9 +2,13 @@
 # scripts/log-watcher.sh - 로그 감시 및 에러 감지
 # set -e 제거: jq 파싱 실패 시에도 계속 진행
 
-# 설정
-LOG_DIR="${LOG_DIR:-./logs}"
-STATE_DIR="${STATE_DIR:-./logs/.state}"
+# 스크립트 위치 기반 절대 경로 설정
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# 설정 (절대 경로 사용)
+LOG_DIR="${LOG_DIR:-$PROJECT_ROOT/logs}"
+STATE_DIR="${STATE_DIR:-$PROJECT_ROOT/logs/.state}"
 DEDUP_WINDOW=300  # 5분
 LOCK_TIMEOUT=10   # 락 대기 시간 (초)
 
@@ -82,8 +86,8 @@ fi
 ERROR_COUNT=0
 ALERT_COUNT=0
 
-# 새 라인 처리
-tail -n +$((LAST_LINE + 1)) "$LOG_FILE" | while read -r line; do
+# 새 라인 처리 (프로세스 치환으로 본 셸에서 실행하여 변수 유지)
+while read -r line; do
     # 빈 라인 스킵
     [ -z "$line" ] && continue
 
@@ -125,50 +129,31 @@ tail -n +$((LAST_LINE + 1)) "$LOG_FILE" | while read -r line; do
         } > "${DEDUP_FILE}.tmp"
         mv "${DEDUP_FILE}.tmp" "$DEDUP_FILE"
 
-        # 비용 제한 체크 (진단 호출 전 필수)
-        if ! python3 -c "
-import time
-from pathlib import Path
-
-RATE_LIMIT_FILE = Path('/tmp/diagnostic-rate-limit')
-MAX_CALLS_PER_HOUR = 10
-
-now = time.time()
-hour_ago = now - 3600
-
-if not RATE_LIMIT_FILE.exists():
-    RATE_LIMIT_FILE.write_text(str(now))
-    exit(0)  # 허용
-
-calls = [float(t) for t in RATE_LIMIT_FILE.read_text().split('\n') if t]
-recent_calls = [t for t in calls if t > hour_ago]
-
-if len(recent_calls) >= MAX_CALLS_PER_HOUR:
-    exit(1)  # 제한 초과
-
-recent_calls.append(now)
-RATE_LIMIT_FILE.write_text('\n'.join(str(t) for t in recent_calls))
-exit(0)  # 허용
-"; then
-            # 비용 제한 초과 - 기본 알림만 발송
-            echo "[$(date)] Rate limit exceeded, skipping diagnostic"
-            if ./scripts/discord-alert.sh "critical" \
-                "🚨 [$ERROR_CODE] Error Detected (진단 제한 초과)" \
-                "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
-                "$ERROR_CODE"; then
-                ALERT_COUNT=$((ALERT_COUNT + 1))
+        # 비용 제한 체크 (진단 에이전트 내부에서 처리 - 여기서는 파일 존재 여부로 대략적 확인만)
+        RATE_LIMIT_FILE="/tmp/diagnostic-rate-limit"
+        if [ -f "$RATE_LIMIT_FILE" ]; then
+            RECENT_CALLS=$(wc -l < "$RATE_LIMIT_FILE" 2>/dev/null || echo 0)
+            if [ "$RECENT_CALLS" -ge 10 ]; then
+                # 비용 제한 초과 가능성 - 기본 알림만 발송
+                echo "[$(date)] Rate limit likely exceeded, skipping diagnostic"
+                if "$SCRIPT_DIR/discord-alert.sh" "critical" \
+                    "🚨 [$ERROR_CODE] Error Detected (진단 제한 초과)" \
+                    "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                    "$ERROR_CODE"; then
+                    ALERT_COUNT=$((ALERT_COUNT + 1))
+                fi
+                continue
             fi
-            continue
         fi
 
-        # Diagnostic Agent 호출 (비용 제한 통과 후)
+        # Diagnostic Agent 호출 (rate limit은 에이전트 내부에서 최종 판단)
         echo "[$(date)] Running diagnostic for: $ERROR_CODE"
-        DIAGNOSTIC=$(python3 ./scripts/diagnostic-agent.py "$line" 2>/dev/null)
+        DIAGNOSTIC=$(python3 "$SCRIPT_DIR/diagnostic-agent.py" "$line" 2>/dev/null)
 
         if echo "$DIAGNOSTIC" | jq -e '.error' > /dev/null 2>&1; then
             # 진단 실패 - 기본 알림
             echo "[$(date)] Diagnostic failed, sending basic alert"
-            if ./scripts/discord-alert.sh "critical" \
+            if "$SCRIPT_DIR/discord-alert.sh" "critical" \
                 "🚨 [$ERROR_CODE] Error Detected" \
                 "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
                 "$ERROR_CODE"; then
@@ -181,7 +166,7 @@ exit(0)  # 허용
             RECOMMENDATIONS=$(echo "$DIAGNOSTIC" | jq -r '.recommendations[0].action // "검토 필요"')
 
             echo "[$(date)] Diagnostic success, sending detailed alert"
-            if ./scripts/discord-alert.sh "$SEVERITY" \
+            if "$SCRIPT_DIR/discord-alert.sh" "$SEVERITY" \
                 "🔍 [$ERROR_CODE] AI 진단 완료" \
                 "**근본 원인**: $ROOT_CAUSE\n\n**권장 조치**: $RECOMMENDATIONS\n\n**위치**: $TARGET" \
                 "$ERROR_CODE"; then
@@ -189,7 +174,7 @@ exit(0)  # 허용
             fi
         fi
     fi
-done
+done < <(tail -n +$((LAST_LINE + 1)) "$LOG_FILE")
 
 # 현재 라인 수 저장
 echo "$CURRENT_LINES" > "$STATE_FILE"
