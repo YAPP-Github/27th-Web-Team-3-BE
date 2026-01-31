@@ -29,7 +29,7 @@ use super::service::RetrospectService;
 // RetroRoom Handlers (API-004 ~ API-010)
 // ============================================
 
-/// 회고 룸 생성 API
+/// 회고 룸 생성 API (API-004)
 ///
 /// 새로운 회고 룸을 생성하고 생성자를 관리자로 설정합니다.
 #[utoipa::path(
@@ -64,7 +64,7 @@ pub async fn create_retro_room(
     )))
 }
 
-/// 회고 룸 참여 API (초대 코드)
+/// 회고 룸 참여 API (API-005)
 ///
 /// 초대 링크(코드)를 통해 회고 룸에 참여합니다.
 #[utoipa::path(
@@ -269,7 +269,7 @@ pub async fn list_retrospects(
 // Retrospect Handlers
 // ============================================
 
-/// 회고 생성 API
+/// 회고 생성 API (API-011)
 ///
 /// 진행한 프로젝트에 대한 회고 세션을 생성합니다.
 /// 프로젝트 정보, 회고 방식, 참고 자료 등을 포함하며 생성된 회고의 고유 식별자를 반환합니다.
