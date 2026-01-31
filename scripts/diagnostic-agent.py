@@ -12,16 +12,15 @@ import time
 import fcntl
 from pathlib import Path
 
-import anthropic
-from anthropic import Anthropic
+from openai import OpenAI
 
 # API 키 사전 검증
-api_key = os.environ.get("ANTHROPIC_API_KEY")
+api_key = os.environ.get("OPENAI_API_KEY")
 if not api_key:
-    print(json.dumps({"error": "ANTHROPIC_API_KEY not set"}))
+    print(json.dumps({"error": "OPENAI_API_KEY not set"}))
     sys.exit(1)
 
-client = Anthropic(api_key=api_key)
+client = OpenAI(api_key=api_key)
 
 # Rate limit 설정
 RATE_LIMIT_FILE = Path("/tmp/diagnostic-rate-limit")
@@ -94,7 +93,7 @@ def collect_git_context(target: str) -> str:
         return "(git 정보 수집 실패)"
 
 def diagnose(error_log: dict) -> dict:
-    """Claude API로 에러 진단"""
+    """OpenAI API로 에러 진단"""
     # Rate limit 체크
     if not check_rate_limit():
         return {"error": "Rate limit exceeded (max 10 calls/hour)"}
@@ -143,28 +142,22 @@ def diagnose(error_log: dict) -> dict:
 JSON만 출력하세요."""
 
     try:
-        model = os.environ.get("DIAGNOSTIC_MODEL", "claude-sonnet-4-20250514")
-        response = client.messages.create(
+        model = os.environ.get("DIAGNOSTIC_MODEL", "gpt-4o-mini")
+        response = client.chat.completions.create(
             model=model,
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}]
         )
 
-        content = response.content[0].text
+        content = response.choices[0].message.content
         json_match = re.search(r'\{[\s\S]*\}', content)
         if json_match:
             return json.loads(json_match.group())
 
         return {"error": "JSON 파싱 실패", "raw": content[:200]}
 
-    except anthropic.APIConnectionError as e:
-        return {"error": f"API connection failed: {e}"}
-    except anthropic.RateLimitError:
-        return {"error": "Anthropic rate limit exceeded"}
-    except anthropic.APIStatusError as e:
-        return {"error": f"API error: {e.status_code}"}
     except Exception as e:
-        return {"error": f"Unexpected error: {e}"}
+        return {"error": f"OpenAI API error: {e}"}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
