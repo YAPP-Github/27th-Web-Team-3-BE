@@ -256,9 +256,13 @@ impl AuthService {
             ));
         }
 
-        // 3. DB에서 해당 Refresh Token을 가진 회원 조회
-        let stored_member = Member::find()
-            .filter(member::Column::RefreshToken.eq(&req.refresh_token))
+        // 3. claims.sub(member_id)로 회원 조회 (PK 조회로 효율적)
+        let member_id: i64 = claims
+            .sub
+            .parse()
+            .map_err(|_| AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into()))?;
+
+        let stored_member = Member::find_by_id(member_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
@@ -267,20 +271,29 @@ impl AuthService {
             AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
         })?;
 
-        // 4. 만료 시간 확인
+        // 4. 저장된 토큰과 요청 토큰 일치 확인
+        let stored_token = stored_member.refresh_token.as_ref().ok_or_else(|| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        if stored_token != &req.refresh_token {
+            return Err(AppError::InvalidRefreshToken(
+                "유효하지 않거나 만료된 Refresh Token입니다.".into(),
+            ));
+        }
+
+        // 5. 만료 시간 확인
         let expires_at = stored_member.refresh_token_expires_at.ok_or_else(|| {
             AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
         })?;
 
         if expires_at < Utc::now().naive_utc() {
             // 만료된 토큰 삭제
-            Self::clear_refresh_token(&state.db, stored_member.member_id).await.ok();
+            Self::clear_refresh_token(&state.db, member_id).await.ok();
             return Err(AppError::InvalidRefreshToken(
                 "유효하지 않거나 만료된 Refresh Token입니다.".into(),
             ));
         }
-
-        let member_id = stored_member.member_id;
 
         // 5. 새 토큰 발급
         let new_access_token = encode_token(
