@@ -1,5 +1,5 @@
 use crate::domain::{
-    member::entity::{member, member_response, member_retro, member_retro_room, refresh_token},
+    member::entity::{member, member_response, member_retro, member_retro_room},
     retrospect::entity::{
         response, response_comment, response_like, retro_reference, retro_room, retrospect,
     },
@@ -48,7 +48,6 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
 
     // 2. Dependent Entities (Level 1)
     create_table_if_not_exists(db, &schema, retrospect::Entity).await?;
-    create_table_if_not_exists(db, &schema, refresh_token::Entity).await?;
 
     // 3. Dependent Entities (Level 2)
     create_table_if_not_exists(db, &schema, response::Entity).await?;

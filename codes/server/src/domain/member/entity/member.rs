@@ -23,6 +23,8 @@ pub struct Model {
     pub nickname: Option<String>,
     pub insight_count: i32,
     pub social_type: SocialType,
+    pub refresh_token: Option<String>,
+    pub refresh_token_expires_at: Option<DateTime>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

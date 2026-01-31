@@ -7,7 +7,6 @@ use super::dto::{
     SocialLoginRequest, SocialLoginResponse, TokenRefreshRequest, TokenRefreshResponse,
 };
 use crate::domain::member::entity::member::{self, Entity as Member, SocialType};
-use crate::domain::member::entity::refresh_token::{self, Entity as RefreshToken};
 use crate::state::AppState;
 use crate::utils::error::AppError;
 use crate::utils::jwt::{decode_token, encode_refresh_token, encode_signup_token, encode_token};
@@ -257,38 +256,33 @@ impl AuthService {
             ));
         }
 
-        // 3. DB에서 해당 Refresh Token 존재 확인
-        let stored_token = RefreshToken::find()
-            .filter(refresh_token::Column::Token.eq(&req.refresh_token))
+        // 3. DB에서 해당 Refresh Token을 가진 회원 조회
+        let stored_member = Member::find()
+            .filter(member::Column::RefreshToken.eq(&req.refresh_token))
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let stored_token = stored_token.ok_or_else(|| {
+        let stored_member = stored_member.ok_or_else(|| {
             AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
         })?;
 
         // 4. 만료 시간 확인
-        if stored_token.expires_at < Utc::now().naive_utc() {
+        let expires_at = stored_member.refresh_token_expires_at.ok_or_else(|| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        if expires_at < Utc::now().naive_utc() {
             // 만료된 토큰 삭제
-            RefreshToken::delete_by_id(stored_token.refresh_token_id)
-                .exec(&state.db)
-                .await
-                .ok();
+            Self::clear_refresh_token(&state.db, stored_member.member_id).await.ok();
             return Err(AppError::InvalidRefreshToken(
                 "유효하지 않거나 만료된 Refresh Token입니다.".into(),
             ));
         }
 
-        let member_id = stored_token.member_id;
+        let member_id = stored_member.member_id;
 
-        // 5. 기존 Refresh Token 삭제 (Rotation)
-        RefreshToken::delete_by_id(stored_token.refresh_token_id)
-            .exec(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(format!("Refresh Token 삭제 실패: {}", e)))?;
-
-        // 6. 새 토큰 발급
+        // 5. 새 토큰 발급
         let new_access_token = encode_token(
             member_id.to_string(),
             &state.config.jwt_secret,
@@ -301,7 +295,7 @@ impl AuthService {
             state.config.refresh_token_expiration,
         )?;
 
-        // 7. 새 Refresh Token DB 저장
+        // 6. 새 Refresh Token DB 저장 (기존 토큰 자동 덮어쓰기)
         Self::store_refresh_token(
             &state.db,
             member_id,
@@ -338,22 +332,31 @@ impl AuthService {
             ));
         }
 
-        // 4. DB에서 해당 Refresh Token 삭제
-        let delete_result = RefreshToken::delete_many()
-            .filter(refresh_token::Column::Token.eq(&req.refresh_token))
-            .exec(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(format!("Refresh Token 삭제 실패: {}", e)))?;
-
-        // 토큰이 DB에 없어도 이미 로그아웃된 것으로 간주하고 성공 반환
-        if delete_result.rows_affected == 0 {
-            tracing::info!("Refresh token not found in DB, possibly already logged out");
-        }
+        // 4. DB에서 해당 회원의 Refresh Token 삭제
+        Self::clear_refresh_token(&state.db, user_id).await?;
 
         Ok(())
     }
 
-    /// Refresh Token을 DB에 저장
+    /// 회원의 Refresh Token 삭제 (로그아웃/만료 시)
+    async fn clear_refresh_token(db: &DatabaseConnection, member_id: i64) -> Result<(), AppError> {
+        let update_model = member::ActiveModel {
+            member_id: Set(member_id),
+            refresh_token: Set(None),
+            refresh_token_expires_at: Set(None),
+            updated_at: Set(Utc::now().naive_utc()),
+            ..Default::default()
+        };
+
+        update_model
+            .update(db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("Refresh Token 삭제 실패: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Refresh Token을 member 테이블에 저장 (기존 토큰 덮어쓰기)
     async fn store_refresh_token(
         db: &DatabaseConnection,
         member_id: i64,
@@ -365,16 +368,16 @@ impl AuthService {
             .ok_or_else(|| AppError::InternalError("유효하지 않은 토큰 만료 시간입니다.".into()))?
             .naive_utc();
 
-        let active_model = refresh_token::ActiveModel {
+        let update_model = member::ActiveModel {
             member_id: Set(member_id),
-            token: Set(token.to_string()),
-            expires_at: Set(expires_at),
-            created_at: Set(Utc::now().naive_utc()),
+            refresh_token: Set(Some(token.to_string())),
+            refresh_token_expires_at: Set(Some(expires_at)),
+            updated_at: Set(Utc::now().naive_utc()),
             ..Default::default()
         };
 
-        active_model
-            .insert(db)
+        update_model
+            .update(db)
             .await
             .map_err(|e| AppError::InternalError(format!("Refresh Token 저장 실패: {}", e)))?;
 
