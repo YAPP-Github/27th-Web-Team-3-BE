@@ -3064,7 +3064,7 @@ impl RetrospectService {
 
         if pre_check_count >= 10 {
             return Err(AppError::AiAssistantLimitExceeded(
-                "이번 달 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
+                "이번 달 회고 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
             ));
         }
 
@@ -3118,7 +3118,7 @@ impl RetrospectService {
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
             return Err(AppError::AiAssistantLimitExceeded(
-                "이번 달 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
+                "이번 달 회고 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
             ));
         }
 
