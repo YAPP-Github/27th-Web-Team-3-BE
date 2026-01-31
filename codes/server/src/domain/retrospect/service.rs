@@ -641,7 +641,6 @@ impl RetrospectService {
             updated_at: Set(now),
             start_time: Set(start_time),
             retrospect_room_id: Set(req.retro_room_id),
-            retro_room_id: Set(req.retro_room_id),
             ..Default::default()
         };
 

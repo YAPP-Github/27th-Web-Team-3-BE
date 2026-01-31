@@ -95,7 +95,6 @@ pub struct Model {
     pub updated_at: DateTime,
     pub start_time: DateTime,
     pub retrospect_room_id: i64,
-    pub retro_room_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
