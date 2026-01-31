@@ -14,7 +14,7 @@ crontab -l 2>/dev/null | grep -v "log-watcher.sh" > /tmp/crontab.tmp || true
 # - .env 파일을 source하여 환경변수 로드
 # - PATH 설정으로 jq, curl 등 명령어 사용 가능하게 함
 # - 로그는 프로젝트 logs/ 디렉토리에 저장 (권한 문제 방지)
-echo "*/5 * * * * cd $PROJECT_DIR && export PATH=/usr/local/bin:/usr/bin:\$PATH && [ -f .env ] && export \$(grep -v '^#' .env | xargs) && ./scripts/log-watcher.sh >> $LOG_DIR/ai-monitor.log 2>&1" >> /tmp/crontab.tmp
+echo "*/5 * * * * cd $PROJECT_DIR && export PATH=/usr/local/bin:/usr/bin:\$PATH && [ -f .env ] && set -a && . ./.env && set +a && ./scripts/log-watcher.sh >> $LOG_DIR/ai-monitor.log 2>&1" >> /tmp/crontab.tmp
 
 # crontab 적용
 crontab /tmp/crontab.tmp
