@@ -19,19 +19,19 @@
 | API-001 | POST | `/api/v1/auth/social-login` | 소셜 로그인 (구글/카카오) | [001-auth-social-login.md](./001-auth-social-login.md) |
 | API-002 | POST | `/api/v1/auth/signup` | 회원가입 (닉네임 등록) | [002-auth-signup.md](./002-auth-signup.md) |
 | API-003 | POST | `/api/v1/auth/token/refresh` | 토큰 리프레시 | [003-auth-token-refresh.md](./003-auth-token-refresh.md) |
-| API-004 | POST | `/api/v1/auth/logout` | 로그아웃 | [004-auth-logout.md](./004-auth-logout.md) |
+| API-029 | POST | `/api/v1/auth/logout` | 로그아웃 | [029-auth-logout.md](./029-auth-logout.md) |
 
-### 팀 (Team) - 005~011
+### 회고방 (Retro Room) - 005~011
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-005 | POST | `/api/v1/teams` | 팀 생성 | [004-team-create.md](./004-team-create.md) |
-| API-006 | POST | `/api/v1/teams/join` | 팀 합류 (초대 링크) | [005-team-join.md](./005-team-join.md) |
-| API-007 | GET | `/api/v1/teams` | 참여 팀 목록 조회 | [006-team-list.md](./006-team-list.md) |
-| API-008 | PATCH | `/api/v1/teams/order` | 팀 순서 변경 | [007-team-order-update.md](./007-team-order-update.md) |
-| API-009 | PATCH | `/api/v1/teams/{teamId}/name` | 팀 이름 변경 | [008-team-name-update.md](./008-team-name-update.md) |
-| API-010 | DELETE | `/api/v1/teams/{teamId}` | 팀 삭제 | [009-team-delete.md](./009-team-delete.md) |
-| API-011 | GET | `/api/v1/teams/{teamId}/retrospects` | 팀 내 회고 목록 조회 | [010-team-retrospects-list.md](./010-team-retrospects-list.md) |
+| API-005 | POST | `/api/v1/retro-rooms` | 회고방 생성 | [004-retro-room-create.md](./004-retro-room-create.md) |
+| API-006 | POST | `/api/v1/retro-rooms/join` | 회고방 합류 (초대 링크) | [005-retro-room-join.md](./005-retro-room-join.md) |
+| API-007 | GET | `/api/v1/retro-rooms` | 참여 회고방 목록 조회 | [006-retro-room-list.md](./006-retro-room-list.md) |
+| API-008 | PATCH | `/api/v1/retro-rooms/order` | 회고방 순서 변경 | [007-retro-room-order-update.md](./007-retro-room-order-update.md) |
+| API-009 | PATCH | `/api/v1/retro-rooms/{retroRoomId}/name` | 회고방 이름 변경 | [008-retro-room-name-update.md](./008-retro-room-name-update.md) |
+| API-010 | DELETE | `/api/v1/retro-rooms/{retroRoomId}` | 회고방 삭제 | [009-retro-room-delete.md](./009-retro-room-delete.md) |
+| API-011 | GET | `/api/v1/retro-rooms/{retroRoomId}/retrospects` | 회고방 내 회고 목록 조회 | [010-retro-room-retrospects-list.md](./010-retro-room-retrospects-list.md) |
 
 ### 회고 (Retrospect) - 012~024
 
@@ -104,8 +104,7 @@
 | 접두사 | 도메인 | 예시 |
 |--------|--------|------|
 | AUTH | 인증 | AUTH4001, AUTH4002, AUTH4003 |
-| TEAM | 팀 | TEAM4001, TEAM4031, TEAM4041, TEAM4091 |
-| RETRO | 회고 | RETRO4001, RETRO4031, RETRO4041, RETRO4043 |
+| RETRO | 회고/회고방 | RETRO4001, RETRO4031, RETRO4041, RETRO4043, RETRO4091 |
 | DRAFT | 임시저장 | DRAFT4001, DRAFT4002 |
 | RES | 응답/댓글 | RES4001, RES4041 |
 | MEMBER | 회원 | MEMBER4001, MEMBER4041, MEMBER4042 |

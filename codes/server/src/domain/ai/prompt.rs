@@ -12,7 +12,7 @@ impl AnalysisPrompt {
     /// 회고 분석 시스템 프롬프트 생성
     pub fn system_prompt() -> String {
         r#"당신은 팀 회고 데이터를 종합 분석하는 따뜻한 AI 분석가입니다.
-팀원들이 작성한 회고 답변을 분석하여 팀 인사이트, 감정 통계, 개인별 맞춤 미션을 생성합니다.
+팀원들이 작성한 회고 답변을 분석하여 인사이트, 감정 통계, 개인별 맞춤 미션을 생성합니다.
 
 ## 말투 규칙 (매우 중요)
 
@@ -24,7 +24,7 @@ impl AnalysisPrompt {
 
 ## 분석 방법
 
-### 1. 팀 인사이트 (teamInsight)
+### 1. 인사이트 (insight)
 - 팀 전체의 강점과 개선점을 1문장으로 요약해요.
 - 따뜻하고 공감하는 어투로, "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요" 형태를 참고하세요.
 - 예시: "이번 회고에서 팀은 목표 의식은 분명했지만, 에너지 관리 측면에서 공통적인 아쉬움이 드러났어요."
@@ -52,7 +52,7 @@ impl AnalysisPrompt {
 
 ```json
 {
-  "teamInsight": "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요.",
+  "insight": "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요.",
   "emotionRank": [
     {
       "rank": 1,
@@ -282,7 +282,7 @@ mod tests {
 
         // Assert
         assert!(prompt.contains("종합 분석"));
-        assert!(prompt.contains("teamInsight"));
+        assert!(prompt.contains("insight"));
         assert!(prompt.contains("emotionRank"));
         assert!(prompt.contains("personalMissions"));
         assert!(prompt.contains("정확히 3개"));

@@ -74,3 +74,22 @@ output "database_connection_string" {
   value       = "mysql://${var.db_username}:<password>@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${aws_db_instance.main.db_name}"
   sensitive   = true
 }
+
+# =============================================================================
+# Route53 & Domain Outputs
+# =============================================================================
+
+output "api_domain" {
+  description = "API 도메인 (HTTPS)"
+  value       = "https://${var.api_subdomain}.${var.domain_name}"
+}
+
+output "api_domain_name" {
+  description = "API 도메인 이름"
+  value       = "${var.api_subdomain}.${var.domain_name}"
+}
+
+output "ssl_setup_command" {
+  description = "SSL 인증서 발급 명령어 (DNS 전파 후 실행)"
+  value       = "sudo certbot --nginx -d ${var.api_subdomain}.${var.domain_name}"
+}
