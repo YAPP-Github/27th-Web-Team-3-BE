@@ -2,6 +2,7 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use tracing::Instrument;
 use uuid::Uuid;
 
+// TODO: Phase 2에서 handler에서 RequestId 추출 시 사용 예정
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct RequestId(pub String);

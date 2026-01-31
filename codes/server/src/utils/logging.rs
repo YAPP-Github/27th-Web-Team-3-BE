@@ -22,5 +22,6 @@ pub fn init_logging() {
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt_layer)
-        .init();
+        .try_init()
+        .ok(); // Silently ignore if already initialized
 }
