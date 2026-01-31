@@ -54,7 +54,10 @@ impl AiService {
         let json_str = Self::extract_json(&raw_response);
         let analysis: AnalysisResponse = serde_json::from_str(json_str).map_err(|e| {
             warn!("AI 응답 JSON 파싱 실패: {}", e);
-            warn!("AI 원본 응답: {}", raw_response);
+            warn!(
+                "AI 원본 응답 길이: {} (내용은 개인정보 보호를 위해 생략)",
+                raw_response.len()
+            );
             AppError::AiAnalysisFailed(format!("AI 응답을 파싱할 수 없습니다: {}", e))
         })?;
 
@@ -111,7 +114,10 @@ impl AiService {
         let json_str = Self::extract_json(&raw_response);
         let guide_response: AssistantGuideRaw = serde_json::from_str(json_str).map_err(|e| {
             warn!("AI 응답 JSON 파싱 실패: {}", e);
-            warn!("AI 원본 응답: {}", raw_response);
+            warn!(
+                "AI 원본 응답 길이: {} (내용은 개인정보 보호를 위해 생략)",
+                raw_response.len()
+            );
             AppError::AiAnalysisFailed(format!("AI 응답을 파싱할 수 없습니다: {}", e))
         })?;
 
