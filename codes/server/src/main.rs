@@ -5,10 +5,11 @@ mod domain;
 mod state;
 mod utils;
 
+use axum::http::{header, HeaderValue, Method};
 use axum::{routing::get, Router};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa::OpenApi;
@@ -21,6 +22,7 @@ use crate::domain::auth::dto::{
     SuccessSignupResponse, SuccessSocialLoginResponse, SuccessTokenRefreshResponse,
     TokenRefreshRequest, TokenRefreshResponse,
 };
+use crate::domain::member::dto::SuccessWithdrawResponse;
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     AnalysisResponse, CommentItem, CreateCommentRequest, CreateCommentResponse,
@@ -81,7 +83,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::delete_retrospect,
         domain::retrospect::handler::list_comments,
         domain::retrospect::handler::create_comment,
-        domain::retrospect::handler::toggle_like
+        domain::retrospect::handler::toggle_like,
+        // Member APIs
+        domain::member::handler::withdraw
     ),
     components(
         schemas(
@@ -168,7 +172,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
             SuccessListCommentsResponse,
             CreateCommentRequest,
             CreateCommentResponse,
-            SuccessCreateCommentResponse
+            SuccessCreateCommentResponse,
+            // Member DTOs
+            SuccessWithdrawResponse
         )
     ),
     tags(
@@ -217,6 +223,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfig::from_env()?;
     let port = config.server_port;
 
+    // PDF 폰트 설정 검증
+    validate_pdf_fonts();
+
     // DB 연결 및 테이블 생성 (Auto-Schema)
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = crate::config::establish_connection(&database_url).await?;
@@ -232,10 +241,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // CORS 설정
+    let allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://www.moalog.me",
+        "https://moalog.me",
+        "https://moaofficial.kr",
+    ];
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(
+            allowed_origins
+                .iter()
+                .filter_map(|origin| origin.parse::<HeaderValue>().ok())
+                .collect::<Vec<_>>(),
+        )
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            header::ORIGIN,
+        ])
+        .allow_credentials(true);
 
     // 라우터 구성
     let app = Router::new()
@@ -356,6 +392,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/v1/responses/:response_id/likes",
             axum::routing::post(domain::retrospect::handler::toggle_like),
         )
+        // [API-028] 서비스 탈퇴
+        .route(
+            "/api/v1/members/me",
+            axum::routing::delete(domain::member::handler::withdraw),
+        )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -390,6 +431,38 @@ async fn health_check() -> axum::Json<BaseResponse<HealthResponse>> {
 struct HealthResponse {
     /// 서버 상태
     status: String,
+}
+
+/// PDF 폰트 파일 존재 여부 검증
+fn validate_pdf_fonts() {
+    let font_dir = std::env::var("PDF_FONT_DIR").unwrap_or_else(|_| "./fonts".to_string());
+    let font_family =
+        std::env::var("PDF_FONT_FAMILY").unwrap_or_else(|_| "NanumGothic".to_string());
+
+    let font_path = std::path::Path::new(&font_dir);
+    let regular_font = font_path.join(format!("{}-Regular.ttf", font_family));
+
+    if !font_path.exists() {
+        warn!(
+            "PDF 폰트 디렉토리가 존재하지 않습니다: {}. PDF 내보내기 기능이 작동하지 않을 수 있습니다.",
+            font_dir
+        );
+        return;
+    }
+
+    if !regular_font.exists() {
+        warn!(
+            "PDF 폰트 파일이 존재하지 않습니다: {}. PDF 내보내기 기능이 작동하지 않을 수 있습니다.",
+            regular_font.display()
+        );
+        return;
+    }
+
+    info!(
+        "PDF 폰트 검증 완료: {} ({})",
+        font_family,
+        regular_font.display()
+    );
 }
 
 #[derive(serde::Serialize, utoipa::ToSchema)]

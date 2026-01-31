@@ -20,7 +20,7 @@ use std::time::Duration;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AnalysisResponse {
-    team_insight: String,
+    insight: String,
     emotion_rank: Vec<EmotionRankItem>,
     personal_missions: Vec<PersonalMissionItem>,
 }
@@ -65,7 +65,7 @@ fn system_prompt() -> String {
 
 ## 분석 방법
 
-### 1. 팀 인사이트 (teamInsight)
+### 1. 인사이트 (insight)
 - 팀 전체의 강점과 개선점을 1문장으로 요약해요.
 - 따뜻하고 공감하는 어투로, "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요" 형태를 참고하세요.
 - 예시: "이번 회고에서 팀은 목표 의식은 분명했지만, 에너지 관리 측면에서 공통적인 아쉬움이 드러났어요."
@@ -93,7 +93,7 @@ fn system_prompt() -> String {
 
 ```json
 {
-  "teamInsight": "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요.",
+  "insight": "이번 회고에서 팀은 ~했지만, ~아쉬움이 드러났어요.",
   "emotionRank": [
     {
       "rank": 1,
@@ -387,7 +387,7 @@ async fn live_analysis_api_call() {
                     println!("\n{}", "=".repeat(80));
                     println!("===== [VALIDATION] 응답 검증 =====");
                     println!("{}", "=".repeat(80));
-                    println!("✅ teamInsight: \"{}\"", analysis.team_insight);
+                    println!("✅ insight: \"{}\"", analysis.insight);
                     println!(
                         "✅ emotionRank 개수: {} (기대: 3)",
                         analysis.emotion_rank.len()

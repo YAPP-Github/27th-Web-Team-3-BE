@@ -8,7 +8,7 @@ use sea_orm::{
     sea_query::OnConflict, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, InsertResult,
     ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::domain::member::entity::member;
 use crate::domain::member::entity::member_response;
@@ -56,7 +56,7 @@ impl RetrospectService {
         member_id: i64,
         req: RetroRoomCreateRequest,
     ) -> Result<RetroRoomCreateResponse, AppError> {
-        // 1. 회고 룸 이름 중복 체크
+        // 1. 회고방 이름 중복 체크
         let existing_room = RetroRoom::find()
             .filter(retro_room::Column::Title.eq(&req.title))
             .one(&state.db)
@@ -119,7 +119,7 @@ impl RetrospectService {
 
                     // member_retro_room 생성 (Owner 권한 부여)
                     let member_retro_room_active = member_retro_room::ActiveModel {
-                        member_id: Set(member_id),
+                        member_id: Set(Some(member_id)),
                         retrospect_room_id: Set(result.retrospect_room_id),
                         role: Set(RoomRole::Owner),
                         ..Default::default()
@@ -131,7 +131,7 @@ impl RetrospectService {
                 })
             })
             .await
-            .map_err(|e| AppError::InternalError(format!("회고 룸 생성 실패: {}", e)))?;
+            .map_err(|e| AppError::InternalError(format!("회고방 생성 실패: {}", e)))?;
 
         Ok(RetroRoomCreateResponse {
             retro_room_id: result.retrospect_room_id,
@@ -177,13 +177,13 @@ impl RetrospectService {
 
         if existing_member.is_some() {
             return Err(AppError::AlreadyMember(
-                "이미 해당 회고 룸의 멤버입니다.".into(),
+                "이미 해당 회고방의 멤버입니다.".into(),
             ));
         }
 
         // 5. 멤버 추가 (DB unique constraint로 race condition 방지)
         let member_retro_room_active = member_retro_room::ActiveModel {
-            member_id: Set(member_id),
+            member_id: Set(Some(member_id)),
             retrospect_room_id: Set(room.retrospect_room_id),
             role: Set(RoomRole::Member),
             ..Default::default()
@@ -199,7 +199,7 @@ impl RetrospectService {
                     || err_str.contains("unique")
                     || err_str.contains("constraint")
                 {
-                    AppError::AlreadyMember("이미 해당 회고 룸의 멤버입니다.".into())
+                    AppError::AlreadyMember("이미 해당 회고방의 멤버입니다.".into())
                 } else {
                     AppError::InternalError(format!("멤버 추가 실패: {}", e))
                 }
@@ -212,7 +212,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-006: 사용자가 참여 중인 레트로룸 목록 조회
+    /// API-006: 사용자가 참여 중인 회고방 목록 조회
     pub async fn list_retro_rooms(
         state: AppState,
         member_id: i64,
@@ -240,7 +240,7 @@ impl RetrospectService {
         Ok(result)
     }
 
-    /// API-007: 레트로룸 순서 변경
+    /// API-007: 회고방 순서 변경
     pub async fn update_retro_room_order(
         state: AppState,
         member_id: i64,
@@ -338,7 +338,7 @@ impl RetrospectService {
         Ok(())
     }
 
-    /// API-008: 레트로룸 이름 변경
+    /// API-008: 회고방 이름 변경
     pub async fn update_retro_room_name(
         state: AppState,
         member_id: i64,
@@ -409,7 +409,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-009: 레트로룸 삭제
+    /// API-009: 회고방 삭제
     pub async fn delete_retro_room(
         state: AppState,
         member_id: i64,
@@ -456,7 +456,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-010: 레트로룸 내 회고 목록 조회
+    /// API-010: 회고방 내 회고 목록 조회
     pub async fn list_retrospects(
         state: AppState,
         member_id: i64,
@@ -635,13 +635,12 @@ impl RetrospectService {
 
         let retrospect_model = retrospect::ActiveModel {
             title: Set(req.project_name.clone()),
-            team_insight: Set(None),
+            insight: Set(None),
             retrospect_method: Set(req.retrospect_method.clone()),
             created_at: Set(now),
             updated_at: Set(now),
             start_time: Set(start_time),
             retrospect_room_id: Set(req.retro_room_id),
-            team_id: Set(req.retro_room_id),
             ..Default::default()
         };
 
@@ -865,15 +864,22 @@ impl RetrospectService {
             .unwrap_or(&member_model.email)
             .to_string();
 
-        // 5. member_retro 테이블에 새 레코드 삽입
+        // 5. 트랜잭션 시작 (member_retro, response, member_response 원자적 생성)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 5-1. member_retro 테이블에 새 레코드 삽입
         let member_retro_model = member_retro::ActiveModel {
-            member_id: Set(user_id),
+            member_id: Set(Some(user_id)),
             retrospect_id: Set(retrospect_id),
             personal_insight: Set(None),
             ..Default::default()
         };
 
-        let inserted = member_retro_model.insert(&state.db).await.map_err(|e| {
+        let inserted = member_retro_model.insert(&txn).await.map_err(|e| {
             // DB 유니크 제약 위반 시 409 Conflict로 매핑
             let error_msg = e.to_string().to_lowercase();
             if error_msg.contains("duplicate")
@@ -885,6 +891,51 @@ impl RetrospectService {
                 AppError::InternalError(e.to_string())
             }
         })?;
+
+        // 5-2. 회고 방식에 따른 5개의 질문에 대한 response 레코드 생성
+        let questions = retrospect_model.retrospect_method.default_questions();
+        let now = Utc::now().naive_utc();
+
+        for question in questions {
+            // response 레코드 생성 (빈 content로 초기화)
+            let response_model = response::ActiveModel {
+                question: Set(question.to_string()),
+                content: Set(String::new()),
+                created_at: Set(now),
+                updated_at: Set(now),
+                retrospect_id: Set(retrospect_id),
+                ..Default::default()
+            };
+
+            let inserted_response = response_model
+                .insert(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // member_response 레코드 생성 (member와 response 연결)
+            let member_response_model = member_response::ActiveModel {
+                member_id: Set(Some(user_id)),
+                response_id: Set(inserted_response.response_id),
+                ..Default::default()
+            };
+
+            member_response_model
+                .insert(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+
+        // 5-3. 트랜잭션 커밋
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            participant_id = inserted.member_retro_id,
+            "회고 참석자 등록 완료 (response 5개, member_response 5개 생성)"
+        );
 
         // 6. CreateParticipantResponse 반환
         Ok(CreateParticipantResponse {
@@ -1317,7 +1368,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let member_ids: Vec<i64> = member_retros.iter().map(|mr| mr.member_id).collect();
+        let member_ids: Vec<i64> = member_retros.iter().filter_map(|mr| mr.member_id).collect();
 
         let members = if member_ids.is_empty() {
             vec![]
@@ -1345,16 +1396,17 @@ impl RetrospectService {
         let member_items: Vec<RetrospectMemberItem> = member_retros
             .iter()
             .filter_map(|mr| {
-                let name = member_map.get(&mr.member_id);
+                let member_id = mr.member_id?;
+                let name = member_map.get(&member_id);
                 if name.is_none() {
                     warn!(
-                        member_id = mr.member_id,
+                        member_id = member_id,
                         retrospect_id = retrospect_id,
                         "member_retro에 등록되어 있으나 member 테이블에 존재하지 않는 멤버"
                     );
                 }
                 name.map(|n| RetrospectMemberItem {
-                    member_id: mr.member_id,
+                    member_id,
                     user_name: n.clone(),
                 })
             })
@@ -1548,7 +1600,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let member_ids: Vec<i64> = member_retros.iter().map(|mr| mr.member_id).collect();
+        let member_ids: Vec<i64> = member_retros.iter().filter_map(|mr| mr.member_id).collect();
 
         let members = if member_ids.is_empty() {
             vec![]
@@ -1584,7 +1636,7 @@ impl RetrospectService {
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?
                 .into_iter()
-                .map(|mr| (mr.response_id, mr.member_id))
+                .filter_map(|mr| mr.member_id.map(|id| (mr.response_id, id)))
                 .collect()
         };
 
@@ -1782,16 +1834,32 @@ impl RetrospectService {
         let font_family_name =
             std::env::var("PDF_FONT_FAMILY").unwrap_or_else(|_| "NanumGothic".to_string());
 
+        info!(
+            "PDF 생성 시작 - 회고 ID: {}, 폰트 디렉토리: {}, 폰트 패밀리: {}",
+            retrospect_model.retrospect_id, font_dir, font_family_name
+        );
+
         let font_family = match genpdf::fonts::from_files(&font_dir, &font_family_name, None) {
-            Ok(family) => family,
+            Ok(family) => {
+                info!("폰트 패밀리 로딩 성공: {}", font_family_name);
+                family
+            }
             Err(full_err) => {
                 warn!(
-                    "전체 폰트 패밀리 로딩 실패 ({}), Regular 폰트로 대체합니다.",
-                    full_err
+                    "전체 폰트 패밀리 로딩 실패 ({}), Regular 폰트로 대체합니다. 폰트 디렉토리: {}",
+                    full_err, font_dir
                 );
                 let regular_path = std::path::Path::new(&font_dir)
                     .join(format!("{}-Regular.ttf", font_family_name));
+
+                info!("Regular 폰트 경로 시도: {}", regular_path.display());
+
                 let font_bytes = std::fs::read(&regular_path).map_err(|e| {
+                    error!(
+                        "Regular 폰트 파일 읽기 실패 - 경로: {}, 에러: {}",
+                        regular_path.display(),
+                        e
+                    );
                     AppError::PdfGenerationFailed(format!(
                         "Regular 폰트 파일 읽기 실패 ({}) : {}",
                         regular_path.display(),
@@ -1858,10 +1926,16 @@ impl RetrospectService {
         doc.push(Paragraph::new(format!("Date: {} {}", date_str, time_str)));
         doc.push(Paragraph::new(format!("Method: {}", method_str)));
 
-        // 참여 멤버 목록
+        // 참여 멤버 목록 (탈퇴한 멤버도 포함)
         let participant_names: Vec<String> = member_retros
             .iter()
-            .filter_map(|mr| member_map.get(&mr.member_id).cloned())
+            .map(|mr| match mr.member_id {
+                Some(id) => member_map
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("Member #{}", id)),
+                None => "탈퇴한 멤버".to_string(),
+            })
             .collect();
         doc.push(Paragraph::new(format!(
             "Participants ({}):",
@@ -1873,7 +1947,7 @@ impl RetrospectService {
         doc.push(Break::new(0.5));
 
         // ===== 회고방 인사이트 섹션 =====
-        if let Some(ref insight) = retrospect_model.team_insight {
+        if let Some(ref insight) = retrospect_model.insight {
             doc.push(
                 Paragraph::new("Retro Room Insight")
                     .styled(style::Style::new().bold().with_font_size(14)),
@@ -1946,10 +2020,13 @@ impl RetrospectService {
             doc.push(Break::new(0.3));
 
             for mr in &members_with_insight {
-                let name = member_map
-                    .get(&mr.member_id)
-                    .cloned()
-                    .unwrap_or_else(|| format!("Member #{}", mr.member_id));
+                let name = match mr.member_id {
+                    Some(id) => member_map
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or_else(|| format!("Member #{}", id)),
+                    None => "탈퇴한 멤버".to_string(),
+                };
                 doc.push(Paragraph::new(format!("[{}]", name)).styled(style::Style::new().bold()));
                 if let Some(ref insight) = mr.personal_insight {
                     doc.push(Paragraph::new(format!("  {}", insight)));
@@ -1960,8 +2037,19 @@ impl RetrospectService {
 
         // PDF 렌더링
         let mut buf = Vec::new();
-        doc.render(&mut buf)
-            .map_err(|e| AppError::PdfGenerationFailed(format!("PDF 렌더링 실패: {}", e)))?;
+        doc.render(&mut buf).map_err(|e| {
+            error!(
+                "PDF 렌더링 실패 - 회고 ID: {}, 에러: {}",
+                retrospect_model.retrospect_id, e
+            );
+            AppError::PdfGenerationFailed(format!("PDF 렌더링 실패: {}", e))
+        })?;
+
+        info!(
+            "PDF 생성 완료 - 회고 ID: {}, 크기: {} bytes",
+            retrospect_model.retrospect_id,
+            buf.len()
+        );
 
         Ok(buf)
     }
@@ -2082,7 +2170,7 @@ impl RetrospectService {
             })?;
 
         // 2-1. 이미 분석 완료 여부 확인 (재분석 방지)
-        if retrospect_model.team_insight.is_some() {
+        if retrospect_model.insight.is_some() {
             return Err(AppError::RetroAlreadyAnalyzed(
                 "이미 분석이 완료된 회고입니다.".to_string(),
             ));
@@ -2116,10 +2204,10 @@ impl RetrospectService {
                 .ok_or_else(|| AppError::InternalError("시간 계산 오류".to_string()))?
                 - kst_offset; // UTC로 변환
 
-        // 현재 월에 team_insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
+        // 현재 월에 insight가 NOT NULL인 회고 수 카운트 (분석 시점 = updated_at 기준)
         let monthly_analysis_count = retrospect::Entity::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
-            .filter(retrospect::Column::TeamInsight.is_not_null())
+            .filter(retrospect::Column::Insight.is_not_null())
             .filter(retrospect::Column::UpdatedAt.gte(current_month_start))
             .count(&state.db)
             .await
@@ -2169,7 +2257,10 @@ impl RetrospectService {
         }
 
         // 6. 참여자 목록 조회 (member_retro + member 조인)
-        let member_ids: Vec<i64> = submitted_members.iter().map(|mr| mr.member_id).collect();
+        let member_ids: Vec<i64> = submitted_members
+            .iter()
+            .filter_map(|mr| mr.member_id)
+            .collect();
 
         let members = if member_ids.is_empty() {
             vec![]
@@ -2203,7 +2294,7 @@ impl RetrospectService {
                 member_response::Column::MemberId.is_in(
                     submitted_members
                         .iter()
-                        .map(|mr| mr.member_id)
+                        .filter_map(|mr| mr.member_id)
                         .collect::<Vec<_>>(),
                 ),
             )
@@ -2218,21 +2309,26 @@ impl RetrospectService {
         // member_id -> Vec<response_id> 매핑
         let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
         for mr in &all_member_responses {
-            member_response_map
-                .entry(mr.member_id)
-                .or_default()
-                .push(mr.response_id);
+            if let Some(member_id) = mr.member_id {
+                member_response_map
+                    .entry(member_id)
+                    .or_default()
+                    .push(mr.response_id);
+            }
         }
 
         let mut members_data: Vec<MemberAnswerData> = Vec::new();
         for mr in &submitted_members {
+            let Some(member_id) = mr.member_id else {
+                continue;
+            };
             let username = member_map
-                .get(&mr.member_id)
+                .get(&member_id)
                 .cloned()
-                .unwrap_or_else(|| format!("사용자{}", mr.member_id));
+                .unwrap_or_else(|| format!("사용자{}", member_id));
 
             let response_ids = member_response_map
-                .get(&mr.member_id)
+                .get(&member_id)
                 .cloned()
                 .unwrap_or_default();
 
@@ -2246,7 +2342,7 @@ impl RetrospectService {
             }
 
             members_data.push(MemberAnswerData {
-                user_id: mr.member_id,
+                user_id: member_id,
                 user_name: username,
                 answers,
             });
@@ -2258,6 +2354,13 @@ impl RetrospectService {
             members_data.len()
         );
 
+        // 탈퇴한 멤버로 인해 분석 대상이 없는 경우 에러 반환
+        if members_data.is_empty() {
+            return Err(AppError::RetroInsufficientData(
+                "분석할 멤버 데이터가 없습니다. 모든 참여자가 탈퇴했을 수 있습니다.".to_string(),
+            ));
+        }
+
         // 8. AI 서비스 호출
         let mut analysis = state
             .ai_service
@@ -2267,7 +2370,7 @@ impl RetrospectService {
         // personalMissions의 userId 오름차순 정렬
         analysis.personal_missions.sort_by_key(|pm| pm.user_id);
 
-        let team_insight = analysis.team_insight.clone();
+        let insight = analysis.insight.clone();
         let personal_missions = &analysis.personal_missions;
 
         // 9. 트랜잭션으로 결과 저장
@@ -2277,9 +2380,9 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 9-1. retrospects.team_insight 업데이트
+        // 9-1. retrospects.insight 업데이트
         let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
-        retrospect_active.team_insight = Set(Some(team_insight.clone()));
+        retrospect_active.insight = Set(Some(insight.clone()));
         retrospect_active.updated_at = Set(Utc::now().naive_utc());
         retrospect_active
             .update(&txn)
@@ -2289,9 +2392,9 @@ impl RetrospectService {
         // 9-2. 각 member_retro.personal_insight 업데이트 + status = ANALYZED
         for mr in &submitted_members {
             // personal_missions에서 해당 member_id의 미션 찾기
-            let personal_insight = personal_missions
-                .iter()
-                .find(|pm| pm.user_id == mr.member_id)
+            let personal_insight = mr
+                .member_id
+                .and_then(|member_id| personal_missions.iter().find(|pm| pm.user_id == member_id))
                 .map(|pm| {
                     pm.missions
                         .iter()
@@ -2375,10 +2478,12 @@ impl RetrospectService {
         // member_id별로 그룹화하여 첫 번째 멤버의 응답 세트 확인
         let mut member_response_map: HashMap<i64, Vec<i64>> = HashMap::new();
         for mr in &first_member_responses {
-            member_response_map
-                .entry(mr.member_id)
-                .or_default()
-                .push(mr.response_id);
+            if let Some(member_id) = mr.member_id {
+                member_response_map
+                    .entry(member_id)
+                    .or_default()
+                    .push(mr.response_id);
+            }
         }
 
         // 첫 번째 멤버의 응답 ID 목록 (오름차순 정렬됨)
@@ -2392,10 +2497,21 @@ impl RetrospectService {
         let response_map: HashMap<i64, &response::Model> =
             all_responses.iter().map(|r| (r.response_id, r)).collect();
 
-        let question_texts: Vec<String> = question_response_ids
-            .iter()
-            .filter_map(|rid| response_map.get(rid).map(|r| r.question.clone()))
-            .collect();
+        // 질문 텍스트 추출 (member_response_map이 비어있으면 all_responses에서 직접 추출)
+        let question_texts: Vec<String> = if question_response_ids.is_empty() {
+            // 탈퇴한 멤버로 인해 member_response_map이 빈 경우, 고유한 질문 목록 추출
+            let mut seen = std::collections::HashSet::new();
+            all_responses
+                .iter()
+                .filter(|r| seen.insert(r.question.clone()))
+                .map(|r| r.question.clone())
+                .collect()
+        } else {
+            question_response_ids
+                .iter()
+                .filter_map(|rid| response_map.get(rid).map(|r| r.question.clone()))
+                .collect()
+        };
 
         // 4. 카테고리에 따른 대상 응답 ID 필터링
         let target_response_ids: Vec<i64> = match category.question_index() {
@@ -2489,7 +2605,7 @@ impl RetrospectService {
 
         let response_to_member: HashMap<i64, i64> = member_responses_for_page
             .iter()
-            .map(|mr| (mr.response_id, mr.member_id))
+            .filter_map(|mr| mr.member_id.map(|id| (mr.response_id, id)))
             .collect();
 
         let member_ids: Vec<i64> = response_to_member
@@ -2580,7 +2696,7 @@ impl RetrospectService {
 
     /// 회고 답변 조회 및 회고방 멤버십 확인 헬퍼
     /// - 답변이 존재하지 않으면 RES4041 (404) 반환
-    /// - 회고방 멤버가 아니면 TEAM4031 (403) 반환
+    /// - 회고방 멤버가 아니면 RETRO4031 (403) 반환
     async fn find_response_for_member(
         state: &AppState,
         user_id: i64,
@@ -2783,7 +2899,7 @@ impl RetrospectService {
             AppError::ResponseNotFound("존재하지 않는 회고 답변입니다.".to_string())
         })?;
 
-        // 2. 회고 정보 조회하여 팀 멤버십 확인
+        // 2. 회고 정보 조회하여 회고방 멤버십 확인
         let retrospect_entity = retrospect::Entity::find_by_id(response_model.retrospect_id)
             .one(&state.db)
             .await

@@ -31,8 +31,9 @@ Web Team 3 백엔드 인프라를 AWS에 프로비저닝하는 Terraform 구성�
 | VPC | 10.0.0.0/16 CIDR 블록 |
 | Public Subnets | EC2 인스턴스용 (인터넷 접근 가능) |
 | Private Subnets | RDS용 (인터넷 접근 불가) |
-| EC2 | Ubuntu 24.04 LTS, t3.micro |
+| EC2 | Ubuntu 24.04 LTS, t3.micro, Nginx + Certbot |
 | RDS | MySQL 8.0, db.t3.micro |
+| Route53 | api.moaofficial.kr A 레코드 |
 | Security Groups | EC2, RDS 각각 별도 구성 |
 
 ## 사전 요구사항
@@ -100,6 +101,41 @@ ssh -i <your-key.pem> ubuntu@<ec2_public_ip>
 EC2에 접속 후:
 ```bash
 mysql -h <rds_hostname> -u <db_username> -p <db_name>
+```
+
+## HTTPS 설정 (SSL 인증서)
+
+EC2에는 Nginx와 Certbot이 사전 설치됩니다. SSL 인증서 발급은 DNS 전파 후 수동으로 실행합니다.
+
+### 1. DNS 전파 확인
+
+```bash
+# EC2에서 실행
+dig +short api.moaofficial.kr
+curl -s http://checkip.amazonaws.com
+
+# 두 IP가 일치해야 함
+```
+
+### 2. SSL 인증서 발급
+
+```bash
+# EC2에서 실행
+sudo certbot --nginx -d api.moaofficial.kr
+```
+
+### 3. 자동 갱신 확인
+
+```bash
+sudo certbot renew --dry-run
+```
+
+### 참고: 수동 설정 스크립트
+
+`ci/scripts/setup-ssl.sh` 스크립트를 EC2에 복사하여 사용할 수도 있습니다:
+```bash
+scp -i <your-key.pem> ci/scripts/setup-ssl.sh ubuntu@<ec2_ip>:~/
+ssh -i <your-key.pem> ubuntu@<ec2_ip> 'sudo ~/setup-ssl.sh'
 ```
 
 ## 인프라 삭제

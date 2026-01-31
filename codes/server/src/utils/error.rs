@@ -39,7 +39,7 @@ pub enum AppError {
     /// COMMON409: 중복된 자원 (409)
     Conflict(String),
 
-    /// RETRO4041: 회고 룸 없음 (404)
+    /// RETRO4041: 회고방 없음 (404)
     NotFound(String),
 
     /// AUTH4003: 이미 로그아웃되었거나 유효하지 않은 토큰 (400)
@@ -58,13 +58,13 @@ pub enum AppError {
     /// RETRO4003: 만료된 초대 링크 (400)
     ExpiredInviteLink(String),
 
-    /// RETRO4001: 회고 룸 이름 길이 초과 (400)
+    /// RETRO4001: 회고방 이름 길이 초과 (400)
     RetroRoomNameTooLong(String),
 
-    /// RETRO4091: 회고 룸 이름 중복 (409)
+    /// RETRO4091: 회고방 이름 중복 (409)
     RetroRoomNameDuplicate(String),
 
-    /// RETRO4092: 이미 회고 룸 멤버 (409)
+    /// RETRO4092: 이미 회고방 멤버 (409)
     AlreadyMember(String),
 
     /// RETRO4004: 잘못된 순서 데이터 (400)
@@ -154,6 +154,9 @@ pub enum AppError {
     /// 회고방 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
     #[allow(dead_code)]
     RetroDeleteAccessDenied(String),
+
+    /// MEMBER4042: 존재하지 않는 사용자 (404)
+    MemberNotFound(String),
 }
 
 impl AppError {
@@ -207,6 +210,7 @@ impl AppError {
             AppError::RetroCategoryInvalid(msg) => msg.clone(),
             AppError::PdfGenerationFailed(_) => "PDF 생성 중 서버 에러가 발생했습니다.".to_string(),
             AppError::RetroDeleteAccessDenied(msg) => msg.clone(),
+            AppError::MemberNotFound(msg) => msg.clone(),
         }
     }
 
@@ -260,6 +264,7 @@ impl AppError {
             AppError::RetroCategoryInvalid(_) => "RETRO4004",
             AppError::PdfGenerationFailed(_) => "COMMON500",
             AppError::RetroDeleteAccessDenied(_) => "RETRO4031",
+            AppError::MemberNotFound(_) => "MEMBER4042",
         }
     }
 
@@ -313,6 +318,7 @@ impl AppError {
             AppError::RetroCategoryInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::PdfGenerationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::RetroDeleteAccessDenied(_) => StatusCode::FORBIDDEN,
+            AppError::MemberNotFound(_) => StatusCode::NOT_FOUND,
         }
     }
 }
