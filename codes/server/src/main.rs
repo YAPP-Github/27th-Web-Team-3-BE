@@ -2,6 +2,7 @@
 
 mod config;
 mod domain;
+mod global;
 mod state;
 mod utils;
 
@@ -10,7 +11,6 @@ use axum::{routing::get, Router};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -219,12 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // 로깅 초기화
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
-        ))
-        .init();
+    utils::init_logging();
 
     // 설정 로드
     let config = AppConfig::from_env()?;
@@ -410,8 +405,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::post(domain::retrospect::handler::assistant_guide),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .layer(cors)
+        // 레이어 순서: 아래에서 위로 적용됨 (request_id → cors → TraceLayer → handler)
         .layer(TraceLayer::new_for_http())
+        .layer(cors)
+        .layer(axum::middleware::from_fn(global::request_id_middleware))
         .with_state(app_state);
 
     // 서버 시작
