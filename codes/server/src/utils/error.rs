@@ -436,18 +436,10 @@ impl From<ValidationErrors> for AppError {
 
 /// nested validation 에러 중 retro_room_orders 관련 에러가 있는지 확인
 fn has_nested_retro_room_order_error(errors: &ValidationErrors) -> bool {
-    for (field, kind) in errors.errors() {
-        // retro_room_orders 필드의 nested 에러 확인
-        if *field == "retro_room_orders" {
-            if let validator::ValidationErrorsKind::List(list_errors) = kind {
-                // 리스트 내 아이템에 에러가 있으면 true
-                if !list_errors.is_empty() {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    errors.errors().iter().any(|(field, kind)| {
+        *field == "retro_room_orders"
+            && matches!(kind, validator::ValidationErrorsKind::List(list) if !list.is_empty())
+    })
 }
 
 /// nested validation 에러에서 메시지 추출
@@ -516,11 +508,6 @@ mod tests {
         assert!(validation_result.is_err());
 
         let errors = validation_result.unwrap_err();
-        println!(
-            "Field errors keys: {:?}",
-            errors.field_errors().keys().collect::<Vec<_>>()
-        );
-
         let app_error: AppError = errors.into();
 
         // Assert
@@ -543,16 +530,9 @@ mod tests {
         assert!(validation_result.is_err());
 
         let errors = validation_result.unwrap_err();
-        println!(
-            "Field errors keys: {:?}",
-            errors.field_errors().keys().collect::<Vec<_>>()
-        );
-
         let app_error: AppError = errors.into();
 
         // Assert
-        println!("Error code: {}", app_error.error_code());
-        println!("Error message: {}", app_error.message());
         assert_eq!(app_error.error_code(), "RETRO4004");
     }
 
@@ -571,16 +551,57 @@ mod tests {
         assert!(validation_result.is_err());
 
         let errors = validation_result.unwrap_err();
-        println!(
-            "Field errors keys: {:?}",
-            errors.field_errors().keys().collect::<Vec<_>>()
-        );
-
         let app_error: AppError = errors.into();
 
         // Assert
-        println!("Error code: {}", app_error.error_code());
-        println!("Error message: {}", app_error.message());
+        assert_eq!(app_error.error_code(), "RETRO4004");
+    }
+
+    #[test]
+    fn should_return_invalid_order_data_error_for_partial_invalid_items() {
+        // Arrange: 여러 아이템 중 일부만 유효하지 않은 경우
+        let req = UpdateRetroRoomOrderRequest {
+            retro_room_orders: vec![
+                RetroRoomOrderItem {
+                    retro_room_id: 1,
+                    order_index: 1,
+                }, // valid
+                RetroRoomOrderItem {
+                    retro_room_id: 0,
+                    order_index: 2,
+                }, // invalid
+            ],
+        };
+
+        // Act
+        let validation_result = req.validate();
+        assert!(validation_result.is_err());
+
+        let errors = validation_result.unwrap_err();
+        let app_error: AppError = errors.into();
+
+        // Assert
+        assert_eq!(app_error.error_code(), "RETRO4004");
+    }
+
+    #[test]
+    fn should_return_invalid_order_data_error_for_both_fields_invalid() {
+        // Arrange: 한 아이템에서 두 필드 모두 유효하지 않은 경우
+        let req = UpdateRetroRoomOrderRequest {
+            retro_room_orders: vec![RetroRoomOrderItem {
+                retro_room_id: 0, // Invalid
+                order_index: 0,   // Invalid
+            }],
+        };
+
+        // Act
+        let validation_result = req.validate();
+        assert!(validation_result.is_err());
+
+        let errors = validation_result.unwrap_err();
+        let app_error: AppError = errors.into();
+
+        // Assert
         assert_eq!(app_error.error_code(), "RETRO4004");
     }
 }
