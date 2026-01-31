@@ -9,39 +9,56 @@ import json
 import subprocess
 import re
 import time
+import fcntl
 from pathlib import Path
+
+import anthropic
 from anthropic import Anthropic
 
-client = Anthropic()
+# API 키 사전 검증
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    print(json.dumps({"error": "ANTHROPIC_API_KEY not set"}))
+    sys.exit(1)
+
+client = Anthropic(api_key=api_key)
 
 # Rate limit 설정
 RATE_LIMIT_FILE = Path("/tmp/diagnostic-rate-limit")
 MAX_CALLS_PER_HOUR = 10
 
 def check_rate_limit() -> bool:
-    """시간당 호출 제한 확인 및 기록 (단일 소스 of truth)"""
+    """시간당 호출 제한 확인 및 기록 (단일 소스 of truth, 파일 락 사용)"""
     now = time.time()
     hour_ago = now - 3600
 
-    # 파일이 없으면 생성하고 첫 호출 기록
-    if not RATE_LIMIT_FILE.exists():
-        RATE_LIMIT_FILE.write_text(str(now))
-        return True
+    # 파일 락을 사용하여 race condition 방지
+    with open(RATE_LIMIT_FILE, 'a+') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read()
 
-    # 기존 호출 기록 읽기
-    calls = [float(t) for t in RATE_LIMIT_FILE.read_text().split('\n') if t.strip()]
-    recent_calls = [t for t in calls if t > hour_ago]
+            # 기존 호출 기록 읽기
+            calls = [float(t) for t in content.split('\n') if t.strip()]
+            recent_calls = [t for t in calls if t > hour_ago]
 
-    # 제한 초과 확인
-    if len(recent_calls) >= MAX_CALLS_PER_HOUR:
-        # 오래된 호출 제거 후 저장 (정리)
-        RATE_LIMIT_FILE.write_text('\n'.join(str(t) for t in recent_calls))
-        return False
+            # 제한 초과 확인
+            if len(recent_calls) >= MAX_CALLS_PER_HOUR:
+                # 오래된 호출 제거 후 저장 (정리)
+                f.seek(0)
+                f.truncate()
+                f.write('\n'.join(str(t) for t in recent_calls))
+                return False
 
-    # 현재 호출 추가 후 저장
-    recent_calls.append(now)
-    RATE_LIMIT_FILE.write_text('\n'.join(str(t) for t in recent_calls))
-    return True
+            # 현재 호출 추가 후 저장
+            recent_calls.append(now)
+            f.seek(0)
+            f.truncate()
+            f.write('\n'.join(str(t) for t in recent_calls))
+            return True
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 def get_project_root() -> Path:
     """스크립트 위치 기반 프로젝트 루트 반환"""
@@ -140,8 +157,14 @@ JSON만 출력하세요."""
 
         return {"error": "JSON 파싱 실패", "raw": content[:200]}
 
+    except anthropic.APIConnectionError as e:
+        return {"error": f"API connection failed: {e}"}
+    except anthropic.RateLimitError:
+        return {"error": "Anthropic rate limit exceeded"}
+    except anthropic.APIStatusError as e:
+        return {"error": f"API error: {e.status_code}"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Unexpected error: {e}"}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
