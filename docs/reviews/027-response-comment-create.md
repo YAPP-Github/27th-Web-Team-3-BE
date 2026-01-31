@@ -45,7 +45,7 @@
    - 없으면 `RES4041` 반환
 
 6. **회고방 멤버십 확인**:
-   - response → retrospect → team 경로로 회고방 정보 조회
+   - response → retrospect → retro_room 경로로 회고방 정보 조회
    - `member_retro_room` 테이블에서 사용자의 회고방 소속 여부 확인
    - 권한 없으면 `RETRO4031` 반환
 
@@ -138,7 +138,7 @@
 - **이유**: 클라이언트가 에러 유형에 따라 다른 UI 처리 가능
 
 ### 6.3 회고방 멤버십 확인 경로
-- **방식**: response → retrospect → team → member_retro_room
+- **방식**: response → retrospect → retro_room → member_retro_room
 - **재사용**: `find_response_for_member` 헬퍼 (API-026과 공유)
 - **이유**: 코드 중복 제거, 일관된 접근 제어
 

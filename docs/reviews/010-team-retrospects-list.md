@@ -147,7 +147,7 @@ test result: ok. 50 passed; 0 failed; 0 ignored
 | `api010_should_return_401_when_authorization_header_missing` | 인증 헤더 없음 | 401 |
 | `api010_should_return_401_when_authorization_header_format_invalid` | Bearer 형식 아님 | 401 |
 | `api010_should_return_404_when_team_not_found` | 존재하지 않는 회고방 | 404 |
-| `api010_should_return_403_when_not_team_member` | 회고방 멤버가 아님 | 403 |
+| `api010_should_return_403_when_not_retro_room_member` | 회고방 멤버가 아님 | 403 |
 | `api010_should_return_200_with_retrospect_list_when_valid_request` | 정상 요청 | 200 |
 | `api010_should_return_200_with_empty_array_when_no_retrospects` | 빈 결과 | 200 |
 | `api010_should_return_400_when_retro_room_id_is_zero` | retroRoomId가 0 | 400 |

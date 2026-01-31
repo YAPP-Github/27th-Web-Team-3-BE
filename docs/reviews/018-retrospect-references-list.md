@@ -148,7 +148,7 @@ pub async fn list_references(
 | `api018_should_return_400_when_retrospect_id_is_zero` | retrospectId가 0 | 400 |
 | `api018_should_return_400_when_retrospect_id_is_negative` | retrospectId가 음수 | 400 |
 | `api018_should_return_404_when_retrospect_not_found` | 존재하지 않는 회고 | 404 |
-| `api018_should_return_404_when_not_team_member` | 회고방 멤버가 아님 (존재 여부 노출 방지) | 404 |
+| `api018_should_return_404_when_not_retro_room_member` | 회고방 멤버가 아님 (존재 여부 노출 방지) | 404 |
 | `api018_should_return_200_with_empty_array_when_no_references` | 참고자료 없음 | 200 (빈 배열) |
 | `api018_should_return_200_with_references_list_when_valid_request` | 정상 요청 | 200 |
 

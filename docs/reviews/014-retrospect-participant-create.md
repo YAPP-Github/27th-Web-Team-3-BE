@@ -148,7 +148,7 @@ pub async fn create_participant(
 | `api014_should_return_400_when_retrospect_id_is_zero` | retrospectId가 0 | 400 |
 | `api014_should_return_400_when_retrospect_id_is_negative` | retrospectId가 음수 | 400 |
 | `api014_should_return_404_when_retrospect_not_found` | 존재하지 않는 회고 | 404 |
-| `api014_should_return_403_when_not_team_member` | 회고방 멤버가 아님 | 403 |
+| `api014_should_return_403_when_not_retro_room_member` | 회고방 멤버가 아님 | 403 |
 | `api014_should_return_400_when_retrospect_already_started` | 과거/진행중 회고 | 400 |
 | `api014_should_return_409_when_already_participant` | 중복 참석 | 409 |
 | `api014_should_return_200_when_valid_request` | 정상 요청 | 200 |

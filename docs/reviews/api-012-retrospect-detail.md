@@ -101,7 +101,7 @@
 | `api012_should_return_400_when_retrospect_id_is_zero` | retrospectId가 0일 때 400 반환 |
 | `api012_should_return_400_when_retrospect_id_is_negative` | retrospectId가 음수일 때 400 반환 |
 | `api012_should_return_404_when_retrospect_not_found` | 존재하지 않는 회고 요청 시 404 반환 |
-| `api012_should_return_403_when_user_is_not_team_member` | 회고방 멤버가 아닌 사용자 요청 시 403 반환 |
+| `api012_should_return_403_when_user_is_not_retro_room_member` | 회고방 멤버가 아닌 사용자 요청 시 403 반환 |
 | `api012_should_return_200_when_valid_request` | 유효한 요청 시 200 성공 응답 |
 | `api012_should_return_correct_result_structure` | 성공 응답의 result 필드 구조 검증 |
 | `api012_should_return_correct_members_fields` | 멤버 데이터 (memberId, userName) 검증 |

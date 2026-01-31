@@ -46,7 +46,7 @@
 1. **인증 확인**: Bearer 토큰에서 사용자 ID 추출
 2. **retrospectId 검증**: 1 이상의 양수 확인
 3. **회고 조회 및 접근 제어**: `find_retrospect_for_member`로 회고 존재 및 회고방 멤버십 확인 (정보 누출 방지)
-4. **회고방 이름 조회**: `team` 테이블에서 회고방명 조회
+4. **회고방 이름 조회**: `retro_room` 테이블에서 회고방명 조회
 5. **참여 멤버 조회**: `member_retro` + `member` 테이블 조인으로 참여자 목록 및 닉네임 조회
 6. **질문/답변 조회**: `response` 테이블에서 해당 회고의 모든 질문/답변 조회
 7. **PDF 생성**: `genpdf` 라이브러리로 PDF 문서 생성
@@ -89,7 +89,7 @@
 
 #### 비즈니스 에러
 - `api021_should_return_404_when_retrospect_not_found` - 존재하지 않는 회고
-- `api021_should_return_403_when_user_is_not_team_member` - 접근 권한 없음
+- `api021_should_return_403_when_user_is_not_retro_room_member` - 접근 권한 없음
 - `api021_should_return_500_when_pdf_generation_fails` - PDF 생성 실패
 
 #### 성공 케이스
