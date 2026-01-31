@@ -257,10 +257,9 @@ impl AuthService {
         }
 
         // 3. claims.sub(member_id)로 회원 조회 (PK 조회로 효율적)
-        let member_id: i64 = claims
-            .sub
-            .parse()
-            .map_err(|_| AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into()))?;
+        let member_id: i64 = claims.sub.parse().map_err(|_| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
 
         let stored_member = Member::find_by_id(member_id)
             .one(&state.db)
@@ -289,7 +288,13 @@ impl AuthService {
 
         if expires_at < Utc::now().naive_utc() {
             // 만료된 토큰 삭제
-            Self::clear_refresh_token(&state.db, member_id).await.ok();
+            if let Err(e) = Self::clear_refresh_token(&state.db, member_id).await {
+                tracing::warn!(
+                    "Failed to clear expired refresh token for member {}: {:?}",
+                    member_id,
+                    e
+                );
+            }
             return Err(AppError::InvalidRefreshToken(
                 "유효하지 않거나 만료된 Refresh Token입니다.".into(),
             ));
