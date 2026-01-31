@@ -42,6 +42,14 @@ resource "aws_instance" "app" {
     # 시스템 업데이트
     apt-get update && apt-get upgrade -y
 
+    # Swap 설정 (2GB - t3.micro 메모리 부족 대비)
+    fallocate -l 2G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    echo "Swap 설정 완료: $(swapon --show)"
+
     # 필수 패키지 설치
     apt-get install -y git build-essential pkg-config libssl-dev curl dnsutils
 
