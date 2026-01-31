@@ -88,13 +88,7 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
 async fn apply_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
     // Migration: Add refresh_token and refresh_token_expires_at columns to member table
     add_column_if_not_exists(db, "member", "refresh_token", "VARCHAR(500) NULL").await?;
-    add_column_if_not_exists(
-        db,
-        "member",
-        "refresh_token_expires_at",
-        "DATETIME NULL",
-    )
-    .await?;
+    add_column_if_not_exists(db, "member", "refresh_token_expires_at", "DATETIME NULL").await?;
 
     Ok(())
 }
@@ -115,10 +109,7 @@ async fn add_column_if_not_exists(
 
     match db.execute(stmt).await {
         Ok(_) => {
-            info!(
-                "Added column '{}' to table '{}'",
-                column_name, table_name
-            );
+            info!("Added column '{}' to table '{}'", column_name, table_name);
             Ok(())
         }
         Err(e) => {
