@@ -244,6 +244,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // CORS 설정
     let allowed_origins = [
         "http://localhost:3000",
+        "http://localhost:5173",
         "https://www.moalog.me",
         "https://moalog.me",
         "https://moaofficial.kr",
