@@ -39,3 +39,10 @@ db_allocated_storage     = 20
 db_max_allocated_storage = 100
 db_multi_az              = false               # prod에서는 true 권장
 db_skip_final_snapshot   = true                # prod에서는 false 권장
+
+# -----------------------------------------------------------------------------
+# Domain Settings
+# -----------------------------------------------------------------------------
+domain_name   = "moaofficial.kr"
+api_subdomain = "api"
+ssl_email     = "admin@moaofficial.kr"
