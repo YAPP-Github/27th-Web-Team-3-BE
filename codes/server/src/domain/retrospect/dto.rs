@@ -15,10 +15,10 @@ use crate::domain::member::entity::member_retro::RetrospectStatus;
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetroRoomCreateRequest {
-    #[validate(length(min = 1, max = 20, message = "회고 룸 이름은 1~20자여야 합니다."))]
+    #[validate(length(min = 1, max = 20, message = "회고방 이름은 1~20자여야 합니다."))]
     pub title: String,
 
-    #[validate(length(max = 50, message = "회고 룸 한 줄 소개는 50자를 초과할 수 없습니다."))]
+    #[validate(length(max = 50, message = "회고방 한 줄 소개는 50자를 초과할 수 없습니다."))]
     pub description: Option<String>,
 }
 
@@ -63,7 +63,7 @@ pub struct SuccessJoinRetroRoomResponse {
     pub result: JoinRetroRoomResponse,
 }
 
-// ============== API-006: 레트로룸 목록 조회 ==============
+// ============== API-006: 회고방 목록 조회 ==============
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +82,7 @@ pub struct SuccessRetroRoomListResponse {
     pub result: Vec<RetroRoomListItem>,
 }
 
-// ============== API-007: 레트로룸 순서 변경 ==============
+// ============== API-007: 회고방 순서 변경 ==============
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -110,7 +110,7 @@ pub struct SuccessEmptyResponse {
     pub result: Option<()>,
 }
 
-// ============== API-008: 레트로룸 이름 변경 ==============
+// ============== API-008: 회고방 이름 변경 ==============
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -136,7 +136,7 @@ pub struct SuccessUpdateRetroRoomNameResponse {
     pub result: UpdateRetroRoomNameResponse,
 }
 
-// ============== API-009: 레트로룸 삭제 ==============
+// ============== API-009: 회고방 삭제 ==============
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -154,7 +154,7 @@ pub struct SuccessDeleteRetroRoomResponse {
     pub result: DeleteRetroRoomResponse,
 }
 
-// ============== API-010: 레트로룸 내 회고 목록 조회 ==============
+// ============== API-010: 회고방 내 회고 목록 조회 ==============
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

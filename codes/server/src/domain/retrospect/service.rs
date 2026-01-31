@@ -56,7 +56,7 @@ impl RetrospectService {
         member_id: i64,
         req: RetroRoomCreateRequest,
     ) -> Result<RetroRoomCreateResponse, AppError> {
-        // 1. 회고 룸 이름 중복 체크
+        // 1. 회고방 이름 중복 체크
         let existing_room = RetroRoom::find()
             .filter(retro_room::Column::Title.eq(&req.title))
             .one(&state.db)
@@ -131,7 +131,7 @@ impl RetrospectService {
                 })
             })
             .await
-            .map_err(|e| AppError::InternalError(format!("회고 룸 생성 실패: {}", e)))?;
+            .map_err(|e| AppError::InternalError(format!("회고방 생성 실패: {}", e)))?;
 
         Ok(RetroRoomCreateResponse {
             retro_room_id: result.retrospect_room_id,
@@ -177,7 +177,7 @@ impl RetrospectService {
 
         if existing_member.is_some() {
             return Err(AppError::AlreadyMember(
-                "이미 해당 회고 룸의 멤버입니다.".into(),
+                "이미 해당 회고방의 멤버입니다.".into(),
             ));
         }
 
@@ -199,7 +199,7 @@ impl RetrospectService {
                     || err_str.contains("unique")
                     || err_str.contains("constraint")
                 {
-                    AppError::AlreadyMember("이미 해당 회고 룸의 멤버입니다.".into())
+                    AppError::AlreadyMember("이미 해당 회고방의 멤버입니다.".into())
                 } else {
                     AppError::InternalError(format!("멤버 추가 실패: {}", e))
                 }
@@ -212,7 +212,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-006: 사용자가 참여 중인 레트로룸 목록 조회
+    /// API-006: 사용자가 참여 중인 회고방 목록 조회
     pub async fn list_retro_rooms(
         state: AppState,
         member_id: i64,
@@ -240,7 +240,7 @@ impl RetrospectService {
         Ok(result)
     }
 
-    /// API-007: 레트로룸 순서 변경
+    /// API-007: 회고방 순서 변경
     pub async fn update_retro_room_order(
         state: AppState,
         member_id: i64,
@@ -338,7 +338,7 @@ impl RetrospectService {
         Ok(())
     }
 
-    /// API-008: 레트로룸 이름 변경
+    /// API-008: 회고방 이름 변경
     pub async fn update_retro_room_name(
         state: AppState,
         member_id: i64,
@@ -409,7 +409,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-009: 레트로룸 삭제
+    /// API-009: 회고방 삭제
     pub async fn delete_retro_room(
         state: AppState,
         member_id: i64,
@@ -456,7 +456,7 @@ impl RetrospectService {
         })
     }
 
-    /// API-010: 레트로룸 내 회고 목록 조회
+    /// API-010: 회고방 내 회고 목록 조회
     pub async fn list_retrospects(
         state: AppState,
         member_id: i64,
