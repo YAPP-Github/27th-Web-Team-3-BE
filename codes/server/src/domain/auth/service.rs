@@ -369,7 +369,7 @@ impl AuthService {
         update_model
             .update(db)
             .await
-            .map_err(|e| AppError::InternalError(format!("Refresh Token 삭제 실패: {}", e)))?;
+            .map_err(|e| AppError::InternalError(format!("Refresh Token 초기화 실패: {}", e)))?;
 
         Ok(())
     }
