@@ -1,4 +1,4 @@
-# API-010 팀 회고 목록 조회 구현 리뷰
+# API-010 회고방 회고 목록 조회 구현 리뷰
 
 ## 개요
 
@@ -6,7 +6,7 @@
 |------|------|
 | API 번호 | API-010 |
 | 엔드포인트 | `GET /api/v1/teams/{retroRoomId}/retrospects` |
-| 기능 | 특정 팀에 속한 모든 회고 목록 조회 |
+| 기능 | 특정 회고방에 속한 모든 회고 목록 조회 |
 | 브랜치 | `feature/api-010-team-retrospects-list` |
 | 기반 브랜치 | `feature/api-011-retrospect-create` |
 
@@ -29,7 +29,7 @@ codes/server/src/
 ### 1. DTO (`dto.rs`)
 
 ```rust
-/// 팀 회고 목록 아이템 응답 DTO
+/// 회고방 회고 목록 아이템 응답 DTO
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamRetrospectListItem {
@@ -48,7 +48,7 @@ impl From<RetrospectModel> for TeamRetrospectListItem {
 ### 2. 서비스 (`service.rs`)
 
 ```rust
-/// 팀 회고 목록 조회 (API-010)
+/// 회고방 회고 목록 조회 (API-010)
 pub async fn list_team_retrospects(
     state: AppState,
     user_id: i64,
@@ -57,9 +57,9 @@ pub async fn list_team_retrospects(
 ```
 
 **비즈니스 로직:**
-1. 팀 존재 여부 확인 → `TeamNotFound` (404)
+1. 회고방 존재 여부 확인 → `RetroRoomNotFound` (404)
 2. 회고방 멤버십 확인 → `RetroRoomAccessDenied` (403)
-3. 팀에 속한 회고 목록 조회 (최신순 정렬)
+3. 회고방에 속한 회고 목록 조회 (최신순 정렬)
 4. DTO 변환 후 반환
 
 ### 3. 핸들러 (`handler.rs`)
@@ -68,7 +68,7 @@ pub async fn list_team_retrospects(
 #[utoipa::path(
     get,
     path = "/api/v1/teams/{retro_room_id}/retrospects",
-    params(("retro_room_id" = i64, Path, description = "조회를 원하는 팀의 고유 ID")),
+    params(("retro_room_id" = i64, Path, description = "조회를 원하는 회고방의 고유 ID")),
     security(("bearer_auth" = [])),
     responses(...)
 )]
@@ -87,7 +87,7 @@ pub async fn list_team_retrospects(
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "팀 내 전체 회고 목록 조회를 성공했습니다.",
+  "message": "회고방 내 전체 회고 목록 조회를 성공했습니다.",
   "result": [
     {
       "retrospectId": 101,
@@ -113,7 +113,7 @@ pub async fn list_team_retrospects(
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "팀 내 전체 회고 목록 조회를 성공했습니다.",
+  "message": "회고방 내 전체 회고 목록 조회를 성공했습니다.",
   "result": []
 }
 ```
@@ -125,7 +125,7 @@ pub async fn list_team_retrospects(
 | `AUTH4001` | 401 | 인증 헤더 누락 또는 잘못된 토큰 |
 | `COMMON400` | 400 | retroRoomId가 1 미만 |
 | `RETRO4031` | 403 | 해당 회고방 멤버가 아님 |
-| `RETRO4041` | 404 | 존재하지 않는 팀 |
+| `RETRO4041` | 404 | 존재하지 않는 회고방 |
 | `COMMON500` | 500 | 서버 내부 오류 |
 
 ## 테스트 결과
@@ -146,7 +146,7 @@ test result: ok. 50 passed; 0 failed; 0 ignored
 |--------|---------|----------|
 | `api010_should_return_401_when_authorization_header_missing` | 인증 헤더 없음 | 401 |
 | `api010_should_return_401_when_authorization_header_format_invalid` | Bearer 형식 아님 | 401 |
-| `api010_should_return_404_when_team_not_found` | 존재하지 않는 팀 | 404 |
+| `api010_should_return_404_when_team_not_found` | 존재하지 않는 회고방 | 404 |
 | `api010_should_return_403_when_not_team_member` | 회고방 멤버가 아님 | 403 |
 | `api010_should_return_200_with_retrospect_list_when_valid_request` | 정상 요청 | 200 |
 | `api010_should_return_200_with_empty_array_when_no_retrospects` | 빈 결과 | 200 |
@@ -164,7 +164,7 @@ API-010은 API-011 (회고 생성) 브랜치를 기반으로 구현되었습니�
 
 - **공유 엔티티**: Retrospect, Team, MemberTeam
 - **공유 에러 코드**: `RETRO4031`, `RETRO4041`
-- **검증 로직 재사용**: 팀 존재 여부, 멤버십 확인
+- **검증 로직 재사용**: 회고방 존재 여부, 멤버십 확인
 
 ## 설계 결정
 

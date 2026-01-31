@@ -39,8 +39,8 @@
    - 없으면 `RES4041` 반환
 
 5. **회고방 멤버십 확인**:
-   - response → retrospect → team 경로로 팀 정보 조회
-   - `member_team` 테이블에서 사용자의 팀 소속 여부 확인
+   - response → retrospect → team 경로로 회고방 정보 조회
+   - `member_retro_room` 테이블에서 사용자의 회고방 소속 여부 확인
    - 권한 없으면 `RETRO4031` 반환
 
 #### 2.2.2 데이터 조회
@@ -149,7 +149,7 @@
 - **단점**: 특정 페이지로 직접 이동 불가
 
 ### 6.2 회고방 멤버십 확인 경로
-- **방식**: response → retrospect → team → member_team
+- **방식**: response → retrospect → team → member_retro_room
 - **이유**: response 테이블에 직접 retro_room_id가 없어 조인 필요
 - **고려사항**: 3단계 조회로 인한 성능 영향 (필요시 캐싱 검토)
 

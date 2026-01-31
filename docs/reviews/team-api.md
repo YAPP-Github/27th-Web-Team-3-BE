@@ -52,17 +52,17 @@
 ### 3.2 기능 검증 포인트
 1.  **성공 케이스**:
     - 유효한 이름과 설명으로 요청 시 200 OK.
-    - `result`에 `retroRoomId`, `teamName`, `inviteCode` 포함 확인.
+    - `result`에 `retroRoomId`, `retroRoomName`, `inviteCode` 포함 확인.
     - DB에 `retro_room` 및 `member_retro_room` 데이터 적재 확인.
 2.  **실패 케이스**:
-    - **중복 이름**: 이미 존재하는 팀 이름으로 요청 시 409 Conflict (`RETRO4091`).
+    - **중복 이름**: 이미 존재하는 회고방 이름으로 요청 시 409 Conflict (`RETRO4091`).
     - **길이 초과**: 20자 넘는 이름 요청 시 400 Bad Request (`RETRO4001`).
     - **인증 실패**: 토큰 없이 요청 시 401 Unauthorized.
 
 ## 4. 코드 리뷰 체크리스트 (Self-Check)
 
 - [x] **API 명세 준수**: `004-team-create.md`의 요청/응답 형식을 정확히 구현했는가?
-- [x] **데이터 무결성**: 팀 생성과 동시에 관리자 권한이 부여되는가?
+- [x] **데이터 무결성**: 회고방 생성과 동시에 관리자 권한이 부여되는가?
 - [x] **보안**: 인증된 사용자만 접근 가능한가? (Bearer Token)
 - [x] **컨벤션**: `camelCase` 응답, `BaseResponse` 포맷, 에러 코드 체계를 따랐는가?
 - [x] **확장성**: 추후 멤버 초대 및 역할 관리를 위한 `RoomRole` 확장이 용이한가?

@@ -111,7 +111,7 @@
 ## 주요 구현 특징
 
 ### 접근 권한 검증 방식
-- 회고(retrospect)가 속한 `retrospect_room_id`를 통해 `member_retro_room` 테이블에서 사용자의 팀 소속 여부를 확인합니다.
+- 회고(retrospect)가 속한 `retrospect_room_id`를 통해 `member_retro_room` 테이블에서 사용자의 회고방 소속 여부를 확인합니다.
 - `member_retro`(회고 참석자)가 아닌 `member_retro_room`(회고방 멤버)으로 확인하므로, 아직 회고에 참석 등록하지 않은 팀원도 상세 정보를 조회할 수 있습니다.
 
 ### 질문 추출 로직

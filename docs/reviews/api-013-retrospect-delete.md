@@ -28,7 +28,7 @@
    5. `retro_reference` - 참고자료 삭제
    6. `member_retro` - 멤버-회고 매핑 삭제 (개인 인사이트 포함)
    7. `member_retro_room` - 멤버-회고방 매핑 삭제
-   8. `retrospect` - 회고 삭제 (팀 인사이트 포함)
+   8. `retrospect` - 회고 삭제 (인사이트 포함)
    9. `retro_room` - 회고방 삭제
 4. **응답 반환**: `result: null` (삭제 완료)
 
@@ -47,8 +47,8 @@
 - OpenAPI paths 및 schemas에 등록 완료
 
 ### 2.5 권한 체계 참고
-- API 스펙은 "팀 관리자(Owner)" 또는 "회고 생성자"만 삭제 가능으로 정의
-- 현재 DB 스키마에 `member_team.role` 및 `retrospect.created_by` 필드가 없어 회고방 멤버십 기반 접근 제어로 구현
+- API 스펙은 "회고방 관리자(Owner)" 또는 "회고 생성자"만 삭제 가능으로 정의
+- 현재 DB 스키마에 `member_retro_room.role` 및 `retrospect.created_by` 필드가 없어 회고방 멤버십 기반 접근 제어로 구현
 - 향후 스키마에 해당 필드 추가 시 `RETRO4031` 에러를 활용한 세밀한 권한 체크 가능
 
 ## 3. 테스트 결과

@@ -26,7 +26,7 @@ POST /api/v1/responses/{responseId}/likes
 
 ```
 1. 답변(response) 존재 확인 → RES4041
-2. 회고 정보 조회 → 팀 ID 확인
+2. 회고 정보 조회 → 회고방 ID 확인
 3. 회고방 멤버십 확인 → RETRO4031
 4. 기존 좋아요 확인
    - 좋아요 있으면 → 삭제 (취소)

@@ -12,7 +12,7 @@
 
 ## Summary
 
-회고록 작성 서비스의 **회고 생성 API**를 구현했습니다. 사용자가 팀 내에서 새로운 회고 세션을 생성하고, 선택한 회고 방식에 따라 기본 질문이 자동 생성됩니다.
+회고록 작성 서비스의 **회고 생성 API**를 구현했습니다. 사용자가 회고방 내에서 새로운 회고 세션을 생성하고, 선택한 회고 방식에 따라 기본 질문이 자동 생성됩니다.
 
 ### 주요 기능
 - 5가지 회고 방식 지원 (KPT, 4L, 5F, PMI, FREE)
@@ -35,7 +35,7 @@
 | 파일 | 변경 유형 | 설명 |
 |------|----------|------|
 | `src/domain/team/entity/team.rs` | 생성 | Team 엔티티 정의 |
-| `src/domain/team/entity/member_team.rs` | 생성 | Member-Team 조인 테이블 엔티티 |
+| `src/domain/team/entity/member_retro_room.rs` | 생성 | Member-Team 조인 테이블 엔티티 |
 | `src/domain/team/entity/mod.rs` | 생성 | Team 엔티티 모듈 |
 | `src/domain/team/mod.rs` | 생성 | Team 도메인 모듈 |
 | `src/domain/retrospect/entity/retrospect.rs` | 수정 | RetrospectMethod enum 확장, retro_room_id 추가 |
@@ -70,7 +70,7 @@
 | `RETRO4005` | 400 | 유효하지 않은 회고 방식 | Enum 외의 값 입력 |
 | `RETRO4006` | 400 | 유효하지 않은 URL 형식 | http/https 아닌 URL |
 | `RETRO4031` | 403 | 회고방 접근 권한 없음 | 회고방 멤버가 아닌 경우 |
-| `RETRO4041` | 404 | 존재하지 않는 팀 | 없는 retroRoomId 입력 |
+| `RETRO4041` | 404 | 존재하지 않는 회고방 | 없는 retroRoomId 입력 |
 
 ### 4. 검증 규칙
 
@@ -87,7 +87,7 @@
 ```
 1. 참고 URL 검증 (중복, 형식, 길이)
 2. 날짜 형식 및 오늘 이후 날짜 검증 (오늘 포함)
-3. 팀 존재 여부 확인 → TeamNotFound (404)
+3. 회고방 존재 여부 확인 → RetroRoomNotFound (404)
 4. 회고방 멤버십 확인 → RetroRoomAccessDenied (403)
 5. 트랜잭션 시작
    ├── 회고방(RetroRoom) 생성 (초대 URL 포함)
@@ -237,12 +237,12 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
 }
 ```
 
-#### 존재하지 않는 팀 (404)
+#### 존재하지 않는 회고방 (404)
 ```json
 {
   "isSuccess": false,
   "code": "RETRO4041",
-  "message": "존재하지 않는 팀입니다.",
+  "message": "존재하지 않는 회고방입니다.",
   "result": null
 }
 ```

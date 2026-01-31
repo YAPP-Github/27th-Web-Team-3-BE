@@ -286,7 +286,7 @@ curl -X GET http://localhost:8080/api/v1/retrospects/100/references \
 | 테이블 | 용도 |
 |--------|------|
 | `retrospects` | 회고 존재 확인, retro_room_id 조회 |
-| `member_team` | 회고방 멤버십 확인 |
+| `member_retro_room` | 회고방 멤버십 확인 |
 | `retro_refrence` | 참고자료 목록 조회 |
 
 ---
