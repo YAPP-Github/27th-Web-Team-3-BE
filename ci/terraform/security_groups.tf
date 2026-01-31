@@ -34,14 +34,8 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Application Port (Rust server default)
-  ingress {
-    description = "Application port"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # 8080 포트는 Nginx 리버스 프록시를 통해 내부에서만 접근
+  # 외부 노출 제거 (보안 강화)
 
   # Outbound
   egress {
