@@ -530,7 +530,9 @@ mod tests {
         let validation_result = req.validate();
         let errors = match validation_result {
             Err(errors) => errors,
-            Ok(_) => panic!("Expected validation to fail for invalid order_index, but it succeeded"),
+            Ok(_) => {
+                panic!("Expected validation to fail for invalid order_index, but it succeeded")
+            }
         };
         let app_error: AppError = errors.into();
 
@@ -552,7 +554,9 @@ mod tests {
         let validation_result = req.validate();
         let errors = match validation_result {
             Err(errors) => errors,
-            Ok(_) => panic!("Expected validation to fail for invalid retro_room_id, but it succeeded"),
+            Ok(_) => {
+                panic!("Expected validation to fail for invalid retro_room_id, but it succeeded")
+            }
         };
         let app_error: AppError = errors.into();
 
@@ -580,7 +584,9 @@ mod tests {
         let validation_result = req.validate();
         let errors = match validation_result {
             Err(errors) => errors,
-            Ok(_) => panic!("Expected validation to fail for partial invalid items, but it succeeded"),
+            Ok(_) => {
+                panic!("Expected validation to fail for partial invalid items, but it succeeded")
+            }
         };
         let app_error: AppError = errors.into();
 
@@ -602,7 +608,9 @@ mod tests {
         let validation_result = req.validate();
         let errors = match validation_result {
             Err(errors) => errors,
-            Ok(_) => panic!("Expected validation to fail for both fields invalid, but it succeeded"),
+            Ok(_) => {
+                panic!("Expected validation to fail for both fields invalid, but it succeeded")
+            }
         };
         let app_error: AppError = errors.into();
 
