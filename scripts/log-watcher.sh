@@ -27,15 +27,11 @@ WARNING_CODES="AUTH4001|AUTH4002|AUTH4003|AUTH4004|AUTH4005"
 
 # 심각도 판단 함수
 get_error_severity() {
-    local error_code="$1"
-
-    if echo "$error_code" | grep -qE "^($CRITICAL_CODES)$"; then
-        echo "critical"
-    elif echo "$error_code" | grep -qE "^($WARNING_CODES)$"; then
-        echo "warning"
-    else
-        echo "info"
-    fi
+    case "$1" in
+        COMMON500|AI5001|AI5002|AI5003|AI5031) echo "critical" ;;
+        AUTH4001|AUTH4002|AUTH4003|AUTH4004|AUTH4005) echo "warning" ;;
+        *) echo "info" ;;
+    esac
 }
 
 # 상태 디렉토리 생성

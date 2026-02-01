@@ -26,10 +26,11 @@
    3. `member_response` - 멤버-응답 매핑 삭제
    4. `response` - 응답(질문) 삭제
    5. `retro_reference` - 참고자료 삭제
-   6. `member_retro` - 멤버-회고 매핑 삭제 (개인 인사이트 포함)
-   7. `member_retro_room` - 멤버-회고방 매핑 삭제
-   8. `retrospect` - 회고 삭제 (인사이트 포함)
-   9. `retro_room` - 회고방 삭제
+   6. `assistant_usage` - AI 어시스턴트 사용 기록 삭제
+   7. `member_retro` - 멤버-회고 매핑 삭제 (개인 인사이트 포함)
+   8. `member_retro_room` - 멤버-회고방 매핑 삭제
+   9. `retrospect` - 회고 삭제 (인사이트 포함)
+   10. `retro_room` - 회고방 삭제
 4. **응답 반환**: `result: null` (삭제 완료)
 
 ### 2.3 에러 코드

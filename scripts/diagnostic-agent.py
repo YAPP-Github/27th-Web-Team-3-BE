@@ -146,7 +146,7 @@ JSON만 출력하세요."""
         model = os.environ.get("DIAGNOSTIC_MODEL", "gpt-4o-mini")
         response = client.chat.completions.create(
             model=model,
-            max_tokens=1024,
+            max_completion_tokens=1024,
             messages=[{"role": "user", "content": prompt}]
         )
 
@@ -163,6 +163,8 @@ JSON만 출력하세요."""
         return {"error": "OpenAI authentication failed"}
     except openai.APIConnectionError as e:
         return {"error": f"API connection failed: {e}"}
+    except openai.APIStatusError as e:
+        return {"error": f"API error: {e.status_code} - {e.message}"}
     except Exception as e:
         return {"error": f"Unexpected error: {e}"}
 
