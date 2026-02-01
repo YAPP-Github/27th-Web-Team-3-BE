@@ -80,13 +80,15 @@ claude-code --prompt "
 set -e
 
 ERROR_FILE=$1
-WORKING_DIR="/Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE"
+# 스크립트 위치 기준으로 프로젝트 루트 결정
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # 1. 에러 컨텍스트 수집
-cd "$WORKING_DIR/codes/server"
+cd "$PROJECT_ROOT/codes/server"
 
 # 2. Claude Code로 수정 생성
-claude-code --cwd "$WORKING_DIR" \
+claude-code --cwd "$PROJECT_ROOT" \
   --context-file "$ERROR_FILE" \
   --rules-dir ".claude/rules" \
   --max-changes 3 \
@@ -232,8 +234,8 @@ echo "=== 컨벤션 검증 완료 ==="
 
 #### 기본 테스트 실행
 ```bash
-# 작업 디렉토리 이동
-cd /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server
+# 작업 디렉토리 이동 (프로젝트 루트에서 실행 가정)
+cd codes/server
 
 # 전체 테스트 실행
 cargo test
@@ -253,7 +255,10 @@ cargo test -- --failed
 #!/bin/bash
 # scripts/run-tests.sh
 
-cd /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT/codes/server"
 
 # 테스트 실행 및 결과 저장
 cargo test 2>&1 | tee /tmp/test-results.log
@@ -313,7 +318,10 @@ cargo fmt -- src/domain/ai/service.rs
 
 set -e
 
-cd /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT/codes/server"
 
 echo "=== 품질 검사 시작 ==="
 
@@ -375,7 +383,10 @@ echo "=== 품질 검사 완료: 모든 검사 통과 ==="
 
 set -e
 
-cd /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE/codes/server
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT/codes/server"
 
 echo "=== AI 수정 검증 시작 ==="
 echo "대상 브랜치: $(git branch --show-current)"
@@ -437,7 +448,10 @@ echo "수정을 적용해도 안전합니다."
 ERROR_ID=$1
 FIX_DESCRIPTION=$2
 
-cd /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT"
 
 # 변경 사항 확인
 if [ -z "$(git status --porcelain)" ]; then
@@ -520,7 +534,10 @@ echo "PR이 생성되었습니다."
 
 BRANCH_NAME=$1
 
-cd /Users/harperkwon/Desktop/github/yapp/27th-Web-Team-3-BE
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT"
 
 echo "=== 롤백 시작: $BRANCH_NAME ==="
 

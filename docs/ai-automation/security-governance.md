@@ -115,7 +115,121 @@ fn sanitize_user_input(input: &str) -> String {
 | 빌드 | `cargo build`, `cargo test` | - |
 | Git | `git status`, `git diff` | `git push --force`, `git reset --hard` |
 | 파일 시스템 | 프로젝트 내 읽기/쓰기 | 프로젝트 외부 접근 |
-| 네트워크 | localhost 접근 | 외부 네트워크 요청 |
+| 네트워크 | localhost 접근 | 외부 네트워크 요청 (예외 규정 참조) |
+
+### 1.4 파이프라인 운영 예외 규정
+
+일반 보안 정책과 AI 자동화 파이프라인 운영 간의 충돌을 해결하기 위한 예외 규정입니다.
+
+#### 허용된 외부 API 호출
+
+파이프라인 운영을 위해 다음 외부 API 호출이 허용됩니다:
+
+| API 서비스 | 용도 | 호출 주체 | 승인 조건 |
+|-----------|------|----------|----------|
+| **OpenAI API** | AI 진단 및 코드 분석 | Phase 2-3 스크립트 | `OPENAI_API_KEY` 환경변수 설정 |
+| **Anthropic API** | Claude 기반 이슈 분석 | `issue-analyzer.py` | `ANTHROPIC_API_KEY` 환경변수 설정 |
+| **GitHub API** | PR 생성, 이슈 관리 | `gh` CLI | `GITHUB_TOKEN` 또는 PAT 설정 |
+| **Discord Webhook** | 알림 발송 | `discord-alert.sh` | `DISCORD_WEBHOOK_URL` 설정 |
+| **Slack Webhook** | 알림 발송 (선택) | 알림 스크립트 | `SLACK_WEBHOOK_URL` 설정 |
+
+```yaml
+# 허용된 외부 도메인 목록
+allowed_external_domains:
+  - api.openai.com
+  - api.anthropic.com
+  - api.github.com
+  - discord.com/api/webhooks
+  - hooks.slack.com
+
+# 금지된 외부 접근 (변경 불가)
+forbidden_external_access:
+  - 프로덕션 데이터베이스
+  - 내부 인프라 API
+  - 사용자 개인정보 API
+  - 결제/금융 서비스 API
+```
+
+#### 브랜치 푸시 권한 범위
+
+자동화 파이프라인에서 허용되는 브랜치 푸시 범위입니다:
+
+| 브랜치 패턴 | 허용 여부 | 용도 | 승인 필요 |
+|------------|----------|------|----------|
+| `fix/*` | **허용** | 버그 수정 자동화 | 자동 |
+| `hotfix/*` | **허용** | 긴급 수정 자동화 | 자동 |
+| `ai-fix/*` | **허용** | AI 자동 수정 | 자동 |
+| `config/*` | **허용** | 설정 변경 | 자동 |
+| `refactor/*` | **허용** | 리팩토링 | 자동 |
+| `dev` | **제한** | 메인 개발 브랜치 | PR 머지만 허용 |
+| `main`, `master` | **금지** | 프로덕션 브랜치 | 직접 푸시 금지 |
+| `release/*` | **금지** | 릴리스 브랜치 | 수동 승인 필요 |
+
+```yaml
+# GitHub Actions 브랜치 보호 설정
+branch_protection:
+  # 자동 푸시 허용 브랜치
+  auto_push_allowed:
+    patterns:
+      - "fix/**"
+      - "hotfix/**"
+      - "ai-fix/**"
+      - "config/**"
+      - "refactor/**"
+    conditions:
+      - ci_bot_only: true
+      - max_files_changed: 10
+      - no_sensitive_files: true
+
+  # PR을 통한 머지만 허용
+  pr_merge_only:
+    - dev
+
+  # 완전 보호 (수동 승인 필수)
+  fully_protected:
+    - main
+    - master
+    - "release/**"
+```
+
+#### 자동화 작업 승인 절차
+
+| 작업 유형 | 자동 승인 조건 | 수동 승인 필요 |
+|----------|--------------|---------------|
+| **브랜치 생성** | `fix/*`, `hotfix/*`, `ai-fix/*` 패턴 | 다른 패턴 |
+| **브랜치 푸시** | 허용된 패턴 + 10파일 이하 변경 | 11파일 이상 변경 |
+| **PR 생성** | Draft PR + dev 브랜치 대상 | 다른 브랜치 대상 |
+| **PR 머지** | 항상 수동 승인 필요 | - |
+| **외부 API 호출** | 허용된 도메인 목록 내 | 목록 외 도메인 |
+
+#### 예외 규정 적용 조건
+
+예외 규정이 적용되기 위한 필수 조건:
+
+1. **식별 가능한 자동화 주체**
+   ```yaml
+   automation_identity:
+     git_author: "Claude Code <noreply@anthropic.com>"
+     git_committer: "ci-bot <ci-bot@example.com>"
+     commit_suffix: "Co-Authored-By: Claude"
+   ```
+
+2. **감사 로그 기록**
+   - 모든 외부 API 호출 로깅
+   - 모든 Git 작업 로깅
+   - 요청 ID 및 세션 ID 포함
+
+3. **Rate Limiting 준수**
+   ```yaml
+   rate_limits:
+     api_calls_per_minute: 10
+     branch_creations_per_hour: 20
+     pr_creations_per_hour: 10
+   ```
+
+4. **자동 롤백 가능**
+   - 모든 자동화 작업은 롤백 가능해야 함
+   - 롤백 스크립트 사전 검증 필수
 
 ---
 
@@ -126,18 +240,76 @@ fn sanitize_user_input(input: &str) -> String {
 #### 최소 권한 원칙 (Principle of Least Privilege)
 
 ```yaml
-# GitHub Actions 워크플로우 권한
+# GitHub Actions 워크플로우 권한 - 기본 설정
 permissions:
   contents: read          # 코드 읽기만
   pull-requests: write    # PR 생성/수정
   issues: write           # 이슈 코멘트
   checks: write           # 체크 결과 업데이트
 
-# 금지된 권한
+# 금지된 권한 (일반 워크플로우)
 # permissions:
 #   contents: write       # 직접 푸시 금지
 #   actions: write        # 워크플로우 수정 금지
 #   secrets: write        # 시크릿 수정 금지
+```
+
+#### AI 자동화 파이프라인 전용 권한 (예외)
+
+AI 자동화 파이프라인(`ai-fix.yml`, `analyze-and-branch.yml`)에 한하여 다음 권한이 허용됩니다:
+
+```yaml
+# AI 자동화 전용 워크플로우 권한
+# 파일: .github/workflows/ai-automation.yml
+name: AI Automation Pipeline
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write         # 브랜치 생성/푸시 허용 (조건부)
+  pull-requests: write    # PR 생성/수정
+  issues: write           # 이슈 코멘트
+  checks: write           # 체크 결과 업데이트
+
+# 조건부 제한 (반드시 준수)
+# jobs.<job_id>.if: 조건을 통해 브랜치 보호
+jobs:
+  auto-fix:
+    if: |
+      startsWith(github.ref_name, 'fix/') ||
+      startsWith(github.ref_name, 'hotfix/') ||
+      startsWith(github.ref_name, 'ai-fix/')
+    runs-on: ubuntu-latest
+    steps:
+      # ... 자동화 작업 ...
+```
+
+#### 권한 부여 조건
+
+| 권한 | 조건 | 감사 요구사항 |
+|------|------|-------------|
+| `contents: write` | 허용된 브랜치 패턴만 | 모든 푸시 로깅 |
+| `pull-requests: write` | Draft PR로만 생성 | PR 생성 로깅 |
+| 외부 API 호출 | 허용된 도메인만 | API 호출 로깅 |
+
+#### 권한 남용 방지
+
+```yaml
+# 자동 차단 조건
+auto_block_conditions:
+  - main_branch_push_attempt: true
+  - release_branch_push_attempt: true
+  - workflow_file_modification: true
+  - secrets_access_attempt: true
+  - rate_limit_exceeded: true
+
+# 차단 시 조치
+on_block:
+  - notify: "#security-alerts"
+  - disable_workflow: true
+  - require_manual_review: true
 ```
 
 #### Personal Access Token (PAT) 가이드
@@ -155,8 +327,50 @@ permissions:
 | 계정 | 용도 | 권한 수준 |
 |------|------|----------|
 | `ci-bot` | CI/CD 파이프라인 | 읽기 + PR 생성 |
+| `ai-automation-bot` | AI 자동화 파이프라인 | 읽기 + 제한적 쓰기 (아래 참조) |
 | `release-bot` | 릴리스 자동화 | 태그 생성, 릴리스 발행 |
 | `security-scanner` | 보안 스캔 | 읽기 전용 |
+
+#### AI 자동화 전용 계정 (`ai-automation-bot`)
+
+AI 자동화 파이프라인 전용 서비스 계정의 세부 권한입니다:
+
+| 권한 항목 | 허용 범위 | 제한 사항 |
+|----------|----------|----------|
+| **브랜치 생성** | `fix/*`, `hotfix/*`, `ai-fix/*`, `config/*`, `refactor/*` | 다른 패턴 금지 |
+| **브랜치 푸시** | 생성한 브랜치에만 | `dev`, `main` 금지 |
+| **PR 생성** | Draft PR만, `dev` 브랜치 대상 | 다른 브랜치 대상 금지 |
+| **외부 API 호출** | OpenAI, Anthropic, GitHub, Discord, Slack | 기타 도메인 금지 |
+| **파일 수정** | `codes/server/src/**`, `codes/server/tests/**` | 설정 파일, 워크플로우 금지 |
+
+```yaml
+# ai-automation-bot PAT 스코프
+ai_automation_bot:
+  token_scopes:
+    - repo:status
+    - public_repo
+    - read:org
+    - write:discussion
+
+  # Fine-grained permissions (권장)
+  fine_grained:
+    contents: write
+    pull_requests: write
+    issues: write
+    metadata: read
+
+  # 브랜치 규칙으로 추가 제한
+  branch_restrictions:
+    allow_patterns:
+      - "fix/**"
+      - "hotfix/**"
+      - "ai-fix/**"
+    deny_patterns:
+      - "main"
+      - "master"
+      - "dev"
+      - "release/**"
+```
 
 #### 계정 관리 정책
 
@@ -500,11 +714,18 @@ emergency_contacts:
 | 버전 | 날짜 | 변경 내용 | 작성자 |
 |------|------|----------|--------|
 | 1.0 | 2025-02-01 | 최초 작성 | AI Automation Team |
+| 1.1 | 2026-02-01 | 파이프라인 운영 예외 규정 추가 (섹션 1.4, 2.1 보강) | AI Automation Team |
 
 ---
 
 ## 8. 참고 자료
 
+### 외부 문서
 - [GitHub Actions 보안 가이드](https://docs.github.com/en/actions/security-guides)
 - [OWASP 보안 체크리스트](https://owasp.org/www-project-web-security-testing-guide/)
 - [12 Factor App - Config](https://12factor.net/config)
+
+### 프로젝트 내부 문서
+- [Phase 2: 이슈 분석 및 브랜치 생성](./phase-2-issue-analysis.md) - AI 기반 이슈 분석 및 자동 브랜치 생성
+- [Phase 3: AI 코드 수정 및 테스트](./phase-3-code-fix.md) - 자동 코드 수정 및 PR 생성
+- [CLAUDE.md](../../CLAUDE.md) - 프로젝트 코딩 규칙

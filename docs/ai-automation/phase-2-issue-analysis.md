@@ -60,7 +60,7 @@ Phase 2 완료 상태
   "message": "Claude API request failed",
   "fields": {
     "request_id": "req_abc123",
-    "error_code": "AI_003",
+    "error_code": "AI5003",
     "duration_ms": 30500,
     "retry_count": 3
   },
@@ -111,13 +111,15 @@ EOF
 
 #### 에러 코드 체계
 
+> 에러 코드 표준에 대한 상세 내용은 [overview.md의 에러 코드 표준](./overview.md#8-에러-코드-표준)을 참조하세요.
+
 | 도메인 | 접두어 | 범위 | 설명 |
 |--------|--------|------|------|
-| AI | `AI_` | 001-099 | Claude/OpenAI API 관련 |
-| Auth | `AUTH_` | 001-099 | 인증/인가 관련 |
-| Database | `DB_` | 001-099 | 데이터베이스 관련 |
-| Validation | `VAL_` | 001-099 | 입력 검증 관련 |
-| External | `EXT_` | 001-099 | 외부 서비스 관련 |
+| AI | `AI5xxx` | AI5001-AI5099 | Claude/OpenAI API 관련 |
+| Auth | `AUTH4xxx` | AUTH4001-AUTH4099 | 인증/인가 관련 |
+| Database | `DB5xxx` | DB5001-DB5099 | 데이터베이스 관련 |
+| Validation | `VAL4xxx` | VAL4001-VAL4099 | 입력 검증 관련 |
+| External | `EXT5xxx` | EXT5001-EXT5099 | 외부 서비스 관련 |
 
 ### 2.2 컨텍스트 수집
 
@@ -280,7 +282,7 @@ if __name__ == "__main__":
 {
   "error": {
     "timestamp": "2025-01-31T14:23:45Z",
-    "error_code": "AI_003",
+    "error_code": "AI5003",
     "target": "server::domain::ai::service",
     "message": "Claude API timeout"
   },
@@ -351,16 +353,16 @@ SEVERITY_CRITERIA = """
 
 # 에러 코드별 예상 원인
 ERROR_CODE_HINTS = {
-    "AI_001": "API 키 인증 실패 - 환경 변수 또는 키 만료 확인",
-    "AI_002": "잘못된 프롬프트 - 입력 검증 로직 확인",
-    "AI_003": "API 타임아웃 - 타임아웃 설정 또는 네트워크 확인",
-    "AI_004": "Rate limit 초과 - 호출 빈도 또는 쿼터 확인",
-    "AI_005": "API 내부 오류 - 외부 서비스 상태 확인",
-    "AUTH_001": "토큰 없음 - 클라이언트 인증 흐름 확인",
-    "AUTH_002": "토큰 만료 - 토큰 갱신 로직 확인",
-    "AUTH_003": "토큰 변조 - 보안 검토 필요",
-    "DB_001": "연결 실패 - 데이터베이스 상태 확인",
-    "DB_002": "쿼리 타임아웃 - 쿼리 최적화 필요",
+    "AI5001": "API 키 인증 실패 - 환경 변수 또는 키 만료 확인",
+    "AI5002": "잘못된 프롬프트 - 입력 검증 로직 확인",
+    "AI5003": "API 타임아웃 - 타임아웃 설정 또는 네트워크 확인",
+    "AI5004": "Rate limit 초과 - 호출 빈도 또는 쿼터 확인",
+    "AI5005": "API 내부 오류 - 외부 서비스 상태 확인",
+    "AUTH4001": "토큰 없음 - 클라이언트 인증 흐름 확인",
+    "AUTH4002": "토큰 만료 - 토큰 갱신 로직 확인",
+    "AUTH4003": "토큰 변조 - 보안 검토 필요",
+    "DB5001": "연결 실패 - 데이터베이스 상태 확인",
+    "DB5002": "쿼리 타임아웃 - 쿼리 최적화 필요",
 }
 
 
@@ -489,7 +491,7 @@ if __name__ == "__main__":
   "auto_fixable": true,
   "fix_type": "config",
   "fix_suggestion": "src/domain/ai/client.rs의 TIMEOUT_SECS를 30에서 60으로 변경",
-  "branch_name_suggestion": "fix/AI_003-increase-timeout",
+  "branch_name_suggestion": "fix/AI5003-increase-timeout",
   "analysis_model": "claude-sonnet-4-20250514"
 }
 ```
@@ -510,28 +512,28 @@ if __name__ == "__main__":
 
 | 타입 | 사용 시점 | 예시 |
 |------|----------|------|
-| `fix/` | 버그 수정 | `fix/AI_003-timeout-increase` |
-| `hotfix/` | 긴급 수정 (critical) | `hotfix/AUTH_001-token-validation` |
-| `config/` | 설정 변경 | `config/DB_002-connection-pool` |
-| `refactor/` | 구조 개선 | `refactor/AI-error-handling` |
+| `fix/` | 버그 수정 | `fix/ai5003-timeout-increase` |
+| `hotfix/` | 긴급 수정 (critical) | `hotfix/auth4003-token-validation` |
+| `config/` | 설정 변경 | `config/db5002-connection-pool` |
+| `refactor/` | 구조 개선 | `refactor/ai-error-handling` |
 
 #### 네이밍 규칙
 
-1. **소문자 사용**: 모든 문자는 소문자
+1. **소문자 사용**: 타입과 설명은 소문자 (에러 코드는 원래 형식 유지)
 2. **하이픈 구분**: 단어는 하이픈(`-`)으로 구분
 3. **간결한 설명**: 20자 이내 영문 설명
-4. **에러 코드 포함**: 추적 가능성 확보
+4. **에러 코드 포함**: 추적 가능성 확보 (원래 에러 코드 형식 그대로 사용)
 
 #### 예시
 
 ```bash
 # 좋은 예
-fix/AI_003-increase-timeout
-hotfix/AUTH_001-token-refresh
-config/DB_001-pool-size
+fix/ai5003-increase-timeout
+hotfix/auth4002-token-refresh
+config/db5001-pool-size
 
 # 나쁜 예
-Fix/AI_003_increase_timeout    # 대문자, 언더스코어
+Fix/AI5003_increase_timeout    # 타입이 대문자, 언더스코어 사용
 ai-003-fix                     # 타입 없음, 에러코드 형식 불일치
 fix/very-long-branch-name-that-describes-everything-in-detail  # 너무 김
 ```
@@ -818,12 +820,12 @@ fi
 
 ```bash
 # 테스트 1: 정상 에러 로그 파싱
-./scripts/parse-error-log.sh '{"level":"ERROR","target":"server::domain::ai::service","fields":{"error_code":"AI_003"},"message":"timeout"}'
+./scripts/parse-error-log.sh '{"level":"ERROR","target":"server::domain::ai::service","fields":{"error_code":"AI5003"},"message":"timeout"}'
 
 # 예상 결과
 # {
 #   "level": "ERROR",
-#   "error_code": "AI_003",
+#   "error_code": "AI5003",
 #   ...
 # }
 ```
@@ -832,7 +834,7 @@ fi
 
 ```bash
 # 테스트 2: 소스 코드 수집
-python3 ./scripts/collect-context.py '{"target":"server::domain::ai::service","fields":{"error_code":"AI_003"}}'
+python3 ./scripts/collect-context.py '{"target":"server::domain::ai::service","fields":{"error_code":"AI5003"}}'
 
 # 예상 결과
 # - source.exists: true
@@ -845,7 +847,7 @@ python3 ./scripts/collect-context.py '{"target":"server::domain::ai::service","f
 ```bash
 # 테스트 3: AI 분석 (API 호출)
 export ANTHROPIC_API_KEY="sk-ant-xxx"
-python3 ./scripts/issue-analyzer.py '{"error":{"error_code":"AI_003","target":"server::domain::ai::service"},"source":{"content":"pub fn call_api()..."}}'
+python3 ./scripts/issue-analyzer.py '{"error":{"error_code":"AI5003","target":"server::domain::ai::service"},"source":{"content":"pub fn call_api()..."}}'
 
 # 예상 결과
 # - severity: high 또는 critical
@@ -859,13 +861,13 @@ python3 ./scripts/issue-analyzer.py '{"error":{"error_code":"AI_003","target":"s
 
 ```bash
 # 테스트 4: 전체 플로우
-./scripts/analyze-and-branch.sh '{"level":"ERROR","target":"server::domain::ai::service","fields":{"error_code":"AI_003","duration_ms":35000},"message":"Claude API timeout after 30000ms"}'
+./scripts/analyze-and-branch.sh '{"level":"ERROR","target":"server::domain::ai::service","fields":{"error_code":"AI5003","duration_ms":35000},"message":"Claude API timeout after 30000ms"}'
 
 # 예상 결과
 # 1. 에러 파싱 완료
 # 2. 컨텍스트 수집 완료
 # 3. AI 분석 완료 (severity: high)
-# 4. 브랜치 생성: fix/AI_003-increase-timeout
+# 4. 브랜치 생성: fix/AI5003-increase-timeout
 # 5. Discord 알림 발송
 ```
 
@@ -873,10 +875,10 @@ python3 ./scripts/issue-analyzer.py '{"error":{"error_code":"AI_003","target":"s
 
 | 시나리오 | 입력 | 예상 결과 |
 |---------|------|----------|
-| Critical 에러 | `AI_001` (인증 실패) | `hotfix/` 브랜치 생성 |
-| High 에러 | `AI_003` (타임아웃) | `fix/` 브랜치 생성 |
-| Medium 에러 | `VAL_001` (검증 실패) | 브랜치 생성 안 함, 알림만 |
-| Low 에러 | `DB_004` (데이터 없음) | 브랜치 생성 안 함, 알림만 |
+| Critical 에러 | `AI5001` (인증 실패) | `hotfix/` 브랜치 생성 |
+| High 에러 | `AI5003` (타임아웃) | `fix/` 브랜치 생성 |
+| Medium 에러 | `VAL4001` (검증 실패) | 브랜치 생성 안 함, 알림만 |
+| Low 에러 | `DB5004` (데이터 없음) | 브랜치 생성 안 함, 알림만 |
 | 파일 없음 | 존재하지 않는 target | 컨텍스트 없이 분석 진행 |
 | API 오류 | ANTHROPIC_API_KEY 없음 | 기본 알림만 발송 |
 

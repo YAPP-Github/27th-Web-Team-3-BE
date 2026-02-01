@@ -146,7 +146,7 @@ flowchart TD
 | 영역 | 기술 | 상태 |
 |------|------|------|
 | 로깅 | tracing + JSON 포맷 | 구현 완료 |
-| 에러 코드 | AppError enum (AI50xx, RETRO40xx 등) | 구현 완료 |
+| 에러 코드 | AppError enum (AI5xxx, RETRO4xxx 등) | 구현 완료 |
 | Discord 알림 | discord-alert.sh | 구현 완료 |
 | Log Watcher | log-watcher.sh | 구현 완료 |
 
@@ -230,6 +230,75 @@ AI 자동화의 리스크를 최소화하기 위한 안전장치:
 | 로깅 추가/수정 | 비즈니스 로직 |
 | 환경 변수 | 보안 관련 코드 |
 | 간단한 null 체크 | DB 스키마 |
+
+---
+
+---
+
+## 8. 에러 코드 표준
+
+### 8.1 에러 코드 형식
+
+모든 에러 코드는 다음 형식을 따릅니다:
+
+```
+{도메인}{심각도}{순번}
+```
+
+- **도메인**: 2-4자 영문 대문자 (예: AI, AUTH, DB)
+- **심각도**: 1자리 숫자 (4: 클라이언트 에러, 5: 서버 에러)
+- **순번**: 2자리 숫자 (01-99)
+
+### 8.2 도메인별 에러 코드 범위
+
+| 도메인 | 접두어 | 범위 | 설명 |
+|--------|--------|------|------|
+| AI | `AI5xxx` | AI5001-AI5099 | AI/LLM API 관련 에러 |
+| Auth | `AUTH4xxx` | AUTH4001-AUTH4099 | 인증/인가 관련 에러 |
+| Database | `DB5xxx` | DB5001-DB5099 | 데이터베이스 관련 에러 |
+| Validation | `VAL4xxx` | VAL4001-VAL4099 | 입력 검증 관련 에러 |
+| External | `EXT5xxx` | EXT5001-EXT5099 | 외부 서비스 관련 에러 |
+| Retrospect | `RETRO4xxx` | RETRO4001-RETRO4099 | 회고 도메인 관련 에러 |
+| Common | `COMMON5xxx` | COMMON5001-COMMON5099 | 공통 서버 에러 |
+
+### 8.3 AI 도메인 에러 코드 상세
+
+| 코드 | 설명 | 심각도 | 자동화 대응 |
+|------|------|--------|-------------|
+| AI5001 | Claude API 인증 실패 | Critical | Discord 알림 + Issue 생성 |
+| AI5002 | 잘못된 프롬프트/입력 | Warning | 로그만 기록 |
+| AI5003 | API 타임아웃 | Critical | Discord 알림 + Issue 생성 |
+| AI5004 | Rate limit 초과 | Warning | Discord 알림 |
+| AI5005 | API 내부 오류 | Critical | Discord 알림 + Issue 생성 |
+| AI5031 | API 응답 파싱 실패 | High | Discord 알림 |
+
+### 8.4 인증 도메인 에러 코드 상세
+
+| 코드 | 설명 | 심각도 | 자동화 대응 |
+|------|------|--------|-------------|
+| AUTH4001 | 토큰 누락 | Warning | 로그만 기록 |
+| AUTH4002 | 토큰 만료 | Warning | 로그만 기록 |
+| AUTH4003 | 토큰 변조 의심 | Critical | Discord 알림 + 보안팀 통보 |
+| AUTH4004 | 권한 부족 | Warning | 로그만 기록 |
+| AUTH4005 | 잘못된 토큰 형식 | Warning | 로그만 기록 |
+
+### 8.5 데이터베이스 도메인 에러 코드 상세
+
+| 코드 | 설명 | 심각도 | 자동화 대응 |
+|------|------|--------|-------------|
+| DB5001 | 연결 실패 | Critical | Discord 알림 + Issue 생성 |
+| DB5002 | 쿼리 타임아웃 | High | Discord 알림 |
+| DB5003 | 제약조건 위반 | Warning | 로그만 기록 |
+| DB5004 | 데이터 없음 | Info | 로그만 기록 |
+
+### 8.6 심각도 분류 기준
+
+| 심각도 | 자동화 트리거 | 설명 |
+|--------|--------------|------|
+| Critical | AI 진단 + Issue 생성 | 서비스 전체 중단 가능성 |
+| High | Discord 알림 + AI 분석 | 주요 기능 장애 |
+| Warning | Discord 알림만 | 일부 기능 영향 |
+| Info | 로그만 기록 | 정상 동작, 참고용 |
 
 ---
 
