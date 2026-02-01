@@ -57,10 +57,24 @@ impl AppConfig {
             .map_err(|_| ConfigError::InvalidExpiration)?;
 
         let google_client_id = env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
-        let google_client_secret = env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default();
+        let google_client_secret = match env::var("GOOGLE_CLIENT_SECRET") {
+            Ok(v) => v,
+            Err(_) if cfg!(debug_assertions) => {
+                tracing::warn!("GOOGLE_CLIENT_SECRET 환경변수가 설정되지 않았습니다.");
+                String::new()
+            }
+            Err(_) => return Err(ConfigError::MissingGoogleClientSecret),
+        };
         let google_redirect_uri = env::var("GOOGLE_REDIRECT_URI").unwrap_or_default();
         let kakao_client_id = env::var("KAKAO_CLIENT_ID").unwrap_or_default();
-        let kakao_client_secret = env::var("KAKAO_CLIENT_SECRET").unwrap_or_default();
+        let kakao_client_secret = match env::var("KAKAO_CLIENT_SECRET") {
+            Ok(v) => v,
+            Err(_) if cfg!(debug_assertions) => {
+                tracing::warn!("KAKAO_CLIENT_SECRET 환경변수가 설정되지 않았습니다.");
+                String::new()
+            }
+            Err(_) => return Err(ConfigError::MissingKakaoClientSecret),
+        };
         let kakao_redirect_uri = env::var("KAKAO_REDIRECT_URI").unwrap_or_default();
 
         let openai_api_key = env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
@@ -94,4 +108,8 @@ pub enum ConfigError {
     InvalidExpiration,
     #[error("JWT_SECRET environment variable is required in production")]
     MissingJwtSecret,
+    #[error("GOOGLE_CLIENT_SECRET environment variable is required in production")]
+    MissingGoogleClientSecret,
+    #[error("KAKAO_CLIENT_SECRET environment variable is required in production")]
+    MissingKakaoClientSecret,
 }

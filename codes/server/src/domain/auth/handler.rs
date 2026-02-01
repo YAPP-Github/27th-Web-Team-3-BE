@@ -70,11 +70,11 @@ pub async fn login_by_email(
     let mut headers = HeaderMap::new();
     headers.insert(
         set_cookie_header(),
-        create_access_token_cookie(&result.access_token, jwt_expiration),
+        create_access_token_cookie(&result.access_token, jwt_expiration)?,
     );
     headers.append(
         set_cookie_header(),
-        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
+        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration)?,
     );
 
     // 응답 본문에는 토큰 제외
@@ -122,12 +122,13 @@ pub async fn social_login(
 
     if result.is_new_member {
         // 신규 회원: signup_token 쿠키 설정
-        if let Some(signup_token) = &result.signup_token {
-            headers.insert(
-                set_cookie_header(),
-                create_signup_token_cookie(signup_token, signup_token_expiration),
-            );
-        }
+        let signup_token = result.signup_token.ok_or_else(|| {
+            AppError::InternalError("signup_token이 누락되었습니다.".into())
+        })?;
+        headers.insert(
+            set_cookie_header(),
+            create_signup_token_cookie(&signup_token, signup_token_expiration)?,
+        );
         // 응답 본문에서 토큰 제거 (이메일은 signupToken에 포함)
         let response_body = Json(BaseResponse {
             is_success: true,
@@ -143,18 +144,20 @@ pub async fn social_login(
         Ok((headers, response_body))
     } else {
         // 기존 회원: access_token, refresh_token 쿠키 설정
-        if let (Some(access_token), Some(refresh_token)) =
-            (&result.access_token, &result.refresh_token)
-        {
-            headers.insert(
-                set_cookie_header(),
-                create_access_token_cookie(access_token, jwt_expiration),
-            );
-            headers.append(
-                set_cookie_header(),
-                create_refresh_token_cookie(refresh_token, refresh_token_expiration),
-            );
-        }
+        let access_token = result.access_token.ok_or_else(|| {
+            AppError::InternalError("access_token이 누락되었습니다.".into())
+        })?;
+        let refresh_token = result.refresh_token.ok_or_else(|| {
+            AppError::InternalError("refresh_token이 누락되었습니다.".into())
+        })?;
+        headers.insert(
+            set_cookie_header(),
+            create_access_token_cookie(&access_token, jwt_expiration)?,
+        );
+        headers.append(
+            set_cookie_header(),
+            create_refresh_token_cookie(&refresh_token, refresh_token_expiration)?,
+        );
         // 응답 본문에서 토큰 제거
         let response_body = Json(BaseResponse {
             is_success: true,
@@ -209,13 +212,13 @@ pub async fn signup(
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         set_cookie_header(),
-        create_access_token_cookie(&result.access_token, jwt_expiration),
+        create_access_token_cookie(&result.access_token, jwt_expiration)?,
     );
     response_headers.append(
         set_cookie_header(),
-        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
+        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration)?,
     );
-    response_headers.append(set_cookie_header(), clear_signup_token_cookie());
+    response_headers.append(set_cookie_header(), clear_signup_token_cookie()?);
 
     // 응답 본문에는 토큰 제외
     let response_body = Json(BaseResponse {
@@ -264,11 +267,11 @@ pub async fn refresh_token(
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         set_cookie_header(),
-        create_access_token_cookie(&result.access_token, jwt_expiration),
+        create_access_token_cookie(&result.access_token, jwt_expiration)?,
     );
     response_headers.append(
         set_cookie_header(),
-        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
+        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration)?,
     );
 
     // 응답 본문에는 토큰 제외
@@ -321,8 +324,8 @@ pub async fn logout(
 
     // 쿠키 삭제
     let mut response_headers = HeaderMap::new();
-    response_headers.insert(set_cookie_header(), clear_access_token_cookie());
-    response_headers.append(set_cookie_header(), clear_refresh_token_cookie());
+    response_headers.insert(set_cookie_header(), clear_access_token_cookie()?);
+    response_headers.append(set_cookie_header(), clear_refresh_token_cookie()?);
 
     let response_body = Json(BaseResponse {
         is_success: true,

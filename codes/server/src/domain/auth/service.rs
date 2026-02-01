@@ -1,6 +1,7 @@
 use chrono::{Duration, Utc};
 use reqwest::Client;
 use sea_orm::{DbErr, RuntimeErr, *};
+use std::time::Duration as StdDuration;
 
 use super::dto::{
     EmailLoginRequest, LogoutRequest, SignupRequest, SocialLoginRequest, SocialLoginResponse,
@@ -10,6 +11,9 @@ use crate::domain::member::entity::member::{self, Entity as Member, SocialType};
 use crate::state::AppState;
 use crate::utils::error::AppError;
 use crate::utils::jwt::{decode_token, encode_refresh_token, encode_signup_token, encode_token};
+
+/// OAuth 요청 타임아웃 (초)
+const OAUTH_TIMEOUT_SECS: u64 = 10;
 
 pub struct AuthService;
 
@@ -446,6 +450,14 @@ impl AuthService {
         Self::social_login(state, req).await
     }
 
+    /// OAuth HTTP 클라이언트 생성 (타임아웃 설정)
+    fn oauth_client() -> Result<Client, AppError> {
+        Client::builder()
+            .timeout(StdDuration::from_secs(OAUTH_TIMEOUT_SECS))
+            .build()
+            .map_err(|e| AppError::InternalError(format!("HTTP client init failed: {}", e)))
+    }
+
     /// 카카오 인가 코드로 access_token 교환
     async fn exchange_kakao_code(
         code: &str,
@@ -453,7 +465,7 @@ impl AuthService {
         client_secret: &str,
         redirect_uri: &str,
     ) -> Result<String, AppError> {
-        let client = Client::new();
+        let client = Self::oauth_client()?;
         let response = client
             .post("https://kauth.kakao.com/oauth/token")
             .form(&[
@@ -493,7 +505,7 @@ impl AuthService {
         client_secret: &str,
         redirect_uri: &str,
     ) -> Result<String, AppError> {
-        let client = Client::new();
+        let client = Self::oauth_client()?;
         let response = client
             .post("https://oauth2.googleapis.com/token")
             .form(&[
@@ -528,7 +540,7 @@ impl AuthService {
 
     /// 카카오 access_token으로 유저 정보 조회
     async fn fetch_kakao_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
-        let client = Client::new();
+        let client = Self::oauth_client()?;
         let response = client
             .get("https://kapi.kakao.com/v2/user/me")
             .header("Authorization", format!("Bearer {}", token))
@@ -557,7 +569,7 @@ impl AuthService {
 
     /// 구글 access_token으로 유저 정보 조회
     async fn fetch_google_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
-        let client = Client::new();
+        let client = Self::oauth_client()?;
         let response = client
             .get("https://www.googleapis.com/oauth2/v2/userinfo")
             .header("Authorization", format!("Bearer {}", token))
