@@ -234,12 +234,11 @@ pub async fn signup(
 /// 토큰 갱신 API (API-003)
 ///
 /// 만료된 Access Token을 Refresh Token을 이용하여 재발급합니다.
-/// Refresh Token은 쿠키 또는 요청 본문에서 읽습니다.
+/// Refresh Token은 쿠키에서 읽습니다.
 /// Refresh Token Rotation 정책에 따라 새로운 Refresh Token도 함께 발급됩니다.
 #[utoipa::path(
     post,
     path = "/api/v1/auth/token/refresh",
-    request_body = TokenRefreshRequest,
     responses(
         (status = 200, description = "토큰 갱신 성공", body = SuccessTokenRefreshResponse),
         (status = 400, description = "필수 파라미터 누락", body = ErrorResponse),
@@ -250,10 +249,9 @@ pub async fn signup(
 pub async fn refresh_token(
     State(state): State<AppState>,
     headers: HeaderMap,
-    body: Option<Json<TokenRefreshRequest>>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 쿠키 또는 요청 본문에서 refresh_token 추출
-    let refresh_token = extract_refresh_token_from_cookie_or_body(&headers, body)?;
+    // 쿠키에서 refresh_token 추출
+    let refresh_token = extract_refresh_token_from_cookie(&headers)?;
 
     let req = TokenRefreshRequest { refresh_token };
     req.validate()?;
@@ -336,56 +334,7 @@ pub async fn logout(
     Ok((response_headers, response_body))
 }
 
-/// 쿠키 또는 요청 본문에서 refresh_token 추출
-fn extract_refresh_token_from_cookie_or_body<T: HasRefreshToken>(
-    headers: &HeaderMap,
-    body: Option<Json<T>>,
-) -> Result<String, AppError> {
-    // 1. 요청 본문에서 먼저 시도
-    if let Some(Json(req)) = body {
-        let token = req.get_refresh_token();
-        if !token.is_empty() {
-            return Ok(token);
-        }
-    }
-
-    // 2. 쿠키에서 시도
-    if let Some(cookie_header) = headers.get(COOKIE) {
-        if let Ok(cookie_str) = cookie_header.to_str() {
-            for cookie in cookie_str.split(';') {
-                let cookie = cookie.trim();
-                if let Some(value) = cookie.strip_prefix(&format!("{}=", REFRESH_TOKEN_COOKIE)) {
-                    if !value.is_empty() {
-                        return Ok(value.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    Err(AppError::InvalidToken(
-        "Refresh Token이 필요합니다.".to_string(),
-    ))
-}
-
-/// refresh_token을 가진 타입을 위한 트레이트
-trait HasRefreshToken {
-    fn get_refresh_token(&self) -> String;
-}
-
-impl HasRefreshToken for TokenRefreshRequest {
-    fn get_refresh_token(&self) -> String {
-        self.refresh_token.clone()
-    }
-}
-
-impl HasRefreshToken for LogoutRequest {
-    fn get_refresh_token(&self) -> String {
-        self.refresh_token.clone()
-    }
-}
-
-/// 쿠키에서 refresh_token 추출 (로그아웃용)
+/// 쿠키에서 refresh_token 추출
 fn extract_refresh_token_from_cookie(headers: &HeaderMap) -> Result<String, AppError> {
     if let Some(cookie_header) = headers.get(COOKIE) {
         if let Ok(cookie_str) = cookie_header.to_str() {
