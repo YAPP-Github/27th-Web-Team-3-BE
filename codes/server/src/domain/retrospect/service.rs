@@ -5,8 +5,8 @@ use genpdf::elements::{Break, Paragraph};
 use genpdf::style;
 use genpdf::Element;
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, InsertResult,
-    ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
+    sea_query::LockType, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, ModelTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use tracing::{error, info, warn};
 
@@ -3031,44 +3031,44 @@ impl RetrospectService {
             ));
         }
 
-        // 4. 트랜잭션으로 좋아요 토글 (Race Condition 방지)
-        // "INSERT ON CONFLICT DO NOTHING" 패턴으로 동시성 문제 완전 해결
+        // 4. 트랜잭션으로 좋아요 토글 (MySQL 호환 + 동시성 안전)
+        // SELECT FOR UPDATE로 비관적 락 획득 후 INSERT/DELETE
         let (is_liked, total_likes) = state
             .db
             .transaction::<_, (bool, u64), DbErr>(|txn| {
                 Box::pin(async move {
-                    // ON CONFLICT DO NOTHING으로 삽입 시도
-                    // unique constraint (member_id, response_id)가 있으면 충돌 시 무시됨
-                    let new_like = response_like::ActiveModel {
-                        member_id: Set(user_id),
-                        response_id: Set(response_id),
-                        ..Default::default()
-                    };
+                    // response 레코드에 FOR UPDATE 락을 걸어 동시성 제어
+                    // 동일 response에 대한 좋아요 토글 요청이 직렬화됨
+                    let _locked_response = response::Entity::find_by_id(response_id)
+                        .lock(LockType::Update)
+                        .one(txn)
+                        .await?
+                        .ok_or(DbErr::Custom("Response not found".to_string()))?;
 
-                    let insert_result: InsertResult<response_like::ActiveModel> =
-                        response_like::Entity::insert(new_like)
-                            .on_conflict(
-                                OnConflict::columns([
-                                    response_like::Column::MemberId,
-                                    response_like::Column::ResponseId,
-                                ])
-                                .do_nothing()
-                                .to_owned(),
-                            )
-                            .exec(txn)
-                            .await?;
+                    // 기존 좋아요 존재 여부 확인
+                    let existing_like = response_like::Entity::find()
+                        .filter(response_like::Column::MemberId.eq(user_id))
+                        .filter(response_like::Column::ResponseId.eq(response_id))
+                        .one(txn)
+                        .await?;
 
-                    let is_liked = if insert_result.last_insert_id > 0 {
-                        // 삽입 성공 = 좋아요 추가됨
-                        true
-                    } else {
-                        // 삽입 실패 (충돌) = 이미 좋아요가 있으므로 삭제
+                    let is_liked = if existing_like.is_some() {
+                        // 이미 좋아요가 있으면 삭제 (좋아요 취소)
                         response_like::Entity::delete_many()
                             .filter(response_like::Column::MemberId.eq(user_id))
                             .filter(response_like::Column::ResponseId.eq(response_id))
                             .exec(txn)
                             .await?;
                         false
+                    } else {
+                        // 좋아요가 없으면 추가
+                        let new_like = response_like::ActiveModel {
+                            member_id: Set(user_id),
+                            response_id: Set(response_id),
+                            ..Default::default()
+                        };
+                        response_like::Entity::insert(new_like).exec(txn).await?;
+                        true
                     };
 
                     // 5. 총 좋아요 개수 조회
