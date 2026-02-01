@@ -1746,20 +1746,27 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 9. 멤버-회고 매핑 삭제 (member_retro)
+        // 9. 어시스턴트 사용 기록 삭제 (assistant_usage)
+        let assistant_usages_deleted = assistant_usage::Entity::delete_many()
+            .filter(assistant_usage::Column::RetrospectId.eq(retrospect_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 10. 멤버-회고 매핑 삭제 (member_retro)
         let member_retros_deleted = member_retro::Entity::delete_many()
             .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
             .exec(&txn)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 10. 회고 삭제
+        // 11. 회고 삭제
         retrospect_model
             .delete(&txn)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 11. 회고방 삭제 (같은 room을 참조하는 다른 회고가 없는 경우에만)
+        // 12. 회고방 삭제 (같은 room을 참조하는 다른 회고가 없는 경우에만)
         let other_retro_count = retrospect::Entity::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
             .count(&txn)
@@ -1793,7 +1800,7 @@ impl RetrospectService {
             (0, 0)
         };
 
-        // 12. 트랜잭션 커밋
+        // 13. 트랜잭션 커밋
         txn.commit()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -1802,6 +1809,7 @@ impl RetrospectService {
             retrospect_id = retrospect_id,
             responses_deleted = responses_deleted.rows_affected,
             references_deleted = references_deleted.rows_affected,
+            assistant_usages_deleted = assistant_usages_deleted.rows_affected,
             member_retros_deleted = member_retros_deleted.rows_affected,
             member_retro_rooms_deleted = member_retro_rooms_deleted,
             room_deleted = room_deleted,
