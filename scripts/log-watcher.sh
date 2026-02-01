@@ -18,7 +18,7 @@ LOCK_TIMEOUT=10   # 락 대기 시간 (초)
 CRITICAL_CODES="COMMON500|AI5001|AI5002|AI5003|AI5031"
 
 # Warning: 알림만 (AI 진단 없음)
-# - 인증 오류, PDF 생성 실패
+# - 인증 오류 (4xx 클라이언트 에러)
 WARNING_CODES="AUTH4001|AUTH4002|AUTH4003|AUTH4004|AUTH4005"
 
 # Info: 로그만 (알림 없음)

@@ -12,6 +12,7 @@ import time
 import fcntl
 from pathlib import Path
 
+import openai
 from openai import OpenAI
 
 # API 키 사전 검증
@@ -156,8 +157,14 @@ JSON만 출력하세요."""
 
         return {"error": "JSON 파싱 실패", "raw": content[:200]}
 
+    except openai.RateLimitError:
+        return {"error": "OpenAI rate limit exceeded"}
+    except openai.AuthenticationError:
+        return {"error": "OpenAI authentication failed"}
+    except openai.APIConnectionError as e:
+        return {"error": f"API connection failed: {e}"}
     except Exception as e:
-        return {"error": f"OpenAI API error: {e}"}
+        return {"error": f"Unexpected error: {e}"}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
