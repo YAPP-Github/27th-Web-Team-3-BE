@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use std::fmt;
 use tracing::error;
 use validator::ValidationErrors;
 
@@ -332,6 +333,12 @@ impl AppError {
             AppError::RetroDeleteAccessDenied(_) => StatusCode::FORBIDDEN,
             AppError::MemberNotFound(_) => StatusCode::NOT_FOUND,
         }
+    }
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}] {}", self.error_code(), self.message())
     }
 }
 
