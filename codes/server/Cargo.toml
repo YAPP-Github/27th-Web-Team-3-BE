@@ -42,7 +42,11 @@ utoipa-swagger-ui = { version = "7", features = ["axum"] }
 thiserror = "1.0"
 
 # UUID
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Async trait support
+async-trait = "0.1"
+
 sea-orm = { version = "1.1.19", features = ["sqlx-mysql", "runtime-tokio-native-tls", "macros"] }
 
 # PDF Generation
