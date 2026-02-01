@@ -122,9 +122,9 @@ pub async fn social_login(
 
     if result.is_new_member {
         // 신규 회원: signup_token 쿠키 설정
-        let signup_token = result.signup_token.ok_or_else(|| {
-            AppError::InternalError("signup_token이 누락되었습니다.".into())
-        })?;
+        let signup_token = result
+            .signup_token
+            .ok_or_else(|| AppError::InternalError("signup_token이 누락되었습니다.".into()))?;
         headers.insert(
             set_cookie_header(),
             create_signup_token_cookie(&signup_token, signup_token_expiration)?,
@@ -144,12 +144,12 @@ pub async fn social_login(
         Ok((headers, response_body))
     } else {
         // 기존 회원: access_token, refresh_token 쿠키 설정
-        let access_token = result.access_token.ok_or_else(|| {
-            AppError::InternalError("access_token이 누락되었습니다.".into())
-        })?;
-        let refresh_token = result.refresh_token.ok_or_else(|| {
-            AppError::InternalError("refresh_token이 누락되었습니다.".into())
-        })?;
+        let access_token = result
+            .access_token
+            .ok_or_else(|| AppError::InternalError("access_token이 누락되었습니다.".into()))?;
+        let refresh_token = result
+            .refresh_token
+            .ok_or_else(|| AppError::InternalError("refresh_token이 누락되었습니다.".into()))?;
         headers.insert(
             set_cookie_header(),
             create_access_token_cookie(&access_token, jwt_expiration)?,
