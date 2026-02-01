@@ -48,10 +48,28 @@ impl AuthService {
         state: AppState,
         req: SocialLoginRequest,
     ) -> Result<SocialLoginResponse, AppError> {
-        // 1. 소셜 제공자로부터 유저 정보 가져오기
+        // 1. 인가 코드로 access_token 교환 후 유저 정보 가져오기
         let social_info = match req.provider {
-            SocialType::Kakao => Self::fetch_kakao_user_info(&req.access_token).await?,
-            SocialType::Google => Self::fetch_google_user_info(&req.access_token).await?,
+            SocialType::Kakao => {
+                let access_token = Self::exchange_kakao_code(
+                    &req.code,
+                    &state.config.kakao_client_id,
+                    &state.config.kakao_client_secret,
+                    &state.config.kakao_redirect_uri,
+                )
+                .await?;
+                Self::fetch_kakao_user_info(&access_token).await?
+            }
+            SocialType::Google => {
+                let access_token = Self::exchange_google_code(
+                    &req.code,
+                    &state.config.google_client_id,
+                    &state.config.google_client_secret,
+                    &state.config.google_redirect_uri,
+                )
+                .await?;
+                Self::fetch_google_user_info(&access_token).await?
+            }
         };
 
         // 2. DB에서 유저 조회 (이메일 + 소셜 타입)
@@ -436,6 +454,87 @@ impl AuthService {
         Self::social_login(state, req).await
     }
 
+    /// 카카오 인가 코드로 access_token 교환
+    async fn exchange_kakao_code(
+        code: &str,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uri: &str,
+    ) -> Result<String, AppError> {
+        let client = Client::new();
+        let response = client
+            .post("https://kauth.kakao.com/oauth/token")
+            .form(&[
+                ("grant_type", "authorization_code"),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("redirect_uri", redirect_uri),
+                ("code", code),
+            ])
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Kakao token exchange failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!("Kakao token exchange error: {}", error_body);
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 인가 코드입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        json["access_token"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| AppError::SocialAuthFailed("토큰 응답 파싱 실패".into()))
+    }
+
+    /// 구글 인가 코드로 access_token 교환
+    async fn exchange_google_code(
+        code: &str,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uri: &str,
+    ) -> Result<String, AppError> {
+        let client = Client::new();
+        let response = client
+            .post("https://oauth2.googleapis.com/token")
+            .form(&[
+                ("grant_type", "authorization_code"),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("redirect_uri", redirect_uri),
+                ("code", code),
+            ])
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Google token exchange failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!("Google token exchange error: {}", error_body);
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 인가 코드입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        json["access_token"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| AppError::SocialAuthFailed("토큰 응답 파싱 실패".into()))
+    }
+
+    /// 카카오 access_token으로 유저 정보 조회
     async fn fetch_kakao_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
         let client = Client::new();
         let response = client
@@ -464,6 +563,7 @@ impl AuthService {
         Ok(SocialUserInfo { email })
     }
 
+    /// 구글 access_token으로 유저 정보 조회
     async fn fetch_google_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
         let client = Client::new();
         let response = client

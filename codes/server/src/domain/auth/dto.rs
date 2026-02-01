@@ -27,9 +27,9 @@ pub struct SocialLoginRequest {
     /// 소셜 서비스 구분 (GOOGLE, KAKAO)
     pub provider: SocialType,
 
-    /// 소셜 서비스에서 발급받은 Access Token
-    #[validate(length(min = 1, message = "accessToken은 필수입니다"))]
-    pub access_token: String,
+    /// 소셜 서비스에서 발급받은 인가 코드 (Authorization Code)
+    #[validate(length(min = 1, message = "code는 필수입니다"))]
+    pub code: String,
 }
 
 /// [API-001] 소셜 로그인 응답 DTO
