@@ -417,13 +417,19 @@ impl RetrospectService {
         member_id: i64,
         retro_room_id: i64,
     ) -> Result<DeleteRetroRoomResponse, AppError> {
+        info!(
+            member_id = member_id,
+            retro_room_id = retro_room_id,
+            "회고방 삭제 요청"
+        );
+
         // 1. 룸 존재 여부 확인
         let room = RetroRoom::find_by_id(retro_room_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let room =
+        let _room =
             room.ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
 
         // 2. 멤버십 및 Owner 권한 확인
@@ -447,10 +453,105 @@ impl RetrospectService {
 
         let deleted_at = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
 
-        // 3. 삭제 (관련 member_retro_room은 CASCADE로 삭제)
-        room.delete(&state.db)
+        // 3. 트랜잭션 내에서 연관 데이터 순차 삭제 (FK 제약조건 고려)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 3-1. 해당 회고방의 모든 회고 ID 조회
+        let retrospect_ids: Vec<i64> = Retrospect::find()
+            .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
+            .select_only()
+            .column(retrospect::Column::RetrospectId)
+            .into_tuple()
+            .all(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if !retrospect_ids.is_empty() {
+            // 3-2. 해당 회고들의 모든 응답 ID 조회
+            let response_ids: Vec<i64> = response::Entity::find()
+                .filter(response::Column::RetrospectId.is_in(retrospect_ids.clone()))
+                .select_only()
+                .column(response::Column::ResponseId)
+                .into_tuple()
+                .all(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            if !response_ids.is_empty() {
+                // 3-3. 댓글 삭제 (response_comment)
+                response_comment::Entity::delete_many()
+                    .filter(response_comment::Column::ResponseId.is_in(response_ids.clone()))
+                    .exec(&txn)
+                    .await
+                    .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+                // 3-4. 좋아요 삭제 (response_like)
+                response_like::Entity::delete_many()
+                    .filter(response_like::Column::ResponseId.is_in(response_ids.clone()))
+                    .exec(&txn)
+                    .await
+                    .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+                // 3-5. 멤버 응답 매핑 삭제 (member_response)
+                member_response::Entity::delete_many()
+                    .filter(member_response::Column::ResponseId.is_in(response_ids.clone()))
+                    .exec(&txn)
+                    .await
+                    .map_err(|e| AppError::InternalError(e.to_string()))?;
+            }
+
+            // 3-6. 응답 삭제 (response)
+            response::Entity::delete_many()
+                .filter(response::Column::RetrospectId.is_in(retrospect_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 3-7. 참고자료 삭제 (retro_reference)
+            retro_reference::Entity::delete_many()
+                .filter(retro_reference::Column::RetrospectId.is_in(retrospect_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 3-8. 멤버 회고 매핑 삭제 (member_retro)
+            member_retro::Entity::delete_many()
+                .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids.clone()))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 3-9. 회고 삭제 (retrospect)
+            Retrospect::delete_many()
+                .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
+                .exec(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+
+        // 3-10. 멤버 회고방 매핑 삭제 (member_retro_room)
+        MemberRetroRoom::delete_many()
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+            .exec(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 3-11. 회고방 삭제 (retro_room)
+        RetroRoom::delete_by_id(retro_room_id)
+            .exec(&txn)
             .await
             .map_err(|e| AppError::InternalError(format!("회고방 삭제 실패: {}", e)))?;
+
+        // 4. 트랜잭션 커밋
+        txn.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        info!(retro_room_id = retro_room_id, "회고방 삭제 완료");
 
         Ok(DeleteRetroRoomResponse {
             retro_room_id,
