@@ -15,6 +15,7 @@ pub struct AppConfig {
     pub google_client_secret: String,
     pub google_redirect_uri: String,
     pub kakao_client_id: String,
+    pub kakao_client_secret: String,
     pub kakao_redirect_uri: String,
 
     // AI Service
@@ -59,6 +60,7 @@ impl AppConfig {
         let google_client_secret = env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default();
         let google_redirect_uri = env::var("GOOGLE_REDIRECT_URI").unwrap_or_default();
         let kakao_client_id = env::var("KAKAO_CLIENT_ID").unwrap_or_default();
+        let kakao_client_secret = env::var("KAKAO_CLIENT_SECRET").unwrap_or_default();
         let kakao_redirect_uri = env::var("KAKAO_REDIRECT_URI").unwrap_or_default();
 
         let openai_api_key = env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
@@ -77,6 +79,7 @@ impl AppConfig {
             google_client_secret,
             google_redirect_uri,
             kakao_client_id,
+            kakao_client_secret,
             kakao_redirect_uri,
             openai_api_key,
         })
