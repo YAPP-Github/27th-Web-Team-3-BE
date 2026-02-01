@@ -1,14 +1,22 @@
-use axum::{extract::State, http::HeaderMap, Json};
+use axum::{
+    extract::State,
+    http::{header::COOKIE, HeaderMap},
+    response::IntoResponse,
+    Json,
+};
 use utoipa;
 use validator::Validate;
 
 use super::dto::{
-    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
-    SocialLoginRequest, SocialLoginResponse, TokenRefreshRequest, TokenRefreshResponse,
+    EmailLoginRequest, LogoutRequest, SignupRequest, SocialLoginRequest, TokenRefreshRequest,
 };
 use super::service::AuthService;
 use crate::state::AppState;
 use crate::utils::auth::AuthUser;
+use crate::utils::cookie::{
+    clear_access_token_cookie, clear_refresh_token_cookie, create_access_token_cookie,
+    create_refresh_token_cookie, set_cookie_header, REFRESH_TOKEN_COOKIE,
+};
 use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
@@ -35,6 +43,7 @@ pub async fn auth_test(user: AuthUser) -> Json<BaseResponse<String>> {
 /// 이메일 기반 로그인 (테스트/개발용)
 ///
 /// 비밀번호 없이 이메일만으로 로그인을 진행합니다. (존재하는 유저만 가능)
+/// 성공 시 accessToken, refreshToken을 쿠키로 설정합니다.
 #[utoipa::path(
     post,
     path = "/api/auth/login/email",
@@ -48,18 +57,37 @@ pub async fn auth_test(user: AuthUser) -> Json<BaseResponse<String>> {
 pub async fn login_by_email(
     State(state): State<AppState>,
     Json(req): Json<EmailLoginRequest>,
-) -> Result<Json<BaseResponse<EmailLoginResponse>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     req.validate()?;
 
+    let jwt_expiration = state.config.jwt_expiration;
+    let refresh_token_expiration = state.config.refresh_token_expiration;
     let result = AuthService::login_by_email(state, req).await?;
 
-    Ok(Json(BaseResponse::success(result)))
+    let response_body = Json(BaseResponse::success(result.clone()));
+
+    // 로그인 성공 시 쿠키 설정
+    if let (Some(access_token), Some(refresh_token)) = (&result.access_token, &result.refresh_token)
+    {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            set_cookie_header(),
+            create_access_token_cookie(access_token, jwt_expiration),
+        );
+        headers.append(
+            set_cookie_header(),
+            create_refresh_token_cookie(refresh_token, refresh_token_expiration),
+        );
+        return Ok((headers, response_body));
+    }
+
+    Ok((HeaderMap::new(), response_body))
 }
 
 /// 소셜 로그인 API (API-001)
 ///
 /// 카카오/구글 액세스 토큰을 받아 로그인 검증 후 JWT 토큰을 발급합니다.
-/// - 기존 회원: accessToken, refreshToken 발급
+/// - 기존 회원: accessToken, refreshToken 발급 (쿠키로 전달)
 /// - 신규 회원: signupToken 발급 (회원가입 필요)
 #[utoipa::path(
     post,
@@ -75,9 +103,11 @@ pub async fn login_by_email(
 pub async fn social_login(
     State(state): State<AppState>,
     Json(req): Json<SocialLoginRequest>,
-) -> Result<Json<BaseResponse<SocialLoginResponse>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     req.validate()?;
 
+    let jwt_expiration = state.config.jwt_expiration;
+    let refresh_token_expiration = state.config.refresh_token_expiration;
     let result = AuthService::social_login(state, req).await?;
 
     let (code, message) = if result.is_new_member {
@@ -86,18 +116,39 @@ pub async fn social_login(
         ("COMMON200", "로그인에 성공하였습니다.")
     };
 
-    Ok(Json(BaseResponse {
+    let response_body = Json(BaseResponse {
         is_success: true,
         code: code.to_string(),
         message: message.to_string(),
-        result: Some(result),
-    }))
+        result: Some(result.clone()),
+    });
+
+    // 기존 회원인 경우에만 쿠키 설정
+    if !result.is_new_member {
+        if let (Some(access_token), Some(refresh_token)) =
+            (&result.access_token, &result.refresh_token)
+        {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                set_cookie_header(),
+                create_access_token_cookie(access_token, jwt_expiration),
+            );
+            headers.append(
+                set_cookie_header(),
+                create_refresh_token_cookie(refresh_token, refresh_token_expiration),
+            );
+            return Ok((headers, response_body));
+        }
+    }
+
+    Ok((HeaderMap::new(), response_body))
 }
 
 /// 회원가입 API (API-002)
 ///
 /// 소셜 로그인에서 발급받은 signupToken으로 회원가입을 완료합니다.
 /// Authorization 헤더에 Bearer {signupToken}이 필요합니다.
+/// 성공 시 accessToken, refreshToken을 쿠키로 설정합니다.
 #[utoipa::path(
     post,
     path = "/api/v1/auth/signup",
@@ -117,7 +168,7 @@ pub async fn signup(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<SignupRequest>,
-) -> Result<Json<BaseResponse<SignupResponse>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     req.validate()?;
 
     // Authorization 헤더에서 signupToken 추출
@@ -131,19 +182,35 @@ pub async fn signup(
         .strip_prefix("Bearer ")
         .ok_or_else(|| AppError::Unauthorized("인증 정보가 유효하지 않습니다.".into()))?;
 
+    let jwt_expiration = state.config.jwt_expiration;
+    let refresh_token_expiration = state.config.refresh_token_expiration;
     let result = AuthService::signup(state, req, signup_token).await?;
 
-    Ok(Json(BaseResponse {
+    // 쿠키 설정
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(
+        set_cookie_header(),
+        create_access_token_cookie(&result.access_token, jwt_expiration),
+    );
+    response_headers.append(
+        set_cookie_header(),
+        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
+    );
+
+    let response_body = Json(BaseResponse {
         is_success: true,
         code: "COMMON200".to_string(),
         message: "회원가입이 성공적으로 완료되었습니다.".to_string(),
         result: Some(result),
-    }))
+    });
+
+    Ok((response_headers, response_body))
 }
 
 /// 토큰 갱신 API (API-003)
 ///
 /// 만료된 Access Token을 Refresh Token을 이용하여 재발급합니다.
+/// Refresh Token은 쿠키 또는 요청 본문에서 읽습니다.
 /// Refresh Token Rotation 정책에 따라 새로운 Refresh Token도 함께 발급됩니다.
 #[utoipa::path(
     post,
@@ -158,24 +225,45 @@ pub async fn signup(
 )]
 pub async fn refresh_token(
     State(state): State<AppState>,
-    Json(req): Json<TokenRefreshRequest>,
-) -> Result<Json<BaseResponse<TokenRefreshResponse>>, AppError> {
+    headers: HeaderMap,
+    body: Option<Json<TokenRefreshRequest>>,
+) -> Result<impl IntoResponse, AppError> {
+    // 쿠키 또는 요청 본문에서 refresh_token 추출
+    let refresh_token = extract_refresh_token_from_cookie_or_body(&headers, body)?;
+
+    let req = TokenRefreshRequest { refresh_token };
     req.validate()?;
 
+    let jwt_expiration = state.config.jwt_expiration;
+    let refresh_token_expiration = state.config.refresh_token_expiration;
     let result = AuthService::refresh_token(state, req).await?;
 
-    Ok(Json(BaseResponse {
+    // 쿠키 설정
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(
+        set_cookie_header(),
+        create_access_token_cookie(&result.access_token, jwt_expiration),
+    );
+    response_headers.append(
+        set_cookie_header(),
+        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
+    );
+
+    let response_body = Json(BaseResponse {
         is_success: true,
         code: "COMMON200".to_string(),
         message: "토큰이 성공적으로 갱신되었습니다.".to_string(),
         result: Some(result),
-    }))
+    });
+
+    Ok((response_headers, response_body))
 }
 
 /// 로그아웃 API (API-029)
 ///
 /// 현재 사용자의 로그아웃을 처리합니다.
-/// 서버에 저장된 Refresh Token을 무효화하여 보안을 유지합니다.
+/// 서버에 저장된 Refresh Token을 무효화하고 쿠키를 삭제합니다.
+/// Refresh Token은 쿠키 또는 요청 본문에서 읽습니다.
 #[utoipa::path(
     post,
     path = "/api/v1/auth/logout",
@@ -193,8 +281,13 @@ pub async fn refresh_token(
 pub async fn logout(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(req): Json<LogoutRequest>,
-) -> Result<Json<BaseResponse<()>>, AppError> {
+    headers: HeaderMap,
+    body: Option<Json<LogoutRequest>>,
+) -> Result<impl IntoResponse, AppError> {
+    // 쿠키 또는 요청 본문에서 refresh_token 추출
+    let refresh_token = extract_refresh_token_from_cookie_or_body(&headers, body)?;
+
+    let req = LogoutRequest { refresh_token };
     req.validate()?;
 
     let user_id: i64 = user
@@ -205,19 +298,76 @@ pub async fn logout(
 
     AuthService::logout(state, req, user_id).await?;
 
-    Ok(Json(BaseResponse {
+    // 쿠키 삭제
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(set_cookie_header(), clear_access_token_cookie());
+    response_headers.append(set_cookie_header(), clear_refresh_token_cookie());
+
+    let response_body = Json(BaseResponse {
         is_success: true,
         code: "COMMON200".to_string(),
         message: "로그아웃이 성공적으로 처리되었습니다.".to_string(),
-        result: None,
-    }))
+        result: None::<()>,
+    });
+
+    Ok((response_headers, response_body))
+}
+
+/// 쿠키 또는 요청 본문에서 refresh_token 추출
+fn extract_refresh_token_from_cookie_or_body<T: HasRefreshToken>(
+    headers: &HeaderMap,
+    body: Option<Json<T>>,
+) -> Result<String, AppError> {
+    // 1. 요청 본문에서 먼저 시도
+    if let Some(Json(req)) = body {
+        let token = req.get_refresh_token();
+        if !token.is_empty() {
+            return Ok(token);
+        }
+    }
+
+    // 2. 쿠키에서 시도
+    if let Some(cookie_header) = headers.get(COOKIE) {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if let Some(value) = cookie.strip_prefix(&format!("{}=", REFRESH_TOKEN_COOKIE)) {
+                    if !value.is_empty() {
+                        return Ok(value.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Err(AppError::InvalidToken(
+        "Refresh Token이 필요합니다.".to_string(),
+    ))
+}
+
+/// refresh_token을 가진 타입을 위한 트레이트
+trait HasRefreshToken {
+    fn get_refresh_token(&self) -> String;
+}
+
+impl HasRefreshToken for TokenRefreshRequest {
+    fn get_refresh_token(&self) -> String {
+        self.refresh_token.clone()
+    }
+}
+
+impl HasRefreshToken for LogoutRequest {
+    fn get_refresh_token(&self) -> String {
+        self.refresh_token.clone()
+    }
 }
 
 // 하위 호환성을 위한 별칭
 #[deprecated(note = "Use social_login instead")]
+#[allow(dead_code)]
 pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<SocialLoginRequest>,
-) -> Result<Json<BaseResponse<SocialLoginResponse>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     social_login(State(state), Json(req)).await
 }

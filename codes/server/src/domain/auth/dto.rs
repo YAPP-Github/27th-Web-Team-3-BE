@@ -33,7 +33,7 @@ pub struct SocialLoginRequest {
 }
 
 /// [API-001] 소셜 로그인 응답 DTO
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SocialLoginResponse {
     /// 신규 회원 여부
@@ -126,7 +126,7 @@ pub struct EmailLoginRequest {
     pub email: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailLoginResponse {
     pub is_new_member: bool,
