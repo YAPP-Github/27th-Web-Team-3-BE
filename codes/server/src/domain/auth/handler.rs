@@ -288,11 +288,10 @@ pub async fn refresh_token(
 ///
 /// 현재 사용자의 로그아웃을 처리합니다.
 /// 서버에 저장된 Refresh Token을 무효화하고 쿠키를 삭제합니다.
-/// Refresh Token은 쿠키 또는 요청 본문에서 읽습니다.
+/// Refresh Token은 쿠키에서 읽습니다.
 #[utoipa::path(
     post,
     path = "/api/v1/auth/logout",
-    request_body = LogoutRequest,
     security(
         ("bearer_auth" = [])
     ),
@@ -307,10 +306,9 @@ pub async fn logout(
     State(state): State<AppState>,
     user: AuthUser,
     headers: HeaderMap,
-    body: Option<Json<LogoutRequest>>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 쿠키 또는 요청 본문에서 refresh_token 추출
-    let refresh_token = extract_refresh_token_from_cookie_or_body(&headers, body)?;
+    // 쿠키에서 refresh_token 추출
+    let refresh_token = extract_refresh_token_from_cookie(&headers)?;
 
     let req = LogoutRequest { refresh_token };
     req.validate()?;
@@ -385,6 +383,26 @@ impl HasRefreshToken for LogoutRequest {
     fn get_refresh_token(&self) -> String {
         self.refresh_token.clone()
     }
+}
+
+/// 쿠키에서 refresh_token 추출 (로그아웃용)
+fn extract_refresh_token_from_cookie(headers: &HeaderMap) -> Result<String, AppError> {
+    if let Some(cookie_header) = headers.get(COOKIE) {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if let Some(value) = cookie.strip_prefix(&format!("{}=", REFRESH_TOKEN_COOKIE)) {
+                    if !value.is_empty() {
+                        return Ok(value.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Err(AppError::InvalidToken(
+        "Refresh Token이 필요합니다.".to_string(),
+    ))
 }
 
 /// 쿠키 또는 Authorization 헤더에서 signup_token 추출
