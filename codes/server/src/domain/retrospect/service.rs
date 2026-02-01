@@ -5,8 +5,8 @@ use genpdf::elements::{Break, Paragraph};
 use genpdf::style;
 use genpdf::Element;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set, TransactionTrait,
+    sea_query::LockType, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, ModelTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use tracing::{error, info, warn};
 
@@ -2930,12 +2930,20 @@ impl RetrospectService {
             ));
         }
 
-        // 4. 트랜잭션으로 좋아요 토글 (MySQL 호환)
-        // SELECT-then-INSERT/DELETE 패턴으로 모든 DB 호환성 보장
+        // 4. 트랜잭션으로 좋아요 토글 (MySQL 호환 + 동시성 안전)
+        // SELECT FOR UPDATE로 비관적 락 획득 후 INSERT/DELETE
         let (is_liked, total_likes) = state
             .db
             .transaction::<_, (bool, u64), DbErr>(|txn| {
                 Box::pin(async move {
+                    // response 레코드에 FOR UPDATE 락을 걸어 동시성 제어
+                    // 동일 response에 대한 좋아요 토글 요청이 직렬화됨
+                    let _locked_response = response::Entity::find_by_id(response_id)
+                        .lock(LockType::Update)
+                        .one(txn)
+                        .await?
+                        .ok_or(DbErr::Custom("Response not found".to_string()))?;
+
                     // 기존 좋아요 존재 여부 확인
                     let existing_like = response_like::Entity::find()
                         .filter(response_like::Column::MemberId.eq(user_id))
