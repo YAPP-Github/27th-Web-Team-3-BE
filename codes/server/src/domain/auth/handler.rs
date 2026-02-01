@@ -8,14 +8,16 @@ use utoipa;
 use validator::Validate;
 
 use super::dto::{
-    EmailLoginRequest, LogoutRequest, SignupRequest, SocialLoginRequest, TokenRefreshRequest,
+    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
+    SocialLoginRequest, TokenRefreshRequest, TokenRefreshResponse,
 };
 use super::service::AuthService;
 use crate::state::AppState;
 use crate::utils::auth::AuthUser;
 use crate::utils::cookie::{
-    clear_access_token_cookie, clear_refresh_token_cookie, create_access_token_cookie,
-    create_refresh_token_cookie, set_cookie_header, REFRESH_TOKEN_COOKIE,
+    clear_access_token_cookie, clear_refresh_token_cookie, clear_signup_token_cookie,
+    create_access_token_cookie, create_refresh_token_cookie, create_signup_token_cookie,
+    set_cookie_header, REFRESH_TOKEN_COOKIE, SIGNUP_TOKEN_COOKIE,
 };
 use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
@@ -64,31 +66,30 @@ pub async fn login_by_email(
     let refresh_token_expiration = state.config.refresh_token_expiration;
     let result = AuthService::login_by_email(state, req).await?;
 
-    let response_body = Json(BaseResponse::success(result.clone()));
+    // 쿠키 설정
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        set_cookie_header(),
+        create_access_token_cookie(&result.access_token, jwt_expiration),
+    );
+    headers.append(
+        set_cookie_header(),
+        create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
+    );
 
-    // 로그인 성공 시 쿠키 설정
-    if let (Some(access_token), Some(refresh_token)) = (&result.access_token, &result.refresh_token)
-    {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            set_cookie_header(),
-            create_access_token_cookie(access_token, jwt_expiration),
-        );
-        headers.append(
-            set_cookie_header(),
-            create_refresh_token_cookie(refresh_token, refresh_token_expiration),
-        );
-        return Ok((headers, response_body));
-    }
+    // 응답 본문에는 토큰 제외
+    let response_body = Json(BaseResponse::success(EmailLoginResponse {
+        is_new_member: result.is_new_member,
+    }));
 
-    Ok((HeaderMap::new(), response_body))
+    Ok((headers, response_body))
 }
 
 /// 소셜 로그인 API (API-001)
 ///
 /// 카카오/구글 액세스 토큰을 받아 로그인 검증 후 JWT 토큰을 발급합니다.
-/// - 기존 회원: accessToken, refreshToken 발급 (쿠키로 전달)
-/// - 신규 회원: signupToken 발급 (회원가입 필요)
+/// - 기존 회원: accessToken, refreshToken 쿠키로 발급
+/// - 신규 회원: signupToken 쿠키로 발급 (회원가입 필요)
 #[utoipa::path(
     post,
     path = "/api/v1/auth/social-login",
@@ -108,6 +109,7 @@ pub async fn social_login(
 
     let jwt_expiration = state.config.jwt_expiration;
     let refresh_token_expiration = state.config.refresh_token_expiration;
+    let signup_token_expiration = state.config.signup_token_expiration;
     let result = AuthService::social_login(state, req).await?;
 
     let (code, message) = if result.is_new_member {
@@ -116,19 +118,35 @@ pub async fn social_login(
         ("COMMON200", "로그인에 성공하였습니다.")
     };
 
-    let response_body = Json(BaseResponse {
-        is_success: true,
-        code: code.to_string(),
-        message: message.to_string(),
-        result: Some(result.clone()),
-    });
+    let mut headers = HeaderMap::new();
 
-    // 기존 회원인 경우에만 쿠키 설정
-    if !result.is_new_member {
+    if result.is_new_member {
+        // 신규 회원: signup_token 쿠키 설정
+        if let Some(signup_token) = &result.signup_token {
+            headers.insert(
+                set_cookie_header(),
+                create_signup_token_cookie(signup_token, signup_token_expiration),
+            );
+        }
+        // 응답 본문에서 토큰 제거
+        let response_body = Json(BaseResponse {
+            is_success: true,
+            code: code.to_string(),
+            message: message.to_string(),
+            result: Some(super::dto::SocialLoginResponse {
+                is_new_member: true,
+                access_token: None,
+                refresh_token: None,
+                email: result.email.clone(),
+                signup_token: None, // 쿠키로 전달하므로 본문에서 제거
+            }),
+        });
+        Ok((headers, response_body))
+    } else {
+        // 기존 회원: access_token, refresh_token 쿠키 설정
         if let (Some(access_token), Some(refresh_token)) =
             (&result.access_token, &result.refresh_token)
         {
-            let mut headers = HeaderMap::new();
             headers.insert(
                 set_cookie_header(),
                 create_access_token_cookie(access_token, jwt_expiration),
@@ -137,17 +155,28 @@ pub async fn social_login(
                 set_cookie_header(),
                 create_refresh_token_cookie(refresh_token, refresh_token_expiration),
             );
-            return Ok((headers, response_body));
         }
+        // 응답 본문에서 토큰 제거
+        let response_body = Json(BaseResponse {
+            is_success: true,
+            code: code.to_string(),
+            message: message.to_string(),
+            result: Some(super::dto::SocialLoginResponse {
+                is_new_member: false,
+                access_token: None,  // 쿠키로 전달하므로 본문에서 제거
+                refresh_token: None, // 쿠키로 전달하므로 본문에서 제거
+                email: None,
+                signup_token: None,
+            }),
+        });
+        Ok((headers, response_body))
     }
-
-    Ok((HeaderMap::new(), response_body))
 }
 
 /// 회원가입 API (API-002)
 ///
 /// 소셜 로그인에서 발급받은 signupToken으로 회원가입을 완료합니다.
-/// Authorization 헤더에 Bearer {signupToken}이 필요합니다.
+/// signupToken은 쿠키 또는 Authorization 헤더에서 읽습니다.
 /// 성공 시 accessToken, refreshToken을 쿠키로 설정합니다.
 #[utoipa::path(
     post,
@@ -171,22 +200,14 @@ pub async fn signup(
 ) -> Result<impl IntoResponse, AppError> {
     req.validate()?;
 
-    // Authorization 헤더에서 signupToken 추출
-    let auth_header = headers
-        .get("Authorization")
-        .ok_or_else(|| AppError::Unauthorized("인증 정보가 유효하지 않습니다.".into()))?
-        .to_str()
-        .map_err(|_| AppError::Unauthorized("인증 정보가 유효하지 않습니다.".into()))?;
-
-    let signup_token = auth_header
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| AppError::Unauthorized("인증 정보가 유효하지 않습니다.".into()))?;
+    // 쿠키 또는 Authorization 헤더에서 signupToken 추출
+    let signup_token = extract_signup_token_from_cookie_or_header(&headers)?;
 
     let jwt_expiration = state.config.jwt_expiration;
     let refresh_token_expiration = state.config.refresh_token_expiration;
-    let result = AuthService::signup(state, req, signup_token).await?;
+    let result = AuthService::signup(state, req, &signup_token).await?;
 
-    // 쿠키 설정
+    // 쿠키 설정: access_token, refresh_token 추가, signup_token 삭제
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         set_cookie_header(),
@@ -196,12 +217,17 @@ pub async fn signup(
         set_cookie_header(),
         create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
     );
+    response_headers.append(set_cookie_header(), clear_signup_token_cookie());
 
+    // 응답 본문에는 토큰 제외
     let response_body = Json(BaseResponse {
         is_success: true,
         code: "COMMON200".to_string(),
         message: "회원가입이 성공적으로 완료되었습니다.".to_string(),
-        result: Some(result),
+        result: Some(SignupResponse {
+            member_id: result.member_id,
+            nickname: result.nickname,
+        }),
     });
 
     Ok((response_headers, response_body))
@@ -249,11 +275,12 @@ pub async fn refresh_token(
         create_refresh_token_cookie(&result.refresh_token, refresh_token_expiration),
     );
 
+    // 응답 본문에는 토큰 제외
     let response_body = Json(BaseResponse {
         is_success: true,
         code: "COMMON200".to_string(),
         message: "토큰이 성공적으로 갱신되었습니다.".to_string(),
-        result: Some(result),
+        result: Some(TokenRefreshResponse {}),
     });
 
     Ok((response_headers, response_body))
@@ -360,6 +387,38 @@ impl HasRefreshToken for LogoutRequest {
     fn get_refresh_token(&self) -> String {
         self.refresh_token.clone()
     }
+}
+
+/// 쿠키 또는 Authorization 헤더에서 signup_token 추출
+fn extract_signup_token_from_cookie_or_header(headers: &HeaderMap) -> Result<String, AppError> {
+    // 1. Authorization 헤더에서 먼저 시도
+    if let Some(auth_header) = headers.get("Authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                if !token.is_empty() {
+                    return Ok(token.to_string());
+                }
+            }
+        }
+    }
+
+    // 2. 쿠키에서 시도
+    if let Some(cookie_header) = headers.get(COOKIE) {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if let Some(value) = cookie.strip_prefix(&format!("{}=", SIGNUP_TOKEN_COOKIE)) {
+                    if !value.is_empty() {
+                        return Ok(value.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Err(AppError::Unauthorized(
+        "인증 정보가 유효하지 않습니다.".to_string(),
+    ))
 }
 
 // 하위 호환성을 위한 별칭

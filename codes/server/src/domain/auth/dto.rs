@@ -72,6 +72,7 @@ pub struct SignupRequest {
 }
 
 /// [API-002] 회원가입 응답 DTO
+/// 토큰은 쿠키로 전달됩니다.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SignupResponse {
@@ -79,10 +80,6 @@ pub struct SignupResponse {
     pub member_id: i64,
     /// 설정된 닉네임
     pub nickname: String,
-    /// 서비스 Access Token
-    pub access_token: String,
-    /// 서비스 Refresh Token
-    pub refresh_token: String,
 }
 
 // --- [API-003] 토큰 갱신 ---
@@ -97,13 +94,11 @@ pub struct TokenRefreshRequest {
 }
 
 /// [API-003] 토큰 갱신 응답 DTO
+/// 토큰은 쿠키로 전달됩니다.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenRefreshResponse {
-    /// 새로 발급된 Access Token
-    pub access_token: String,
-    /// 새로 발급된 Refresh Token
-    pub refresh_token: String,
+    // 토큰은 쿠키로 전달되므로 본문은 비어있음
 }
 
 // --- [API-004] 로그아웃 ---
@@ -126,14 +121,12 @@ pub struct EmailLoginRequest {
     pub email: String,
 }
 
+/// 이메일 로그인 응답 DTO (테스트용)
+/// 토큰은 쿠키로 전달됩니다.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailLoginResponse {
     pub is_new_member: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub access_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refresh_token: Option<String>,
 }
 
 // --- Swagger용 래핑 DTO ---

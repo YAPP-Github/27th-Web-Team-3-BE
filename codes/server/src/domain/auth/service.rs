@@ -3,8 +3,8 @@ use reqwest::Client;
 use sea_orm::{DbErr, RuntimeErr, *};
 
 use super::dto::{
-    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
-    SocialLoginRequest, SocialLoginResponse, TokenRefreshRequest, TokenRefreshResponse,
+    EmailLoginRequest, LogoutRequest, SignupRequest, SocialLoginRequest, SocialLoginResponse,
+    TokenRefreshRequest,
 };
 use crate::domain::member::entity::member::{self, Entity as Member, SocialType};
 use crate::state::AppState;
@@ -16,6 +16,30 @@ pub struct AuthService;
 #[derive(Debug)]
 struct SocialUserInfo {
     email: String,
+}
+
+/// 회원가입 결과 (내부용)
+#[derive(Debug)]
+pub struct SignupResult {
+    pub member_id: i64,
+    pub nickname: String,
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+/// 이메일 로그인 결과 (내부용)
+#[derive(Debug)]
+pub struct EmailLoginResult {
+    pub is_new_member: bool,
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+/// 토큰 갱신 결과 (내부용)
+#[derive(Debug)]
+pub struct TokenRefreshResult {
+    pub access_token: String,
+    pub refresh_token: String,
 }
 
 impl AuthService {
@@ -99,7 +123,7 @@ impl AuthService {
         state: AppState,
         req: SignupRequest,
         signup_token: &str,
-    ) -> Result<SignupResponse, AppError> {
+    ) -> Result<SignupResult, AppError> {
         // 1. signupToken 검증
         let claims = decode_token(signup_token, &state.config.jwt_secret)?;
 
@@ -187,7 +211,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok(SignupResponse {
+        Ok(SignupResult {
             member_id: new_member.member_id,
             nickname: req.nickname,
             access_token,
@@ -199,7 +223,7 @@ impl AuthService {
     pub async fn login_by_email(
         state: AppState,
         req: EmailLoginRequest,
-    ) -> Result<EmailLoginResponse, AppError> {
+    ) -> Result<EmailLoginResult, AppError> {
         // DB에서 유저 조회 (이메일 기반)
         let member = Member::find()
             .filter(member::Column::Email.eq(&req.email))
@@ -232,10 +256,10 @@ impl AuthService {
         )
         .await?;
 
-        Ok(EmailLoginResponse {
+        Ok(EmailLoginResult {
             is_new_member: false,
-            access_token: Some(access_token),
-            refresh_token: Some(refresh_token_str),
+            access_token,
+            refresh_token: refresh_token_str,
         })
     }
 
@@ -243,7 +267,7 @@ impl AuthService {
     pub async fn refresh_token(
         state: AppState,
         req: TokenRefreshRequest,
-    ) -> Result<TokenRefreshResponse, AppError> {
+    ) -> Result<TokenRefreshResult, AppError> {
         // 1. Refresh Token JWT 검증
         let claims = decode_token(&req.refresh_token, &state.config.jwt_secret).map_err(|_| {
             AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
@@ -322,7 +346,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok(TokenRefreshResponse {
+        Ok(TokenRefreshResult {
             access_token: new_access_token,
             refresh_token: new_refresh_token,
         })
