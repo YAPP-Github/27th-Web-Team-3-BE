@@ -54,7 +54,6 @@ impl AuthService {
                 let access_token = Self::exchange_kakao_code(
                     &req.code,
                     &state.config.kakao_client_id,
-                    &state.config.kakao_client_secret,
                     &state.config.kakao_redirect_uri,
                 )
                 .await?;
@@ -458,7 +457,6 @@ impl AuthService {
     async fn exchange_kakao_code(
         code: &str,
         client_id: &str,
-        client_secret: &str,
         redirect_uri: &str,
     ) -> Result<String, AppError> {
         let client = Client::new();
@@ -467,7 +465,6 @@ impl AuthService {
             .form(&[
                 ("grant_type", "authorization_code"),
                 ("client_id", client_id),
-                ("client_secret", client_secret),
                 ("redirect_uri", redirect_uri),
                 ("code", code),
             ])
