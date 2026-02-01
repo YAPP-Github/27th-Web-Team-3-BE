@@ -172,7 +172,7 @@ pub async fn refresh_token(
     }))
 }
 
-/// 로그아웃 API (API-029)
+/// 로그아웃 API (API-004)
 ///
 /// 현재 사용자의 로그아웃을 처리합니다.
 /// 서버에 저장된 Refresh Token을 무효화하여 보안을 유지합니다.

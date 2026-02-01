@@ -19,7 +19,7 @@
 | API-001 | POST | `/api/v1/auth/social-login` | 소셜 로그인 (구글/카카오) | [001-auth-social-login.md](./001-auth-social-login.md) |
 | API-002 | POST | `/api/v1/auth/signup` | 회원가입 (닉네임 등록) | [002-auth-signup.md](./002-auth-signup.md) |
 | API-003 | POST | `/api/v1/auth/token/refresh` | 토큰 리프레시 | [003-auth-token-refresh.md](./003-auth-token-refresh.md) |
-| API-029 | POST | `/api/v1/auth/logout` | 로그아웃 | [029-auth-logout.md](./029-auth-logout.md) |
+| API-004 | POST | `/api/v1/auth/logout` | 로그아웃 | [004-auth-logout.md](./004-auth-logout.md) |
 
 ### 회고방 (Retro Room) - 005~011
 
@@ -65,11 +65,11 @@
 | API-027 | GET | `/api/v1/responses/{responseId}/comments` | 답변 댓글 조회 | [027-response-comments-list.md](./027-response-comments-list.md) |
 | API-028 | POST | `/api/v1/responses/{responseId}/comments` | 답변 댓글 작성 | [028-response-comment-create.md](./028-response-comment-create.md) |
 
-### AI 어시스턴트 (AI Assistant) - 030
+### AI 어시스턴트 (AI Assistant) - 029
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-030 | POST | `/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant` | 회고 질문별 AI 어시스턴트 | [030-retrospect-assistant.md](./030-retrospect-assistant.md) |
+| API-029 | POST | `/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant` | 회고 질문별 AI 어시스턴트 | [029-retrospect-assistant.md](./029-retrospect-assistant.md) |
 
 ---
 
