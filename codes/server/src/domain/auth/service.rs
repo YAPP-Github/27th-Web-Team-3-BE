@@ -108,7 +108,6 @@ impl AuthService {
                     is_new_member: false,
                     access_token: Some(access_token),
                     refresh_token: Some(refresh_token_str),
-                    email: None,
                     signup_token: None,
                 })
             }
@@ -129,7 +128,6 @@ impl AuthService {
                     is_new_member: true,
                     access_token: None,
                     refresh_token: None,
-                    email: Some(social_info.email),
                     signup_token: Some(signup_token),
                 })
             }
@@ -152,16 +150,10 @@ impl AuthService {
             ));
         }
 
-        // 3. 이메일 일치 여부 확인
-        let token_email = claims
+        // 3. 토큰에서 이메일 추출
+        let email = claims
             .email
             .ok_or_else(|| AppError::Unauthorized("토큰에 이메일 정보가 없습니다.".into()))?;
-
-        if token_email != req.email {
-            return Err(AppError::Unauthorized(
-                "이메일 정보가 일치하지 않습니다.".into(),
-            ));
-        }
 
         // 4. provider 정보 추출
         let social_type = match claims.provider.as_deref() {
@@ -187,7 +179,7 @@ impl AuthService {
 
         // 6. 회원 생성
         let active_model = member::ActiveModel {
-            email: Set(req.email),
+            email: Set(email),
             nickname: Set(Some(req.nickname.clone())),
             social_type: Set(social_type),
             insight_count: Set(0),

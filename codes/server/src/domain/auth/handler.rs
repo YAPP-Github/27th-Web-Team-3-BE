@@ -128,7 +128,7 @@ pub async fn social_login(
                 create_signup_token_cookie(signup_token, signup_token_expiration),
             );
         }
-        // 응답 본문에서 토큰 제거
+        // 응답 본문에서 토큰 제거 (이메일은 signupToken에 포함)
         let response_body = Json(BaseResponse {
             is_success: true,
             code: code.to_string(),
@@ -137,7 +137,6 @@ pub async fn social_login(
                 is_new_member: true,
                 access_token: None,
                 refresh_token: None,
-                email: result.email.clone(),
                 signup_token: None, // 쿠키로 전달하므로 본문에서 제거
             }),
         });
@@ -165,7 +164,6 @@ pub async fn social_login(
                 is_new_member: false,
                 access_token: None,  // 쿠키로 전달하므로 본문에서 제거
                 refresh_token: None, // 쿠키로 전달하므로 본문에서 제거
-                email: None,
                 signup_token: None,
             }),
         });

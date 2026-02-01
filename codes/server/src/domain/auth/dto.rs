@@ -33,6 +33,7 @@ pub struct SocialLoginRequest {
 }
 
 /// [API-001] 소셜 로그인 응답 DTO
+/// 토큰은 쿠키로 전달됩니다. 이메일은 signupToken에 포함되어 있습니다.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SocialLoginResponse {
@@ -44,22 +45,16 @@ pub struct SocialLoginResponse {
     /// 서비스 Refresh Token (기존 회원인 경우)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
-    /// 소셜 계정 이메일 (신규 회원인 경우)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
-    /// 회원가입용 임시 토큰 (신규 회원인 경우)
+    /// 회원가입용 임시 토큰 (신규 회원인 경우, 이메일/provider 정보 포함)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signup_token: Option<String>,
 }
 
 /// [API-002] 회원가입 요청 DTO
+/// 이메일은 signupToken에서 추출됩니다.
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SignupRequest {
-    /// 소셜 로그인에서 반환받은 이메일
-    #[validate(email(message = "이메일 형식이 올바르지 않습니다"))]
-    pub email: String,
-
     /// 사용자 닉네임 (1~20자, 특수문자 제외)
     #[validate(
         length(min = 1, max = 20, message = "닉네임은 1~20자 이내로 입력해야 합니다"),
