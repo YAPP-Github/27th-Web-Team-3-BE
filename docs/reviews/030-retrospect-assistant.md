@@ -1,11 +1,11 @@
-# API-029 회고 어시스턴트 Implementation Review
+# API-030 회고 어시스턴트 Implementation Review
 
 ## 1. 개요
 - **API 명**: `POST /api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant`
 - **구현 목적**: 회고 작성 시 각 질문에 대해 AI 어시스턴트가 작성 가이드를 제공한다.
 - **구현 일자**: 2026-01-30
-- **브랜치**: feature/api-029-retrospect-assistant
-- **API 스펙**: `docs/api-specs/028-retrospect-assistant.md`
+- **브랜치**: feature/api-030-retrospect-assistant
+- **API 스펙**: `docs/api-specs/030-retrospect-assistant.md`
 
 ## 2. 구현 상세
 
@@ -213,7 +213,7 @@
 - 응답 시간 개선
 
 ## 8. 관련 문서
-- **API 스펙**: `docs/api-specs/028-retrospect-assistant.md`
+- **API 스펙**: `docs/api-specs/030-retrospect-assistant.md`
 - **유사 API**: `docs/reviews/022-retrospect-analysis.md` (AI 분석)
 - **아키텍처**: `docs/ai-conventions/architecture.md`
 - **코딩 규칙**: `docs/ai-conventions/claude.md`
@@ -225,7 +225,7 @@
 - 서버 재시작 불필요 (쿼리에서 동적 계산)
 
 ### 9.2 API-022 분석과의 차이점
-| 항목 | API-022 (분석) | API-029 (어시스턴트) |
+| 항목 | API-022 (분석) | API-030 (어시스턴트) |
 |------|---------------|---------------------|
 | 한도 단위 | 팀당 월 10회 | 사용자당 월 10회 |
 | 추적 방식 | retrospect.team_insight | assistant_usage 테이블 |

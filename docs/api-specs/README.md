@@ -55,7 +55,7 @@
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-025 | DELETE | `/api/v1/members/me` | 서비스 탈퇴 | [025-member-withdraw.md](./025-member-withdraw.md) |
+| API-025 | POST | `/api/v1/members/withdraw` | 서비스 탈퇴 | [025-member-withdraw.md](./025-member-withdraw.md) |
 
 ### 응답/댓글 (Response) - 026~028
 
@@ -65,11 +65,11 @@
 | API-027 | GET | `/api/v1/responses/{responseId}/comments` | 답변 댓글 조회 | [027-response-comments-list.md](./027-response-comments-list.md) |
 | API-028 | POST | `/api/v1/responses/{responseId}/comments` | 답변 댓글 작성 | [028-response-comment-create.md](./028-response-comment-create.md) |
 
-### AI 어시스턴트 (AI Assistant) - 029
+### AI 어시스턴트 (AI Assistant) - 030
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-029 | POST | `/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant` | 회고 질문별 AI 어시스턴트 | [028-retrospect-assistant.md](./028-retrospect-assistant.md) |
+| API-030 | POST | `/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant` | 회고 질문별 AI 어시스턴트 | [030-retrospect-assistant.md](./030-retrospect-assistant.md) |
 
 ---
 

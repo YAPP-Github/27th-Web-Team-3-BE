@@ -57,7 +57,7 @@ POST /api/v1/auth/signup
 | Field | Type | Required | Description | Validation |
 |-------|------|----------|-------------|------------|
 | email | string | Yes | 소셜 로그인 API에서 반환받은 이메일 | 이메일 형식 |
-| nickname | string | Yes | 사용자가 설정할 서비스 닉네임 | 1~20자, 특수문자 제외 |
+| nickname | string | Yes | 사용자가 설정할 서비스 닉네임 | 1~20자, 한글/영문/숫자만 허용 |
 
 ## Response
 
@@ -147,7 +147,7 @@ POST /api/v1/auth/signup
 
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|-----------|
-| COMMON400 | 400 | 유효성 검증 실패 | 닉네임이 1~20자 범위를 벗어나거나 특수문자 포함 시 |
+| COMMON400 | 400 | 유효성 검증 실패 | 닉네임이 1~20자 범위를 벗어나거나 한글/영문/숫자 외 문자 포함 시 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | signupToken 누락, 만료(10분) 또는 잘못된 토큰 |
 | MEMBER4041 | 404 | 유효하지 않은 회원가입 정보 | API-001에서 신규 회원으로 확인된 상태가 아닌 경우 |
 | MEMBER4091 | 409 | 닉네임 중복 | 이미 사용 중인 닉네임으로 가입 시도 |
