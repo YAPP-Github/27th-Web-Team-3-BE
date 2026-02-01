@@ -12,6 +12,32 @@ STATE_DIR="${STATE_DIR:-$PROJECT_ROOT/logs/.state}"
 DEDUP_WINDOW=300  # 5분
 LOCK_TIMEOUT=10   # 락 대기 시간 (초)
 
+# ============== 에러 심각도 분류 ==============
+# Critical: 즉시 알림 + AI 진단 + GitHub Issue
+# - 서버 내부 오류, AI 서비스 장애
+CRITICAL_CODES="COMMON500|AI5001|AI5002|AI5003|AI5031"
+
+# Warning: 알림만 (AI 진단 없음)
+# - 인증 오류 (4xx 클라이언트 에러)
+WARNING_CODES="AUTH4001|AUTH4002|AUTH4003|AUTH4004|AUTH4005"
+
+# Info: 로그만 (알림 없음)
+# - 400대 클라이언트 에러, 비즈니스 로직 에러
+# (CRITICAL, WARNING에 해당하지 않는 모든 에러)
+
+# 심각도 판단 함수
+get_error_severity() {
+    local error_code="$1"
+
+    if echo "$error_code" | grep -qE "^($CRITICAL_CODES)$"; then
+        echo "critical"
+    elif echo "$error_code" | grep -qE "^($WARNING_CODES)$"; then
+        echo "warning"
+    else
+        echo "info"
+    fi
+}
+
 # 상태 디렉토리 생성
 mkdir -p "$STATE_DIR"
 
@@ -145,6 +171,16 @@ while read -r line; do
         TARGET=$(echo "$line" | jq -r '.target // "unknown"' 2>/dev/null || echo "unknown")
         REQUEST_ID=$(echo "$line" | jq -r '.fields.request_id // "N/A"' 2>/dev/null || echo "N/A")
 
+        # 에러 심각도 판단
+        ERROR_SEVERITY=$(get_error_severity "$ERROR_CODE")
+        echo "[$(date)] Error detected: $ERROR_CODE (severity: $ERROR_SEVERITY)"
+
+        # Info 레벨은 로그만 남기고 알림 없음
+        if [ "$ERROR_SEVERITY" = "info" ]; then
+            echo "[$(date)] Info-level error, logging only: $ERROR_CODE"
+            continue
+        fi
+
         # Fingerprint 생성 (SHA256 해시로 delimiter 문제 회피, macOS 호환)
         FINGERPRINT=$(echo -n "${ERROR_CODE}|${TARGET}" | sha256_hash)
 
@@ -166,15 +202,29 @@ while read -r line; do
         } > "${DEDUP_FILE}.tmp"
         mv "${DEDUP_FILE}.tmp" "$DEDUP_FILE"
 
-        # 비용 제한 체크 (진단 에이전트 내부에서 처리 - 여기서는 파일 존재 여부로 대략적 확인만)
+        # Warning 레벨: 간단한 알림만 (AI 진단 없음)
+        if [ "$ERROR_SEVERITY" = "warning" ]; then
+            echo "[$(date)] Warning-level error, sending simple alert: $ERROR_CODE"
+            if "$SCRIPT_DIR/discord-alert.sh" "warning" \
+                "⚠️ [$ERROR_CODE] Warning" \
+                "**위치**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$ERROR_CODE"; then
+                ALERT_COUNT=$((ALERT_COUNT + 1))
+            fi
+            continue
+        fi
+
+        # Critical 레벨: AI 진단 + 상세 알림 + GitHub Issue
+        echo "[$(date)] Critical error, running full diagnostic: $ERROR_CODE"
+
+        # 비용 제한 체크
         RATE_LIMIT_FILE="/tmp/diagnostic-rate-limit"
         if [ -f "$RATE_LIMIT_FILE" ]; then
             RECENT_CALLS=$(wc -l < "$RATE_LIMIT_FILE" 2>/dev/null || echo 0)
             if [ "$RECENT_CALLS" -ge 10 ]; then
-                # 비용 제한 초과 가능성 - 기본 알림만 발송
-                echo "[$(date)] Rate limit likely exceeded, skipping diagnostic"
+                echo "[$(date)] Rate limit exceeded, sending basic critical alert"
                 if "$SCRIPT_DIR/discord-alert.sh" "critical" \
-                    "🚨 [$ERROR_CODE] Error Detected (진단 제한 초과)" \
+                    "🚨 [$ERROR_CODE] Critical Error (진단 제한 초과)" \
                     "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
                     "$ERROR_CODE"; then
                     ALERT_COUNT=$((ALERT_COUNT + 1))
@@ -183,15 +233,14 @@ while read -r line; do
             fi
         fi
 
-        # Diagnostic Agent 호출 (rate limit은 에이전트 내부에서 최종 판단)
-        echo "[$(date)] Running diagnostic for: $ERROR_CODE"
+        # Diagnostic Agent 호출
         DIAGNOSTIC=$(python3 "$SCRIPT_DIR/diagnostic-agent.py" "$line" 2>/dev/null)
 
         # 진단 결과 JSON 유효성 검증
         if [ -z "$DIAGNOSTIC" ] || ! echo "$DIAGNOSTIC" | jq -e '.' > /dev/null 2>&1; then
-            echo "[$(date)] Diagnostic returned invalid or empty JSON, sending basic alert"
+            echo "[$(date)] Diagnostic returned invalid JSON, sending basic alert"
             if "$SCRIPT_DIR/discord-alert.sh" "critical" \
-                "🚨 [$ERROR_CODE] Error Detected (진단 실패)" \
+                "🚨 [$ERROR_CODE] Critical Error (진단 실패)" \
                 "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
@@ -203,37 +252,34 @@ while read -r line; do
             # 진단 실패 - 기본 알림
             echo "[$(date)] Diagnostic failed, sending basic alert"
             if "$SCRIPT_DIR/discord-alert.sh" "critical" \
-                "🚨 [$ERROR_CODE] Error Detected" \
+                "🚨 [$ERROR_CODE] Critical Error" \
                 "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
             fi
         else
             # 진단 성공 - 상세 알림
-            SEVERITY=$(echo "$DIAGNOSTIC" | jq -r '.severity // "critical"')
             ROOT_CAUSE=$(echo "$DIAGNOSTIC" | jq -r '.root_cause // "분석 중"')
             RECOMMENDATIONS=$(echo "$DIAGNOSTIC" | jq -r '.recommendations[0].action // "검토 필요"')
             AUTO_FIXABLE=$(echo "$DIAGNOSTIC" | jq -r '.auto_fixable // false')
 
             echo "[$(date)] Diagnostic success, sending detailed alert"
-            if "$SCRIPT_DIR/discord-alert.sh" "$SEVERITY" \
+            if "$SCRIPT_DIR/discord-alert.sh" "critical" \
                 "🔍 [$ERROR_CODE] AI 진단 완료" \
                 "**근본 원인**: $ROOT_CAUSE\n\n**권장 조치**: $RECOMMENDATIONS\n\n**위치**: $TARGET" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
             fi
 
-            # Phase 4 자동화: critical/warning이면 GitHub Issue 생성, critical + auto_fixable이면 Auto-Fix 시도
-            if [ "$SEVERITY" = "critical" ] || [ "$SEVERITY" = "warning" ]; then
-                DIAGNOSTIC_WITH_CODE=$(echo "$DIAGNOSTIC" | jq --arg ec "$ERROR_CODE" '. + {error_code: $ec}')
-                echo "[$(date)] Creating GitHub Issue for $SEVERITY: $ERROR_CODE"
-                "$SCRIPT_DIR/create-issue.sh" "$DIAGNOSTIC_WITH_CODE" || true
+            # GitHub Issue 자동 생성
+            DIAGNOSTIC_WITH_CODE=$(echo "$DIAGNOSTIC" | jq --arg ec "$ERROR_CODE" '. + {error_code: $ec}')
+            echo "[$(date)] Creating GitHub Issue for: $ERROR_CODE"
+            "$SCRIPT_DIR/create-issue.sh" "$DIAGNOSTIC_WITH_CODE" || true
 
-                # Auto-Fix 시도 (critical + auto_fixable인 경우만)
-                if [ "$SEVERITY" = "critical" ] && [ "$AUTO_FIXABLE" = "true" ]; then
-                    echo "[$(date)] Attempting Auto-Fix for: $ERROR_CODE"
-                    "$SCRIPT_DIR/auto-fix.sh" "$DIAGNOSTIC_WITH_CODE" || true
-                fi
+            # Auto-Fix 시도 (auto_fixable인 경우만)
+            if [ "$AUTO_FIXABLE" = "true" ]; then
+                echo "[$(date)] Attempting Auto-Fix for: $ERROR_CODE"
+                "$SCRIPT_DIR/auto-fix.sh" "$DIAGNOSTIC_WITH_CODE" || true
             fi
         fi
     fi
