@@ -369,16 +369,7 @@ impl TriggerFilter {
     /// If no rate limiter is configured, always returns true.
     pub fn check_rate_limit(&self, action: RateLimitAction) -> bool {
         match &self.rate_limiter {
-            Some(limiter) => {
-                let allowed = limiter.try_acquire(action);
-                if !allowed {
-                    warn!(
-                        action = ?action,
-                        "Rate limit exceeded for action"
-                    );
-                }
-                allowed
-            }
+            Some(limiter) => limiter.try_acquire(action),
             None => true,
         }
     }
