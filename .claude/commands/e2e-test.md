@@ -15,7 +15,7 @@
 | 파라미터 | 기본값 |
 |----------|--------|
 | 서버_URL | `https://api.moaofficial.kr` |
-| Bearer_Token | 자동 획득 (테스트 계정으로 로그인) |
+| Bearer_Token | 자동 획득 (`$E2E_TEST_EMAIL` 환경변수로 로그인) |
 
 ### 옵션
 
@@ -62,13 +62,23 @@ git pull origin dev
 
 ### 3단계: 토큰 획득 (토큰 미제공 시)
 
-Bearer Token이 제공되지 않은 경우, 테스트 계정으로 자동 로그인합니다.
+Bearer Token이 제공되지 않은 경우, 환경변수의 테스트 계정으로 자동 로그인합니다.
+
+#### 환경변수 설정
+
+`.env` 파일 또는 환경변수에 테스트 계정 설정:
 
 ```bash
-# 테스트 계정으로 로그인하여 accessToken 획득
+E2E_TEST_EMAIL=your-test-account@example.com
+```
+
+#### 로그인 요청
+
+```bash
+# 환경변수에서 테스트 계정 읽기
 curl -s -X POST {서버_URL}/api/auth/login/email \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@gmail.com"}'
+  -d "{\"email\":\"$E2E_TEST_EMAIL\"}"
 ```
 
 응답에서 accessToken 추출:
@@ -88,12 +98,14 @@ curl -s -X POST {서버_URL}/api/auth/login/email \
 # 쿠키 저장하여 사용
 curl -s -X POST {서버_URL}/api/auth/login/email \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@gmail.com"}' \
+  -d "{\"email\":\"$E2E_TEST_EMAIL\"}" \
   -c cookies.txt
 
 # 이후 요청에서 쿠키 사용
 curl -s -b cookies.txt {서버_URL}/api/v1/retro-rooms
 ```
+
+**환경변수가 없으면**: 사용자에게 테스트 계정 입력을 요청합니다.
 
 ### 4단계: Swagger 엔드포인트 목록 조회
 
