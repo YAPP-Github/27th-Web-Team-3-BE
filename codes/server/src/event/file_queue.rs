@@ -421,27 +421,29 @@ impl FileEventQueue {
 
         // Check completed directory within dedup window
         let completed_dir = self.completed_dir();
-        if let Ok(entries) = fs::read_dir(&completed_dir) {
-            let dedup_window = std::time::Duration::from_secs(self.config.dedup_window_secs);
-            let now = std::time::SystemTime::now();
+        let entries = fs::read_dir(&completed_dir).map_err(|e| {
+            AppError::InternalError(format!("Failed to read completed directory: {}", e))
+        })?;
 
-            for entry in entries.flatten() {
-                // Check file modification time for dedup window
-                if let Ok(metadata) = entry.metadata() {
-                    if let Ok(modified) = metadata.modified() {
-                        if let Ok(age) = now.duration_since(modified) {
-                            if age > dedup_window {
-                                continue; // Skip files older than dedup window
-                            }
+        let dedup_window = std::time::Duration::from_secs(self.config.dedup_window_secs);
+        let now = std::time::SystemTime::now();
+
+        for entry in entries.flatten() {
+            // Check file modification time for dedup window
+            if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(age) = now.duration_since(modified) {
+                        if age > dedup_window {
+                            continue; // Skip files older than dedup window
                         }
                     }
                 }
+            }
 
-                if let Ok(content) = fs::read_to_string(entry.path()) {
-                    if let Ok(event) = serde_json::from_str::<Event>(&content) {
-                        if event.metadata.fingerprint == fingerprint {
-                            return Ok(true);
-                        }
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if let Ok(event) = serde_json::from_str::<Event>(&content) {
+                    if event.metadata.fingerprint == fingerprint {
+                        return Ok(true);
                     }
                 }
             }
