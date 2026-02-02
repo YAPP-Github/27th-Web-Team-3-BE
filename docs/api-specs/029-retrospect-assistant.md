@@ -1,4 +1,4 @@
-# [API-029] POST /api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant
+# [API-030] POST /api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant
 
 > 회고 질문별 AI 어시스턴트 가이드 생성
 

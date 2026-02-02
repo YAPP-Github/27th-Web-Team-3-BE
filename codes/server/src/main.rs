@@ -394,10 +394,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/v1/responses/:response_id/likes",
             axum::routing::post(domain::retrospect::handler::toggle_like),
         )
-        // [API-028] 서비스 탈퇴
+        // [API-025] 서비스 탈퇴
         .route(
-            "/api/v1/members/me",
-            axum::routing::delete(domain::member::handler::withdraw),
+            "/api/v1/members/withdraw",
+            axum::routing::post(domain::member::handler::withdraw),
         )
         // [API-029] 회고 어시스턴트
         .route(

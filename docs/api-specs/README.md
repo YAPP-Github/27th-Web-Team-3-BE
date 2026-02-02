@@ -19,7 +19,7 @@
 | API-001 | POST | `/api/v1/auth/social-login` | 소셜 로그인 (구글/카카오) | [001-auth-social-login.md](./001-auth-social-login.md) |
 | API-002 | POST | `/api/v1/auth/signup` | 회원가입 (닉네임 등록) | [002-auth-signup.md](./002-auth-signup.md) |
 | API-003 | POST | `/api/v1/auth/token/refresh` | 토큰 리프레시 | [003-auth-token-refresh.md](./003-auth-token-refresh.md) |
-| API-029 | POST | `/api/v1/auth/logout` | 로그아웃 | [029-auth-logout.md](./029-auth-logout.md) |
+| API-004 | POST | `/api/v1/auth/logout` | 로그아웃 | [004-auth-logout.md](./004-auth-logout.md) |
 
 ### 회고방 (Retro Room) - 005~011
 
@@ -55,7 +55,7 @@
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-025 | DELETE | `/api/v1/members/me` | 서비스 탈퇴 | [025-member-withdraw.md](./025-member-withdraw.md) |
+| API-025 | POST | `/api/v1/members/withdraw` | 서비스 탈퇴 | [025-member-withdraw.md](./025-member-withdraw.md) |
 
 ### 응답/댓글 (Response) - 026~028
 
@@ -69,7 +69,7 @@
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
-| API-029 | POST | `/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant` | 회고 질문별 AI 어시스턴트 | [028-retrospect-assistant.md](./028-retrospect-assistant.md) |
+| API-029 | POST | `/api/v1/retrospects/{retrospectId}/questions/{questionId}/assistant` | 회고 질문별 AI 어시스턴트 | [029-retrospect-assistant.md](./029-retrospect-assistant.md) |
 
 ---
 
