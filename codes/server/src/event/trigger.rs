@@ -519,24 +519,50 @@ impl TriggerFilter {
     /// Map an event type to a rate limit action
     ///
     /// This determines which rate limit bucket an event should be counted against.
+    ///
+    /// Matching rules:
+    /// - Branch events: Contains "branch" (case-insensitive)
+    /// - PR events: Contains "pull_request", or has ".pr." / ".PR." segment,
+    ///   or ends with ".pr" / ".PR", or starts with "pr." / "PR."
+    /// - All other events: API call
     fn event_to_rate_limit_action(event: &Event) -> RateLimitAction {
         let event_type = event.event_type.as_str();
+        let event_type_lower = event_type.to_lowercase();
 
-        // Branch creation events
-        if event_type.contains("branch") || event_type.contains("Branch") {
+        // Branch creation events (case-insensitive)
+        if event_type_lower.contains("branch") {
             return RateLimitAction::BranchCreation;
         }
 
         // PR creation events
-        if event_type.contains("pr")
-            || event_type.contains("pull_request")
-            || event_type.contains("PR")
-        {
+        // Match "pull_request" explicitly (case-insensitive)
+        if event_type_lower.contains("pull_request") {
+            return RateLimitAction::PrCreation;
+        }
+
+        // Match "pr" as a distinct segment (not as part of another word)
+        // Valid patterns: ".pr.", ".pr" (at end), "pr." (at start)
+        if Self::contains_pr_segment(&event_type_lower) {
             return RateLimitAction::PrCreation;
         }
 
         // Default to API call for all other events
         RateLimitAction::ApiCall
+    }
+
+    /// Check if the event type contains "pr" as a distinct segment
+    ///
+    /// This avoids false positives like "approve", "prepare", "profile", etc.
+    /// Valid patterns:
+    /// - Starts with "pr." (e.g., "pr.created")
+    /// - Ends with ".pr" (e.g., "github.pr")
+    /// - Contains ".pr." (e.g., "github.pr.created")
+    /// - Exactly "pr"
+    fn contains_pr_segment(event_type: &str) -> bool {
+        event_type == "pr"
+            || event_type.starts_with("pr.")
+            || event_type.ends_with(".pr")
+            || event_type.contains(".pr.")
     }
 }
 
@@ -1446,6 +1472,228 @@ mod tests {
 
             // Assert
             assert_eq!(action, RateLimitAction::ApiCall);
+        }
+
+        // ============================================
+        // Tests for PR segment matching (bug fix)
+        // These tests verify that "pr" is only matched as a distinct segment,
+        // not as a substring of other words like "approve", "prepare", etc.
+        // ============================================
+
+        #[test]
+        fn should_not_match_approve_as_pr_event() {
+            // Arrange - "approve" contains "pr" as a substring, but should NOT be a PR event
+            let event = Event::new(
+                "github.approve",
+                "github-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::ApiCall);
+        }
+
+        #[test]
+        fn should_not_match_prepare_as_pr_event() {
+            // Arrange - "prepare" contains "pr" as a substring, but should NOT be a PR event
+            let event = Event::new(
+                "workflow.prepare",
+                "workflow-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::ApiCall);
+        }
+
+        #[test]
+        fn should_not_match_profile_as_pr_event() {
+            // Arrange - "profile" contains "pr" as a substring, but should NOT be a PR event
+            let event = Event::new(
+                "user.profile.update",
+                "user-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::ApiCall);
+        }
+
+        #[test]
+        fn should_not_match_reprocess_as_pr_event() {
+            // Arrange - "reprocess" contains "pr" as a substring, but should NOT be a PR event
+            let event = Event::new(
+                "job.reprocess",
+                "job-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::ApiCall);
+        }
+
+        #[test]
+        fn should_not_match_deprecation_as_pr_event() {
+            // Arrange - "deprecation" contains "pr" as a substring, but should NOT be a PR event
+            let event = Event::new(
+                "api.deprecation.warning",
+                "api-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::ApiCall);
+        }
+
+        #[test]
+        fn should_not_match_compress_as_pr_event() {
+            // Arrange - "compress" contains "pr" as a substring, but should NOT be a PR event
+            let event = Event::new(
+                "file.compress",
+                "file-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::ApiCall);
+        }
+
+        #[test]
+        fn should_match_pr_segment_at_start() {
+            // Arrange - "pr.created" starts with "pr."
+            let event = Event::new(
+                "pr.created",
+                "github-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::PrCreation);
+        }
+
+        #[test]
+        fn should_match_pr_segment_at_end() {
+            // Arrange - "github.pr" ends with ".pr"
+            let event = Event::new(
+                "github.pr",
+                "github-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::PrCreation);
+        }
+
+        #[test]
+        fn should_match_pr_segment_in_middle() {
+            // Arrange - "github.pr.created" contains ".pr."
+            let event = Event::new(
+                "github.pr.created",
+                "github-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::PrCreation);
+        }
+
+        #[test]
+        fn should_match_exact_pr_event_type() {
+            // Arrange - exactly "pr"
+            let event = Event::new("pr", "github-handler", Priority::P1, serde_json::json!({}));
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::PrCreation);
+        }
+
+        #[test]
+        fn should_match_pr_case_insensitive() {
+            // Arrange - uppercase "PR" should also match as a segment
+            let event = Event::new(
+                "github.PR.opened",
+                "github-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::PrCreation);
+        }
+
+        #[test]
+        fn should_match_branch_case_insensitive() {
+            // Arrange - uppercase "Branch" should match
+            let event = Event::new(
+                "git.Branch.create",
+                "git-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::BranchCreation);
+        }
+
+        #[test]
+        fn should_match_pull_request_case_insensitive() {
+            // Arrange - mixed case "Pull_Request" should match
+            let event = Event::new(
+                "github.Pull_Request.create",
+                "github-handler",
+                Priority::P1,
+                serde_json::json!({}),
+            );
+
+            // Act
+            let action = TriggerFilter::event_to_rate_limit_action(&event);
+
+            // Assert
+            assert_eq!(action, RateLimitAction::PrCreation);
         }
     }
 }

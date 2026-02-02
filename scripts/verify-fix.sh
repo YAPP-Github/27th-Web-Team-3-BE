@@ -33,10 +33,16 @@ echo "PASSED"
 
 # 3단계: 테스트 검증
 echo "[3/5] 테스트 검증..."
+set +e
 TEST_OUTPUT=$(cargo test 2>&1)
-if echo "$TEST_OUTPUT" | grep -q "FAILED"; then
+TEST_EXIT_CODE=$?
+set -e
+if [ $TEST_EXIT_CODE -ne 0 ] || echo "$TEST_OUTPUT" | grep -q "FAILED"; then
   echo "FAILED: 테스트 실패"
-  echo "$TEST_OUTPUT" | grep "FAILED"
+  echo "$TEST_OUTPUT" | grep -E "(FAILED|error\[)" || true
+  echo ""
+  echo "=== 테스트 실패 요약 ==="
+  echo "종료 코드: $TEST_EXIT_CODE"
   exit 1
 fi
 echo "PASSED"

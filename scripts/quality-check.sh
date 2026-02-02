@@ -31,6 +31,17 @@ cargo build
 
 # 4. 테스트 실행
 echo "[4/4] 테스트 실행..."
-cargo test
+set +e
+TEST_OUTPUT=$(cargo test 2>&1)
+TEST_EXIT_CODE=$?
+set -e
+echo "$TEST_OUTPUT"
+if [ $TEST_EXIT_CODE -ne 0 ]; then
+  echo ""
+  echo "=== 테스트 실패 요약 ==="
+  echo "$TEST_OUTPUT" | grep -E "(FAILED|error\[)" || true
+  echo "종료 코드: $TEST_EXIT_CODE"
+  exit 1
+fi
 
 echo "=== 품질 검사 완료: 모든 검사 통과 ==="

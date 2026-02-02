@@ -90,6 +90,10 @@ impl BranchValidator {
 
     /// Validate a PR's branches (both head and base)
     /// Returns Ok(()) if valid, or Err with reason if invalid
+    ///
+    /// Validation rules:
+    /// 1. Head branch must NOT be in blocked patterns (main, master, dev, release/*)
+    /// 2. Head branch MUST be in allowed patterns (fix/*, hotfix/*, ai-fix/*, config/*, refactor/*)
     pub fn validate_pr_branches(
         &self,
         head_ref: &str,
@@ -102,15 +106,20 @@ impl BranchValidator {
             ));
         }
 
-        // Check if base branch (target) is not a protected branch for direct push
-        // For PRs, we allow targeting protected branches, but the source must be valid
+        // Check if head branch (source) is in the allowed patterns
+        // This is the key fix: we must explicitly allow only specific patterns
+        if !self.is_allowed(head_ref) {
+            return Err(BranchValidationError::NotAllowedSourceBranch(
+                head_ref.to_string(),
+            ));
+        }
+
         // Base validation is informational - PRs can target main/dev
         // The key restriction is that AI automation cannot push to protected branches directly
 
         debug!(
             head = %head_ref,
             base = %base_ref,
-            head_allowed = self.is_allowed(head_ref),
             "Branch validation passed"
         );
 
@@ -120,9 +129,12 @@ impl BranchValidator {
 
 /// Error type for branch validation
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::enum_variant_names)]
 pub enum BranchValidationError {
     /// Source branch is blocked
     BlockedSourceBranch(String),
+    /// Source branch is not in the allowed patterns
+    NotAllowedSourceBranch(String),
     /// Target branch is blocked (reserved for future use)
     #[allow(dead_code)]
     BlockedTargetBranch(String),
@@ -133,6 +145,13 @@ impl std::fmt::Display for BranchValidationError {
         match self {
             BranchValidationError::BlockedSourceBranch(branch) => {
                 write!(f, "Source branch '{}' is blocked for AI automation", branch)
+            }
+            BranchValidationError::NotAllowedSourceBranch(branch) => {
+                write!(
+                    f,
+                    "Source branch '{}' is not in the allowed patterns (fix/*, hotfix/*, ai-fix/*, config/*, refactor/*)",
+                    branch
+                )
             }
             BranchValidationError::BlockedTargetBranch(branch) => {
                 write!(f, "Target branch '{}' is blocked for AI automation", branch)
@@ -524,7 +543,8 @@ mod tests {
                 })
                 .collect(),
             head: GitHubGitRef {
-                ref_name: "feature".to_string(),
+                // Use an allowed branch pattern by default for tests
+                ref_name: "fix/test-branch".to_string(),
                 sha: "abc123".to_string(),
             },
             base: GitHubGitRef {
@@ -897,6 +917,38 @@ mod tests {
     }
 
     #[test]
+    fn should_reject_pr_with_non_allowed_head_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act - feature/* branches are not in the allowed patterns
+        let result = validator.validate_pr_branches("feature/new-feature", "dev");
+
+        // Assert
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            BranchValidationError::NotAllowedSourceBranch("feature/new-feature".to_string())
+        );
+    }
+
+    #[test]
+    fn should_reject_pr_with_arbitrary_branch_name() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act - arbitrary branch names should be rejected
+        let result = validator.validate_pr_branches("my-random-branch", "dev");
+
+        // Assert
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            BranchValidationError::NotAllowedSourceBranch("my-random-branch".to_string())
+        );
+    }
+
+    #[test]
     fn should_match_glob_pattern_with_wildcard() {
         // Arrange & Act & Assert
         assert!(BranchValidator::matches_pattern("fix/bug", "fix/*"));
@@ -958,6 +1010,27 @@ mod tests {
     }
 
     #[test]
+    fn should_not_create_event_for_pr_from_non_allowed_branch() {
+        // Arrange
+        let mut pr = create_test_pr(vec!["ai-review"]);
+        pr.head.ref_name = "feature/new-feature".to_string(); // not in allowed patterns
+
+        let payload = PullRequestPayload {
+            action: "opened".to_string(),
+            pull_request: pr,
+            label: None,
+            repository: create_test_repo(),
+            sender: create_test_user(),
+        };
+
+        // Act
+        let result = handle_pull_request_event(payload).unwrap();
+
+        // Assert - event should be ignored because feature/* is not in allowed patterns
+        assert!(result.is_none());
+    }
+
+    #[test]
     fn should_create_event_for_pr_from_allowed_branch() {
         // Arrange
         let mut pr = create_test_pr(vec!["ai-review"]);
@@ -991,6 +1064,12 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "Source branch 'main' is blocked for AI automation"
+        );
+
+        let error = BranchValidationError::NotAllowedSourceBranch("feature/new".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Source branch 'feature/new' is not in the allowed patterns (fix/*, hotfix/*, ai-fix/*, config/*, refactor/*)"
         );
 
         let error = BranchValidationError::BlockedTargetBranch("release/1.0".to_string());
