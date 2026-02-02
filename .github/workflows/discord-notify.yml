@@ -1,5 +1,10 @@
 name: Discord Notification
 
+# ⚠️ NOTE: Discord mentions like @backend-team are text-only and won't trigger notifications.
+# To enable actual Discord role mentions, replace with role IDs: <@&ROLE_ID>
+# Example: <@&123456789012345678> for actual Discord role pings
+# Current implementation uses text mentions for visibility without notification spam.
+
 on:
   pull_request:
     types: [opened, ready_for_review, closed]
@@ -56,6 +61,7 @@ jobs:
           done <<< "$CHANGED_FILES"
 
           # 멘션 대상 결정
+          # Note: These are text mentions, not Discord role pings (see workflow header comment)
           MENTIONS=""
           if [ "$DOMAIN_CHANGES" = true ]; then
             MENTIONS="${MENTIONS}@backend-team "

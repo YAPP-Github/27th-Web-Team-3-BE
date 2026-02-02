@@ -29,6 +29,8 @@ const MAX_TIMESTAMP_DIFF_SECS: i64 = 300;
 /// Discord uses Ed25519 signatures to verify request integrity.
 /// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
 ///
+/// Note: Caller should check DISCORD_SKIP_VERIFICATION before calling this function
+///
 /// # Arguments
 /// * `public_key` - Discord application's public key (hex-encoded)
 /// * `signature` - Request signature from X-Signature-Ed25519 header (hex-encoded)
@@ -44,12 +46,6 @@ fn verify_discord_signature(
     timestamp: &str,
     body: &[u8],
 ) -> Result<(), AppError> {
-    // For development, skip verification if DISCORD_SKIP_VERIFICATION=true
-    if std::env::var("DISCORD_SKIP_VERIFICATION").unwrap_or_default() == "true" {
-        warn!("Discord signature verification skipped (development mode)");
-        return Ok(());
-    }
-
     // 1. Validate timestamp (must be within 5 minutes)
     validate_timestamp(timestamp)?;
 
