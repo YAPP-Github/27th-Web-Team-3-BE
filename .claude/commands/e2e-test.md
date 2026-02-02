@@ -7,8 +7,15 @@
 ## 사용법
 
 ```
-/e2e-test <서버_URL> [Bearer_Token] [옵션]
+/e2e-test [서버_URL] [Bearer_Token] [옵션]
 ```
+
+### 기본값
+
+| 파라미터 | 기본값 |
+|----------|--------|
+| 서버_URL | `https://api.moaofficial.kr` |
+| Bearer_Token | 자동 획득 (테스트 계정으로 로그인) |
 
 ### 옵션
 
@@ -20,10 +27,16 @@
 ### 예시
 
 ```bash
-# 모든 API 테스트 (기본값)
+# 기본값으로 모든 API 테스트 (서버: api.moaofficial.kr, 토큰: 자동)
+/e2e-test
+
+# GET만 테스트
+/e2e-test get
+
+# 특정 서버 + 토큰 지정
 /e2e-test https://api.example.com {TOKEN}
 
-# GET만 테스트 (안전 모드)
+# 특정 서버 + GET만
 /e2e-test https://api.example.com {TOKEN} get
 ```
 
@@ -47,9 +60,46 @@ git checkout dev
 git pull origin dev
 ```
 
-### 3단계: Swagger 엔드포인트 목록 조회
+### 3단계: 토큰 획득 (토큰 미제공 시)
+
+Bearer Token이 제공되지 않은 경우, 테스트 계정으로 자동 로그인합니다.
+
+```bash
+# 테스트 계정으로 로그인하여 accessToken 획득
+curl -s -X POST {서버_URL}/api/auth/login/email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@gmail.com"}'
+```
+
+응답에서 accessToken 추출:
+```json
+{
+  "isSuccess": true,
+  "code": "COMMON200",
+  "result": {
+    "isNewMember": false
+  }
+}
+```
+
+**참고**: accessToken은 쿠키로 전달되므로, 이후 요청에서 쿠키를 유지하거나 응답 헤더에서 추출합니다.
+
+```bash
+# 쿠키 저장하여 사용
+curl -s -X POST {서버_URL}/api/auth/login/email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@gmail.com"}' \
+  -c cookies.txt
+
+# 이후 요청에서 쿠키 사용
+curl -s -b cookies.txt {서버_URL}/api/v1/retro-rooms
+```
+
+### 4단계: Swagger 엔드포인트 목록 조회
 
 **컨텍스트 절약을 위해 엔드포인트 목록만 조회합니다.**
+
+기본 서버 URL: `https://api.moaofficial.kr`
 
 ```bash
 # 엔드포인트 목록만 가져오기 (전체 Swagger JSON 가져오지 않음)
@@ -62,11 +112,11 @@ curl -s {서버_URL}/api-docs/openapi.json | jq '.paths | keys'
 curl -s {서버_URL}/api-docs/openapi.json | jq '.paths["/api/v1/retro-rooms"]'
 ```
 
-### 4단계: API 테스트 실행
+### 5단계: API 테스트 실행
 
 `docs/api-specs/` 디렉토리의 각 API 문서를 **하나씩** 읽고 테스트합니다.
 
-#### 4-1. 문서에서 테스트 케이스 추출
+#### 5-1. 문서에서 테스트 케이스 추출
 
 각 API 문서에서 다음 섹션을 확인:
 
@@ -82,7 +132,7 @@ curl -s {서버_URL}/api-docs/openapi.json | jq '.paths["/api/v1/retro-rooms"]'
 ### 500 Internal Server Error - 서버 에러
 ```
 
-#### 4-2. 성공 케이스 테스트
+#### 5-2. 성공 케이스 테스트
 
 ```bash
 # API 문서의 "사용 예시" 기반으로 테스트
@@ -94,7 +144,7 @@ curl -s -H "Authorization: Bearer {TOKEN}" {서버_URL}/api/v1/retro-rooms
 - `code: "COMMON200"` 확인
 - `result` 구조가 문서와 일치하는지 확인
 
-#### 4-3. 에러 케이스 테스트 (문서 기반)
+#### 5-3. 에러 케이스 테스트 (문서 기반)
 
 **문서의 "에러 응답" 섹션에 정의된 모든 에러를 테스트합니다.**
 
@@ -120,7 +170,7 @@ curl -s -H "Authorization: Bearer {TOKEN}" "{서버_URL}/api/v1/retrospects/1/re
 # 예상: {"isSuccess":false,"code":"RETRO4004",...}
 ```
 
-### 5단계: 결과 출력
+### 6단계: 결과 출력
 
 터미널에 다음 형식으로 출력:
 
@@ -152,7 +202,7 @@ E2E 테스트 결과 ({서버_URL})
 ========================================
 ```
 
-### 6단계: Git 상태 복원
+### 7단계: Git 상태 복원
 ```bash
 # 원래 브랜치로 복귀
 git checkout $ORIGINAL_BRANCH
