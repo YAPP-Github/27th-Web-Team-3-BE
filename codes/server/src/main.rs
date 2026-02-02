@@ -4,6 +4,7 @@ mod config;
 mod domain;
 mod event;
 mod global;
+mod monitoring;
 mod state;
 mod utils;
 
