@@ -1,0 +1,374 @@
+name: Discord Notification
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, closed]
+  pull_request_review:
+    types: [submitted]
+  workflow_run:
+    workflows: ["Build & Deploy"]
+    types: [completed]
+
+env:
+  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+
+jobs:
+  # PR 열림/리뷰 준비 완료 알림
+  notify-pr-opened:
+    name: Notify PR Opened
+    runs-on: ubuntu-latest
+    # 라벨 또는 제목 패턴으로 AI PR 감지 (라벨이 나중에 추가되는 경우 대응)
+    if: |
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'opened' || github.event.action == 'ready_for_review') &&
+      (contains(github.event.pull_request.labels.*.name, 'ai-generated') || contains(github.event.pull_request.title, '[AI]'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Changed Files Summary
+        id: changes
+        run: |
+          # 변경된 파일 분석
+          CHANGED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
+
+          # 변경 영역 판단
+          DOMAIN_CHANGES=false
+          AI_CHANGES=false
+          INFRA_CHANGES=false
+          DOCS_CHANGES=false
+
+          while IFS= read -r file; do
+            if [[ "$file" == codes/server/src/domain/* ]]; then
+              DOMAIN_CHANGES=true
+            fi
+            if [[ "$file" == *ai* ]] || [[ "$file" == *AI* ]]; then
+              AI_CHANGES=true
+            fi
+            if [[ "$file" == .github/* ]] || [[ "$file" == ci/* ]] || [[ "$file" == infra/* ]]; then
+              INFRA_CHANGES=true
+            fi
+            if [[ "$file" == docs/* ]] || [[ "$file" == *.md ]]; then
+              DOCS_CHANGES=true
+            fi
+          done <<< "$CHANGED_FILES"
+
+          # 멘션 대상 결정
+          MENTIONS=""
+          if [ "$DOMAIN_CHANGES" = true ]; then
+            MENTIONS="${MENTIONS}@backend-team "
+          fi
+          if [ "$AI_CHANGES" = true ]; then
+            MENTIONS="${MENTIONS}@ai-team "
+          fi
+          if [ "$INFRA_CHANGES" = true ]; then
+            MENTIONS="${MENTIONS}@devops-team "
+          fi
+          if [ "$DOCS_CHANGES" = true ]; then
+            MENTIONS="${MENTIONS}@tech-writer "
+          fi
+
+          # 기본 멘션 설정
+          if [ -z "$MENTIONS" ]; then
+            MENTIONS="@backend-team "
+          fi
+
+          echo "mentions=${MENTIONS}" >> $GITHUB_OUTPUT
+
+          # 변경 파일 수
+          ADDED_COUNT=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '[.files[] | select(.additions > 0)] | length')
+          MODIFIED_COUNT=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length')
+
+          echo "added_count=${ADDED_COUNT}" >> $GITHUB_OUTPUT
+          echo "modified_count=${MODIFIED_COUNT}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get Commit Summary
+        id: commits
+        run: |
+          # 커밋 메시지 요약 추출 (최대 5개)
+          COMMIT_SUMMARY=$(gh pr view ${{ github.event.pull_request.number }} --json commits --jq '.commits[-5:] | .[] | "- " + .messageHeadline' | head -5)
+
+          # 멀티라인 출력 처리
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "summary<<$EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_SUMMARY" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Discord Notification - PR Opened
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ env.DISCORD_WEBHOOK }}
+          nocontext: true
+          nofail: true
+          title: "New AI-Generated PR"
+          description: |
+            ## New AI-Generated PR
+
+            **제목**: ${{ github.event.pull_request.title }}
+            **브랜치**: `${{ github.event.pull_request.head.ref }}` -> `${{ github.event.pull_request.base.ref }}`
+            **작성자**: ${{ github.event.pull_request.user.login }}
+
+            ### 변경 요약
+            ${{ steps.commits.outputs.summary }}
+
+            ### CI 상태
+            - Build: :hourglass: Pending
+            - Test: :hourglass: Pending
+
+            [PR 링크](${{ github.event.pull_request.html_url }})
+
+            ${{ steps.changes.outputs.mentions }}리뷰 부탁드립니다.
+          color: 0x5865F2
+          username: "GitHub Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
+  # PR 머지 완료 알림
+  notify-pr-merged:
+    name: Notify PR Merged
+    runs-on: ubuntu-latest
+    # 라벨 또는 제목 패턴으로 AI PR 감지
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      (contains(github.event.pull_request.labels.*.name, 'ai-generated') || contains(github.event.pull_request.title, '[AI]'))
+    steps:
+      - name: Discord Notification - PR Merged
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ env.DISCORD_WEBHOOK }}
+          nocontext: true
+          nofail: true
+          title: "PR Merged"
+          description: |
+            ## PR Merged :white_check_mark:
+
+            **제목**: ${{ github.event.pull_request.title }}
+            **브랜치**: `${{ github.event.pull_request.head.ref }}` -> `${{ github.event.pull_request.base.ref }}`
+            **머지 담당자**: ${{ github.event.pull_request.merged_by.login }}
+
+            ### 통계
+            - Commits: ${{ github.event.pull_request.commits }}
+            - Changed Files: ${{ github.event.pull_request.changed_files }}
+            - Additions: +${{ github.event.pull_request.additions }}
+            - Deletions: -${{ github.event.pull_request.deletions }}
+
+            [PR 링크](${{ github.event.pull_request.html_url }})
+
+            :rocket: 배포가 자동으로 시작됩니다.
+          color: 0x238636
+          username: "GitHub Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
+  # CI 실패 알림
+  notify-ci-failure:
+    name: Notify CI Failure
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Get PR Info
+        id: pr_info
+        run: |
+          # workflow_run에서 관련 PR 정보 가져오기
+          if [ -n "${{ github.event.workflow_run.pull_requests[0].number }}" ]; then
+            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+            PR_INFO=$(gh pr view $PR_NUMBER --json title,url,headRefName,author --jq '{title: .title, url: .url, branch: .headRefName, author: .author.login}')
+
+            echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+            echo "pr_title=$(echo $PR_INFO | jq -r '.title')" >> $GITHUB_OUTPUT
+            echo "pr_url=$(echo $PR_INFO | jq -r '.url')" >> $GITHUB_OUTPUT
+            echo "pr_branch=$(echo $PR_INFO | jq -r '.branch')" >> $GITHUB_OUTPUT
+            echo "pr_author=$(echo $PR_INFO | jq -r '.author')" >> $GITHUB_OUTPUT
+            echo "has_pr=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_pr=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Discord Notification - CI Failure (PR)
+        if: steps.pr_info.outputs.has_pr == 'true'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ env.DISCORD_WEBHOOK }}
+          nocontext: true
+          nofail: true
+          title: "CI Failed"
+          description: |
+            ## CI Failed :x:
+
+            **PR**: ${{ steps.pr_info.outputs.pr_title }}
+            **브랜치**: `${{ steps.pr_info.outputs.pr_branch }}`
+            **작성자**: ${{ steps.pr_info.outputs.pr_author }}
+
+            ### 실패 정보
+            - Workflow: ${{ github.event.workflow_run.name }}
+            - Run ID: ${{ github.event.workflow_run.id }}
+
+            [PR 링크](${{ steps.pr_info.outputs.pr_url }})
+            [CI 로그 확인](${{ github.event.workflow_run.html_url }})
+
+            @backend-team CI 수정이 필요합니다.
+          color: 0xDA3633
+          username: "GitHub Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
+      - name: Discord Notification - CI Failure (Push)
+        if: steps.pr_info.outputs.has_pr == 'false'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ env.DISCORD_WEBHOOK }}
+          nocontext: true
+          nofail: true
+          title: "CI Failed"
+          description: |
+            ## CI Failed :x:
+
+            **브랜치**: `${{ github.event.workflow_run.head_branch }}`
+            **커밋**: `${{ github.event.workflow_run.head_sha }}`
+
+            ### 실패 정보
+            - Workflow: ${{ github.event.workflow_run.name }}
+            - Run ID: ${{ github.event.workflow_run.id }}
+
+            [CI 로그 확인](${{ github.event.workflow_run.html_url }})
+
+            @devops-team CI 수정이 필요합니다.
+          color: 0xDA3633
+          username: "GitHub Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
+  # 리뷰 요청 알림
+  notify-review-requested:
+    name: Notify Review Requested
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request_review' &&
+      github.event.action == 'submitted'
+    steps:
+      - name: Determine Review Status
+        id: review_status
+        run: |
+          REVIEW_STATE="${{ github.event.review.state }}"
+          case $REVIEW_STATE in
+            approved)
+              echo "emoji=:white_check_mark:" >> $GITHUB_OUTPUT
+              echo "status=Approved" >> $GITHUB_OUTPUT
+              echo "color=0x238636" >> $GITHUB_OUTPUT
+              ;;
+            changes_requested)
+              echo "emoji=:warning:" >> $GITHUB_OUTPUT
+              echo "status=Changes Requested" >> $GITHUB_OUTPUT
+              echo "color=0xDA3633" >> $GITHUB_OUTPUT
+              ;;
+            commented)
+              echo "emoji=:speech_balloon:" >> $GITHUB_OUTPUT
+              echo "status=Commented" >> $GITHUB_OUTPUT
+              echo "color=0x6E7681" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "emoji=:memo:" >> $GITHUB_OUTPUT
+              echo "status=Reviewed" >> $GITHUB_OUTPUT
+              echo "color=0x5865F2" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Check if AI-generated PR
+        id: check_ai
+        run: |
+          LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '.labels[].name')
+          if echo "$LABELS" | grep -q "ai-generated"; then
+            echo "is_ai=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_ai=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Discord Notification - Review Submitted
+        if: steps.check_ai.outputs.is_ai == 'true'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ env.DISCORD_WEBHOOK }}
+          nocontext: true
+          nofail: true
+          title: "PR Review: ${{ steps.review_status.outputs.status }}"
+          description: |
+            ## PR Review ${{ steps.review_status.outputs.emoji }}
+
+            **PR**: ${{ github.event.pull_request.title }}
+            **리뷰어**: ${{ github.event.review.user.login }}
+            **상태**: ${{ steps.review_status.outputs.status }}
+
+            ${{ github.event.review.body }}
+
+            [리뷰 확인](${{ github.event.review.html_url }})
+          color: ${{ steps.review_status.outputs.color }}
+          username: "GitHub Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+
+  # CI 성공 알림 (선택적)
+  notify-ci-success:
+    name: Notify CI Success
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    steps:
+      - name: Get PR Info
+        id: pr_info
+        run: |
+          if [ -n "${{ github.event.workflow_run.pull_requests[0].number }}" ]; then
+            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+
+            # PR 라벨 확인
+            LABELS=$(gh pr view $PR_NUMBER --json labels --jq '.labels[].name')
+            if echo "$LABELS" | grep -q "ai-generated"; then
+              PR_INFO=$(gh pr view $PR_NUMBER --json title,url --jq '{title: .title, url: .url}')
+              echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+              echo "pr_title=$(echo $PR_INFO | jq -r '.title')" >> $GITHUB_OUTPUT
+              echo "pr_url=$(echo $PR_INFO | jq -r '.url')" >> $GITHUB_OUTPUT
+              echo "is_ai=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_ai=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "is_ai=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Discord Notification - CI Success
+        if: steps.pr_info.outputs.is_ai == 'true'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ env.DISCORD_WEBHOOK }}
+          nocontext: true
+          nofail: true
+          title: "CI Passed"
+          description: |
+            ## CI Passed :white_check_mark:
+
+            **PR**: ${{ steps.pr_info.outputs.pr_title }}
+
+            ### CI 상태
+            - Build: :white_check_mark: Passed
+            - Test: :white_check_mark: Passed
+            - Clippy: :white_check_mark: Passed
+            - Format: :white_check_mark: Passed
+
+            [PR 링크](${{ steps.pr_info.outputs.pr_url }})
+
+            리뷰 진행이 가능합니다.
+          color: 0x238636
+          username: "GitHub Bot"
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"

@@ -1,0 +1,121 @@
+# CODEOWNERS - 27th Web Team 3 Backend
+# GitHub 코드 소유자 설정 파일
+# PR 리뷰 요청 시 자동으로 리뷰어가 할당됩니다.
+#
+# 형식: <패턴> <소유자1> <소유자2> ...
+# 참고: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ============================================
+# 전체 코드베이스 기본 소유자
+# ============================================
+* @backend-team
+
+# ============================================
+# 도메인별 담당자
+# ============================================
+# AI 도메인 (회고 생성, 프롬프트 등)
+codes/server/src/domain/ai/ @ai-lead
+
+# 회고 도메인
+codes/server/src/domain/retrospect/ @backend-lead
+
+# 회원 도메인
+codes/server/src/domain/member/ @backend-lead
+
+# 인증 도메인
+codes/server/src/domain/auth/ @backend-lead
+
+# Webhook 도메인
+codes/server/src/domain/webhook/ @backend-lead @devops-team
+
+# ============================================
+# 핵심 시스템 컴포넌트
+# ============================================
+# 이벤트 시스템
+codes/server/src/event/ @backend-lead @ai-lead
+
+# 모니터링 시스템
+codes/server/src/monitoring/ @devops-team @backend-lead
+
+# 자동화 시스템
+codes/server/src/automation/ @ai-lead @devops-team
+
+# 공통 유틸리티
+codes/server/src/utils/ @backend-team
+
+# 설정
+codes/server/src/config/ @backend-lead @devops-team
+
+# 글로벌 미들웨어
+codes/server/src/global/ @backend-lead
+
+# 애플리케이션 진입점
+codes/server/src/main.rs @backend-lead
+codes/server/src/lib.rs @backend-lead
+codes/server/src/state.rs @backend-lead
+
+# ============================================
+# 테스트
+# ============================================
+codes/server/tests/ @backend-team @qa-lead
+
+# ============================================
+# 빌드 및 의존성
+# ============================================
+codes/server/Cargo.toml @backend-lead @devops-team
+codes/server/Cargo.lock @backend-lead
+
+# ============================================
+# 인프라 및 CI/CD
+# ============================================
+.github/ @devops-team
+.github/workflows/ @devops-team
+.github/CODEOWNERS @backend-lead @devops-team
+
+ci/ @devops-team
+ci/terraform/ @devops-team @infra-lead
+ci/nginx/ @devops-team
+ci/scripts/ @devops-team
+
+# ============================================
+# 스크립트 및 자동화
+# ============================================
+scripts/ @devops-team @ai-lead
+
+# ============================================
+# Claude Code 설정
+# ============================================
+.claude/ @ai-lead @backend-lead
+CLAUDE.md @ai-lead @backend-lead
+
+# ============================================
+# 문서
+# ============================================
+docs/ @tech-writer @backend-lead
+
+# API 명세서
+docs/api-specs/ @backend-lead @tech-writer
+
+# AI 컨벤션 가이드
+docs/ai-conventions/ @ai-lead @tech-writer
+
+# AI 자동화 문서
+docs/ai-automation/ @ai-lead @devops-team
+
+# AI 모니터링 문서
+docs/ai-monitoring/ @ai-lead @devops-team
+
+# 구현 문서
+docs/implementations/ @backend-team @tech-writer
+
+# 리뷰 문서
+docs/reviews/ @backend-team @tech-writer
+
+# 요구사항 문서
+docs/requirements/ @tech-writer @backend-lead
+
+# ============================================
+# 환경 설정 파일 (주의 필요)
+# ============================================
+.env* @backend-lead @devops-team
+*.example @backend-lead
