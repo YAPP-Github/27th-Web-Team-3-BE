@@ -172,6 +172,12 @@ pub struct DiscordResponseData {
 /// Discord 서명 검증
 /// Discord는 Ed25519 서명을 사용하여 요청의 무결성을 검증합니다.
 /// 참고: https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
+///
+/// 필수 의존성 (Cargo.toml):
+/// ```toml
+/// ed25519-dalek = "2.0"
+/// hex = "0.4"
+/// ```
 fn verify_discord_signature(
     public_key: &str,
     signature: &str,

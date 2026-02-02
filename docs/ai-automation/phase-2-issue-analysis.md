@@ -491,7 +491,7 @@ if __name__ == "__main__":
   "auto_fixable": true,
   "fix_type": "config",
   "fix_suggestion": "src/domain/ai/client.rs의 TIMEOUT_SECS를 30에서 60으로 변경",
-  "branch_name_suggestion": "fix/AI5003-increase-timeout",
+  "branch_name_suggestion": "fix/ai5003-increase-timeout",
   "analysis_model": "claude-sonnet-4-20250514"
 }
 ```
@@ -519,10 +519,10 @@ if __name__ == "__main__":
 
 #### 네이밍 규칙
 
-1. **소문자 사용**: 타입과 설명은 소문자 (에러 코드는 원래 형식 유지)
+1. **소문자 사용**: 타입, 설명, 에러 코드 모두 소문자로 통일
 2. **하이픈 구분**: 단어는 하이픈(`-`)으로 구분
 3. **간결한 설명**: 20자 이내 영문 설명
-4. **에러 코드 포함**: 추적 가능성 확보 (원래 에러 코드 형식 그대로 사용)
+4. **에러 코드 포함**: 추적 가능성 확보 (소문자로 변환하여 사용, 예: `AI5003` → `ai5003`)
 
 #### 예시
 
@@ -867,7 +867,7 @@ python3 ./scripts/issue-analyzer.py '{"error":{"error_code":"AI5003","target":"s
 # 1. 에러 파싱 완료
 # 2. 컨텍스트 수집 완료
 # 3. AI 분석 완료 (severity: high)
-# 4. 브랜치 생성: fix/AI5003-increase-timeout
+# 4. 브랜치 생성: fix/ai5003-increase-timeout
 # 5. Discord 알림 발송
 ```
 
