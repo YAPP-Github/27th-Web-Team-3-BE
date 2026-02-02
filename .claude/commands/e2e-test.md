@@ -4,6 +4,17 @@
 
 **주의**: 이 명령어는 일반 개발 테스트가 아닌, 실제 서버를 대상으로 하는 통합 테스트용입니다.
 
+## 자동 실행 모드
+
+**중요**: 이 명령어는 사용자 승인 없이 자동으로 모든 단계를 실행합니다.
+- Git 상태 저장/복원
+- 토큰 획득
+- 모든 API 테스트 (성공 + 모든 에러 케이스)
+- **API 문서(docs/api-specs/)와 실제 응답 비교**
+- 결과 출력
+
+중간에 멈추지 않고 끝까지 실행합니다.
+
 ## 사용법
 
 ```
@@ -87,99 +98,141 @@ curl -s -X POST {서버_URL}/api/auth/login/email \
   "isSuccess": true,
   "code": "COMMON200",
   "result": {
-    "isNewMember": false
+    "accessToken": "eyJ..."
   }
 }
 ```
 
-**참고**: accessToken은 쿠키로 전달되므로, 이후 요청에서 쿠키를 유지하거나 응답 헤더에서 추출합니다.
+**환경변수가 없으면**: 에러 출력 후 테스트 중단.
+
+### 4단계: Swagger 스펙 및 API 문서 준비
+
+테스트는 **Swagger 스펙을 기준**으로 실행하되, **docs/api-specs/ 문서와 비교**하여 불일치를 감지합니다.
 
 ```bash
-# 쿠키 저장하여 사용
-curl -s -X POST {서버_URL}/api/auth/login/email \
-  -H "Content-Type: application/json" \
-  -d "{\"email\":\"$E2E_TEST_EMAIL\"}" \
-  -c cookies.txt
-
-# 이후 요청에서 쿠키 사용
-curl -s -b cookies.txt {서버_URL}/api/v1/retro-rooms
-```
-
-**환경변수가 없으면**: 사용자에게 테스트 계정 입력을 요청합니다.
-
-### 4단계: Swagger 엔드포인트 목록 조회
-
-**컨텍스트 절약을 위해 엔드포인트 목록만 조회합니다.**
-
-기본 서버 URL: `https://api.moaofficial.kr`
-
-```bash
-# 엔드포인트 목록만 가져오기 (전체 Swagger JSON 가져오지 않음)
+# 엔드포인트 목록 조회
 curl -s {서버_URL}/api-docs/openapi.json | jq '.paths | keys'
+
+# 특정 API의 스키마 조회 (필요 시)
+curl -s {서버_URL}/api-docs/openapi.json | jq '.paths["/api/v1/retro-rooms"]'
+curl -s {서버_URL}/api-docs/openapi.json | jq '.components.schemas.{SchemaName}'
 ```
 
-특정 API의 상세 스펙이 필요할 때만 선택적으로 조회:
-```bash
-# 특정 API의 파라미터/응답 스펙 조회
-curl -s {서버_URL}/api-docs/openapi.json | jq '.paths["/api/v1/retro-rooms"]'
-```
+각 API 테스트 시 해당하는 `docs/api-specs/{번호}-{api-name}.md` 문서를 읽어 비교합니다.
 
 ### 5단계: API 테스트 실행
 
-`docs/api-specs/` 디렉토리의 각 API 문서를 **하나씩** 읽고 테스트합니다.
+모든 API에 대해 **성공 케이스 + 모든 에러 케이스**를 테스트합니다.
 
-#### 5-1. 문서에서 테스트 케이스 추출
-
-각 API 문서에서 다음 섹션을 확인:
-
-1. **엔드포인트 정보**: 메서드, 경로
-2. **Request 섹션**: 필수 파라미터, 헤더
-3. **Response 섹션**: 성공 응답 구조
-4. **에러 응답 섹션**: 에러 코드별 조건
-
-예시 (`docs/api-specs/007-retro-room-list.md`):
-```markdown
-## 에러 응답
-### 401 Unauthorized - 인증 실패
-### 500 Internal Server Error - 서버 에러
-```
-
-#### 5-2. 성공 케이스 테스트
+#### 5-1. 성공 케이스 테스트
 
 ```bash
-# API 문서의 "사용 예시" 기반으로 테스트
-curl -s -H "Authorization: Bearer {TOKEN}" {서버_URL}/api/v1/retro-rooms
+# Swagger 스펙의 requestBody 스키마를 참고하여 올바른 요청 생성
+curl -s -X {METHOD} -H "Authorization: Bearer {TOKEN}" \
+  -H "Content-Type: application/json" \
+  "{서버_URL}{endpoint}" \
+  -d '{올바른_요청_바디}'
 ```
 
 검증:
 - `isSuccess: true` 확인
 - `code: "COMMON200"` 확인
-- `result` 구조가 문서와 일치하는지 확인
 
-#### 5-3. 에러 케이스 테스트 (문서 기반)
+#### 5-1-1. API 문서와 비교 (불일치 감지)
 
-**문서의 "에러 응답" 섹션에 정의된 모든 에러를 테스트합니다.**
+각 API 테스트 시 `docs/api-specs/{번호}-{api-name}.md` 문서를 읽고 다음을 비교합니다:
 
-| 에러 코드 | 테스트 방법 |
-|----------|------------|
-| 400 Bad Request | 필수 파라미터 누락 또는 잘못된 값 전송 |
-| 401 Unauthorized | Authorization 헤더 제거 또는 잘못된 토큰 |
-| 403 Forbidden | 권한 없는 리소스 접근 (다른 사용자의 데이터) |
-| 404 Not Found | 존재하지 않는 ID 사용 (예: 99999) |
-| 409 Conflict | 중복 데이터 생성 시도 |
+| 비교 항목 | 문서 위치 | 비교 방법 |
+|----------|----------|----------|
+| **HTTP 메서드** | `## 엔드포인트` | Swagger 메서드와 비교 |
+| **요청 필드명** | `## Request` | Swagger requestBody 스키마와 비교 |
+| **응답 필드명** | `## Response` | 실제 응답 result의 키와 비교 |
+| **에러 코드** | `## 에러 응답` | 실제 에러 응답 code와 비교 |
+
+**불일치 발견 시 출력 예시:**
+
+```
+⚠️ 문서 불일치 발견: API-005 POST /api/v1/retro-rooms
+
+[메서드 불일치]
+  문서: PUT
+  Swagger: POST
+  → 문서 수정 필요
+
+[요청 필드 불일치]
+  문서: {"name": "..."}
+  Swagger: {"title": "..."}
+  → 문서의 name을 title로 수정 필요
+
+[응답 필드 불일치]
+  문서: retroRoomName
+  실제: name
+  → 문서 수정 필요
+
+[에러 코드 불일치]
+  문서: ROOM4001
+  실제: COMMON400
+  → 문서 수정 필요
+```
+
+#### 5-2. 에러 케이스 테스트 (전체)
+
+**Swagger 스펙의 responses 섹션에 정의된 모든 에러를 테스트합니다.**
+
+| 에러 코드 | 테스트 방법 | 예시 |
+|----------|------------|------|
+| **400 Bad Request** | 필수 파라미터 누락 | `{}` 빈 바디 전송 |
+| **400 Bad Request** | 잘못된 값/형식 | `{"name": ""}` 빈 문자열 |
+| **400 Bad Request** | 길이 초과 | 100자 이상 문자열 전송 |
+| **400 Bad Request** | 잘못된 enum 값 | `?category=INVALID` |
+| **400 Bad Request** | 잘못된 path parameter | `/retrospects/0` (0 이하) |
+| **401 Unauthorized** | 인증 헤더 없음 | Authorization 헤더 제거 |
+| **401 Unauthorized** | 잘못된 토큰 | `Bearer invalid_token` |
+| **403 Forbidden** | 권한 없는 접근 | 다른 사용자의 리소스 ID |
+| **404 Not Found** | 존재하지 않는 ID | `/retrospects/99999` |
+| **409 Conflict** | 중복 데이터 | 같은 이름으로 재생성 |
+
+#### 5-3. 에러 케이스별 테스트 예시
 
 ```bash
-# 401 테스트: 인증 없이 요청
-curl -s {서버_URL}/api/v1/retro-rooms
+# 400 테스트: 빈 바디
+curl -s -X POST -H "Authorization: Bearer {TOKEN}" \
+  -H "Content-Type: application/json" \
+  "{서버_URL}/api/v1/retro-rooms" \
+  -d '{}'
+# 예상: {"isSuccess":false,"code":"COMMON400",...}
+
+# 400 테스트: 잘못된 enum
+curl -s -H "Authorization: Bearer {TOKEN}" \
+  "{서버_URL}/api/v1/retrospects/1/responses?category=INVALID"
+# 예상: {"isSuccess":false,"code":"RETRO4004",...}
+
+# 400 테스트: 잘못된 path parameter
+curl -s -H "Authorization: Bearer {TOKEN}" \
+  "{서버_URL}/api/v1/retrospects/0"
+# 예상: {"isSuccess":false,"code":"COMMON400",...}
+
+# 401 테스트: 인증 없음
+curl -s "{서버_URL}/api/v1/retro-rooms"
+# 예상: {"isSuccess":false,"code":"AUTH4001",...}
+
+# 401 테스트: 잘못된 토큰
+curl -s -H "Authorization: Bearer invalid_token" \
+  "{서버_URL}/api/v1/retro-rooms"
 # 예상: {"isSuccess":false,"code":"AUTH4001",...}
 
 # 404 테스트: 없는 리소스
-curl -s -H "Authorization: Bearer {TOKEN}" {서버_URL}/api/v1/retrospects/99999
+curl -s -H "Authorization: Bearer {TOKEN}" \
+  "{서버_URL}/api/v1/retrospects/99999"
 # 예상: {"isSuccess":false,"code":"RETRO4041",...}
 
-# 400 테스트: 잘못된 파라미터
-curl -s -H "Authorization: Bearer {TOKEN}" "{서버_URL}/api/v1/retrospects/1/responses?category=INVALID"
-# 예상: {"isSuccess":false,"code":"RETRO4004",...}
+# 409 테스트: 중복 이름 (회고방 이름 변경 시)
+# 먼저 회고방 A 생성 후, 회고방 B의 이름을 A로 변경 시도
+curl -s -X PATCH -H "Authorization: Bearer {TOKEN}" \
+  -H "Content-Type: application/json" \
+  "{서버_URL}/api/v1/retro-rooms/{id}/name" \
+  -d '{"name":"이미_존재하는_이름"}'
+# 예상: {"isSuccess":false,"code":"ROOM4091",...}
 ```
 
 ### 6단계: 결과 출력
@@ -192,25 +245,56 @@ E2E 테스트 결과 ({서버_URL})
 ========================================
 
 [Health] GET /health
-  ✅ 성공 케이스: PASS (200)
+  ✅ 성공: PASS (200)
 
 [API-007] GET /api/v1/retro-rooms (회고방 목록)
-  ✅ 성공 케이스: PASS (200)
-  ✅ 에러 401 (인증없음): PASS - AUTH4001
+  ✅ 성공: PASS (200)
+  ✅ 401 (인증없음): PASS - AUTH4001
+  ✅ 401 (잘못된토큰): PASS - AUTH4001
+  📄 문서 일치: OK
+
+[API-005] POST /api/v1/retro-rooms (회고방 생성)
+  ✅ 성공: PASS (200)
+  ✅ 400 (빈 바디): PASS - COMMON400
+  ✅ 400 (빈 title): PASS - COMMON400
+  ✅ 401 (인증없음): PASS - AUTH4001
+  ⚠️ 문서 불일치:
+    - 요청 필드: 문서 "name" → Swagger "title"
 
 [API-013] GET /api/v1/retrospects/{id} (회고 상세)
-  ✅ 성공 케이스: PASS (200)
-  ✅ 에러 401 (인증없음): PASS - AUTH4001
-  ✅ 에러 404 (없는 ID): PASS - RETRO4041
+  ✅ 성공: PASS (200)
+  ✅ 400 (id=0): PASS - COMMON400
+  ✅ 401 (인증없음): PASS - AUTH4001
+  ✅ 404 (없는 ID): PASS - RETRO4041
+  📄 문서 일치: OK
 
 [API-021] GET /api/v1/retrospects/{id}/responses (응답 목록)
-  ✅ 성공 케이스: PASS (200)
-  ✅ 에러 400 (잘못된 category): PASS - RETRO4004
-  ✅ 에러 401 (인증없음): PASS - AUTH4001
+  ✅ 성공: PASS (200)
+  ✅ 400 (잘못된 category): PASS - RETRO4004
+  ✅ 400 (잘못된 size): PASS - COMMON400
+  ✅ 401 (인증없음): PASS - AUTH4001
+  ✅ 404 (없는 회고): PASS - RETRO4041
+  📄 문서 일치: OK
 
 ========================================
 총 결과: X/Y 통과 (Z개 스킵)
 실패한 테스트: (있다면 나열)
+========================================
+
+========================================
+문서 불일치 요약 (수정 필요)
+========================================
+[API-005] docs/api-specs/005-retro-room-create.md
+  - 요청 필드: "name" → "title"로 수정 필요
+
+[API-008] docs/api-specs/008-retro-room-order-update.md
+  - HTTP 메서드: PUT → PATCH로 수정 필요
+  - 요청 필드: "retroRoomIds" → "retroRoomOrders"로 수정 필요
+
+[API-012] docs/api-specs/012-retrospect-create.md
+  - 요청 필드: "title" → "projectName"으로 수정 필요
+
+총 3개 문서 수정 필요
 ========================================
 ```
 
@@ -224,6 +308,110 @@ if [ "$STASHED" = true ]; then
     git stash pop
 fi
 ```
+
+## 문서 비교 상세
+
+### 비교 대상 파일
+
+| API 번호 | 문서 경로 | 비교 항목 |
+|---------|----------|----------|
+| API-005 | `docs/api-specs/005-retro-room-create.md` | 메서드, 요청 필드, 응답 필드 |
+| API-006 | `docs/api-specs/006-retro-room-join.md` | 메서드, 요청 필드 |
+| API-007 | `docs/api-specs/007-retro-room-list.md` | 응답 필드 |
+| API-008 | `docs/api-specs/008-retro-room-order-update.md` | 메서드, 요청 필드 |
+| API-009 | `docs/api-specs/009-retro-room-name-update.md` | 메서드, 요청 필드 |
+| API-010 | `docs/api-specs/010-retro-room-delete.md` | 에러 코드 |
+| API-011 | `docs/api-specs/011-retro-room-retrospects-list.md` | 응답 필드 |
+| API-012 | `docs/api-specs/012-retrospect-create.md` | 요청 필드 |
+| API-013 | `docs/api-specs/013-retrospect-detail.md` | 응답 필드 |
+| API-014 | `docs/api-specs/014-retrospect-delete.md` | 에러 코드 |
+| API-015 | `docs/api-specs/015-retrospect-participant-create.md` | 요청 필드 |
+| API-017 | `docs/api-specs/017-retrospect-draft-save.md` | 메서드, 요청 필드 |
+| API-018 | `docs/api-specs/018-retrospect-submit.md` | 요청 필드 |
+| API-019 | `docs/api-specs/019-retrospect-references-list.md` | 응답 필드 |
+| API-020 | `docs/api-specs/020-retrospect-storage-list.md` | 응답 필드 |
+| API-021 | `docs/api-specs/021-retrospect-responses-list.md` | 응답 필드 |
+| API-022 | `docs/api-specs/022-retrospect-export.md` | 요청 파라미터 |
+| API-024 | `docs/api-specs/024-retrospect-search.md` | 응답 필드 |
+| API-026 | `docs/api-specs/026-response-like-toggle.md` | 응답 필드 |
+| API-027 | `docs/api-specs/027-response-comments-list.md` | 응답 필드 |
+| API-028 | `docs/api-specs/028-response-comment-create.md` | 요청 필드, 응답 필드 |
+
+### 비교 로직
+
+```
+1. 문서에서 ## 엔드포인트 섹션 파싱 → HTTP 메서드 추출
+2. 문서에서 ## Request 섹션 파싱 → 요청 필드명 추출
+3. 문서에서 ## Response 섹션 파싱 → 응답 필드명 추출
+4. 문서에서 ## 에러 응답 섹션 파싱 → 에러 코드 추출
+5. Swagger 스펙 / 실제 응답과 비교
+6. 불일치 항목 기록
+```
+
+### 불일치 유형
+
+| 유형 | 심각도 | 설명 |
+|-----|--------|------|
+| **메서드 불일치** | 🔴 높음 | PUT vs PATCH 등 HTTP 메서드가 다름 |
+| **요청 필드 불일치** | 🔴 높음 | 클라이언트가 잘못된 필드명으로 요청할 수 있음 |
+| **응답 필드 불일치** | 🟡 중간 | 클라이언트가 잘못된 필드를 참조할 수 있음 |
+| **에러 코드 불일치** | 🟡 중간 | 에러 핸들링 로직에 영향 |
+| **타입 불일치** | 🟢 낮음 | long vs integer 등 |
+
+## API별 테스트 케이스 상세
+
+### GET API 테스트 케이스
+
+| API | 성공 | 400 | 401 | 403 | 404 |
+|-----|------|-----|-----|-----|-----|
+| GET /health | ✅ | - | - | - | - |
+| GET /api/v1/retro-rooms | ✅ | - | ✅ 인증없음, ✅ 잘못된토큰 | - | - |
+| GET /api/v1/retro-rooms/{id}/retrospects | ✅ | ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | - | ✅ 없는ID |
+| GET /api/v1/retrospects/{id} | ✅ | ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ⏭️ 스킵* | ✅ 없는ID |
+| GET /api/v1/retrospects/storage | ✅ | - | ✅ 인증없음, ✅ 잘못된토큰 | - | - |
+| GET /api/v1/retrospects/search | ✅ | - | ✅ 인증없음, ✅ 잘못된토큰 | - | - |
+| GET /api/v1/retrospects/{id}/references | ✅ | ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ⏭️ 스킵* | ✅ 없는ID |
+| GET /api/v1/retrospects/{id}/responses | ✅ | ✅ category, ✅ size, ✅ cursor, ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ⏭️ 스킵* | ✅ 없는ID |
+| GET /api/v1/retrospects/{id}/export | ✅ | ✅ format, ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ⏭️ 스킵* | ✅ 없는ID |
+| GET /api/v1/responses/{id}/comments | ✅ | ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | - | ✅ 없는ID |
+
+*403 스킵: 다른 사용자의 리소스 접근 테스트는 별도 계정 필요 (E2E_TEST_EMAIL_2 설정 시 테스트)
+
+### POST API 테스트 케이스
+
+| API | 성공 | 400 | 401 | 403 | 404 | 409 |
+|-----|------|-----|-----|-----|-----|-----|
+| POST /api/v1/retro-rooms | ✅ | ✅ 빈바디, ✅ 빈title, ✅ title길이초과 | ✅ 인증없음, ✅ 잘못된토큰 | - | - | - |
+| POST /api/v1/retro-rooms/join | ⏭️ | ✅ 잘못된inviteCode | ✅ 인증없음, ✅ 잘못된토큰 | - | ✅ 없는코드 | - |
+| POST /api/v1/retrospects | ✅ | ✅ 빈바디, ✅ 필수값누락, ✅ 과거날짜 | ✅ 인증없음, ✅ 잘못된토큰 | - | - | - |
+| POST /api/v1/retrospects/{id}/participants | ✅ | ✅ 빈배열, ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ⏭️ 스킵* | ✅ 없는ID | ✅ 이미등록 |
+| POST /api/v1/retrospects/{id}/submit | ⏭️ | ✅ 답변부족, ✅ 빈배열 | ✅ 인증없음, ✅ 잘못된토큰 | ⏭️ 스킵* | ✅ 없는ID | - |
+| POST /api/v1/responses/{id}/likes | ✅ | ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | - | ✅ 없는ID | - |
+| POST /api/v1/responses/{id}/comments | ✅ | ✅ 빈content, ✅ 길이초과, ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | - | ✅ 없는ID | - |
+
+### PUT/PATCH API 테스트 케이스
+
+| API | 성공 | 400 | 401 | 403 | 404 | 409 |
+|-----|------|-----|-----|-----|-----|-----|
+| PATCH /api/v1/retro-rooms/order | ✅ | ✅ 빈배열, ✅ 잘못된ID | ✅ 인증없음, ✅ 잘못된토큰 | - | - | - |
+| PATCH /api/v1/retro-rooms/{id}/name | ✅ | ✅ 빈이름, ✅ 길이초과, ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ✅ 권한없음 | ✅ 없는ID | ✅ 중복이름 |
+| PUT /api/v1/retrospects/{id}/drafts | ✅ | ✅ 빈배열, ✅ 잘못된questionNumber, ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ⏭️ 스킵* | ✅ 없는ID | - |
+
+### DELETE API 테스트 케이스
+
+| API | 성공 | 400 | 401 | 403 | 404 |
+|-----|------|-----|-----|-----|-----|
+| DELETE /api/v1/retro-rooms/{id} | ✅ | ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ✅ 권한없음 | ✅ 없는ID |
+| DELETE /api/v1/retrospects/{id} | ✅ | ✅ id=0 | ✅ 인증없음, ✅ 잘못된토큰 | ✅ 권한없음 | ✅ 없는ID |
+
+## 테스트 제외 대상
+
+다음 API는 항상 제외 (명시적 요청 시에만 테스트):
+
+- `POST /api/v1/auth/*` - 인증 관련 (토큰 발급)
+- `POST /api/v1/retrospects/{id}/analysis` - AI 분석 (비용 발생)
+- `POST /api/v1/retrospects/{id}/questions/{questionId}/assistant` - AI 호출 (비용 발생)
+- `DELETE /api/v1/members/withdraw` - 회원탈퇴 (계정 삭제)
 
 ## 테스트 모드
 
@@ -250,13 +438,6 @@ fi
 - POST, PUT, PATCH, DELETE 제외
 - 프로덕션 서버에서 권장
 
-## 테스트 제외 대상
-
-다음 API는 항상 제외 (명시적 요청 시에만 테스트):
-
-- `POST /api/v1/auth/*` - 인증 관련 (토큰 발급)
-- `POST /api/v1/retrospects/{id}/questions/{questionId}/assistant` - AI 호출 (비용 발생)
-
 ## 실패 시 행동
 
 1. 실패한 API 엔드포인트 식별
@@ -267,8 +448,8 @@ fi
    실제: {"isSuccess":false,"code":"RETRO4041",...}
    원인: 테스트 데이터가 없거나 삭제됨
    ```
-3. 가능한 원인 분석 (문서 불일치, 서버 버그, 테스트 데이터 문제)
-4. 후속 조치 제안
+3. 테스트 계속 진행 (실패해도 멈추지 않음)
+4. 최종 결과에 실패 목록 출력
 
 ## 주의사항
 
@@ -276,3 +457,6 @@ fi
 - **개발 서버**: 기본 모드 (모든 API) 사용 가능
 - 기본 모드에서 생성된 테스트 데이터는 DELETE로 자동 정리 시도
 - 결과는 문서가 아닌 **터미널에만** 출력
+- **403 테스트**: 별도의 테스트 계정이 필요하므로 기본적으로 스킵 (환경변수 `E2E_TEST_EMAIL_2` 설정 시 테스트)
+- **문서 불일치 발견 시**: 테스트는 계속 진행하고, 최종 결과에 수정 필요 문서 목록 출력
+- **문서 우선순위**: Swagger 스펙이 실제 API이므로, 불일치 시 **문서를 수정**해야 함
