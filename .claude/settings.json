@@ -23,9 +23,13 @@
       "Bash(git checkout:*)",
       "Bash(git push:*)",
       "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git fetch:*)",
       "Bash(ls:*)",
       "Bash(tree:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)"
     ],
     "deny": [
       "Read(rust/.env)",
