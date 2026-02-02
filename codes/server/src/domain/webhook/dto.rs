@@ -130,6 +130,7 @@ pub struct DiscordMessageData {
 
 /// Discord webhook response
 #[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DiscordWebhookResponse {
     /// Response type (1 = Pong, 4 = Channel Message with Source, etc.)
     #[serde(rename = "type")]
@@ -160,6 +161,7 @@ impl DiscordWebhookResponse {
 
 /// Discord response data
 #[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DiscordResponseData {
     /// Message content
     pub content: String,

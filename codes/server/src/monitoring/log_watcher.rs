@@ -381,7 +381,15 @@ impl LogWatcher {
         })?;
 
         let reader = BufReader::new(file);
-        Ok(reader.lines().count())
+        let mut count = 0usize;
+        for line in reader.lines() {
+            line.map_err(|e| {
+                error!(error = %e, file = %log_file.display(), "Failed to read log file for line count");
+                AppError::InternalError(format!("Failed to read log file: {}", e))
+            })?;
+            count += 1;
+        }
+        Ok(count)
     }
 
     /// Load deduplication cache from file
