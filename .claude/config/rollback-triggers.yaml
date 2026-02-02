@@ -1,0 +1,60 @@
+# AI 수정 롤백 트리거 설정
+# Phase 3: AI 코드 수정 시스템
+#
+# 이 설정은 AI 수정이 자동으로 롤백되어야 하는 조건을 정의합니다.
+
+auto_rollback:
+  # 즉시 롤백 (자동)
+  # 이 조건들이 충족되면 즉시 자동으로 롤백됩니다.
+  immediate:
+    # 테스트 1개 이상 실패 시 롤백
+    test_failure_count: 1
+
+    # 컴파일 에러 발생 시 롤백
+    compile_error: true
+
+    # 보안 이슈 감지 시 롤백
+    security_issue_detected: true
+
+    # 문법 오류 발생 시 롤백
+    syntax_error: true
+
+  # 검토 후 롤백 (수동 승인 필요)
+  # 이 조건들이 충족되면 수동 검토 후 롤백 여부를 결정합니다.
+  review_required:
+    # 성능 저하 10% 초과 시
+    performance_degradation: "> 10%"
+
+    # API 응답 시간 500ms 초과 시
+    api_response_time: "> 500ms"
+
+    # 에러율 1% 이상 증가 시
+    error_rate_increase: "> 1%"
+
+    # Clippy 경고 증가 시
+    clippy_warnings_increase: true
+
+# 롤백 알림 설정
+notifications:
+  # 즉시 롤백 시 알림
+  on_immediate_rollback:
+    - type: "discord"
+      channel: "#dev-alerts"
+      mention: "@backend-team"
+
+  # 검토 필요 시 알림
+  on_review_required:
+    - type: "discord"
+      channel: "#dev-review"
+      mention: "@backend-team"
+
+# 롤백 제외 조건
+# 이 조건들이 충족되면 롤백을 건너뜁니다.
+skip_rollback:
+  # 드래프트 PR인 경우
+  draft_pr: true
+
+  # 특정 라벨이 있는 경우
+  labels:
+    - "skip-rollback"
+    - "experimental"

@@ -1,5 +1,6 @@
 //! Web Team 3 Backend Server
 
+mod automation;
 mod config;
 mod domain;
 mod event;

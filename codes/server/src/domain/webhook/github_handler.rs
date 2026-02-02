@@ -4,6 +4,10 @@
 //! - Issues (opened, labeled with ai-fix/ai-review)
 //! - Issue comments (@ai-bot mentions)
 //! - Pull requests (opened, labeled with ai-review)
+//!
+//! Includes branch validation for security governance:
+//! - Allowed patterns: fix/*, hotfix/*, ai-fix/*, config/*, refactor/*
+//! - Blocked patterns: main, master, dev, release/*
 
 use crate::domain::webhook::dto::{
     GitHubEventType, GitHubWebhookResponse, IssueCommentPayload, IssuesPayload, PullRequestPayload,
@@ -15,7 +19,131 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use tracing::{debug, error, info, warn};
 
-/// Verify GitHub webhook signature using HMAC-SHA256
+// ============================================================================
+// Branch Validation
+// ============================================================================
+
+/// Branch validation for security governance
+///
+/// Validates branches against allowed and blocked patterns as defined in
+/// docs/ai-automation/security-governance.md
+#[derive(Debug, Clone)]
+pub struct BranchValidator {
+    /// Patterns for branches that AI automation is allowed to push to
+    allowed_patterns: Vec<String>,
+    /// Patterns for branches that are blocked from AI automation
+    blocked_patterns: Vec<String>,
+}
+
+impl Default for BranchValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BranchValidator {
+    /// Create a new BranchValidator with default patterns from security governance
+    pub fn new() -> Self {
+        Self {
+            allowed_patterns: vec![
+                "fix/*".to_string(),
+                "hotfix/*".to_string(),
+                "ai-fix/*".to_string(),
+                "config/*".to_string(),
+                "refactor/*".to_string(),
+            ],
+            blocked_patterns: vec![
+                "main".to_string(),
+                "master".to_string(),
+                "dev".to_string(),
+                "release/*".to_string(),
+            ],
+        }
+    }
+
+    /// Check if a branch matches a glob pattern
+    /// Supports `*` wildcard for any characters after the pattern prefix
+    fn matches_pattern(branch: &str, pattern: &str) -> bool {
+        if pattern.ends_with("/*") {
+            // Pattern like "fix/*" - check if branch starts with "fix/"
+            let prefix = &pattern[..pattern.len() - 1]; // "fix/"
+            branch.starts_with(prefix)
+        } else {
+            // Exact match
+            branch == pattern
+        }
+    }
+
+    /// Check if a branch is in the allowed patterns
+    pub fn is_allowed(&self, branch: &str) -> bool {
+        self.allowed_patterns
+            .iter()
+            .any(|pattern| Self::matches_pattern(branch, pattern))
+    }
+
+    /// Check if a branch is in the blocked patterns
+    pub fn is_blocked(&self, branch: &str) -> bool {
+        self.blocked_patterns
+            .iter()
+            .any(|pattern| Self::matches_pattern(branch, pattern))
+    }
+
+    /// Validate a PR's branches (both head and base)
+    /// Returns Ok(()) if valid, or Err with reason if invalid
+    pub fn validate_pr_branches(
+        &self,
+        head_ref: &str,
+        base_ref: &str,
+    ) -> Result<(), BranchValidationError> {
+        // Check if head branch (source) is blocked
+        if self.is_blocked(head_ref) {
+            return Err(BranchValidationError::BlockedSourceBranch(
+                head_ref.to_string(),
+            ));
+        }
+
+        // Check if base branch (target) is not a protected branch for direct push
+        // For PRs, we allow targeting protected branches, but the source must be valid
+        // Base validation is informational - PRs can target main/dev
+        // The key restriction is that AI automation cannot push to protected branches directly
+
+        debug!(
+            head = %head_ref,
+            base = %base_ref,
+            head_allowed = self.is_allowed(head_ref),
+            "Branch validation passed"
+        );
+
+        Ok(())
+    }
+}
+
+/// Error type for branch validation
+#[derive(Debug, Clone, PartialEq)]
+pub enum BranchValidationError {
+    /// Source branch is blocked
+    BlockedSourceBranch(String),
+    /// Target branch is blocked (reserved for future use)
+    #[allow(dead_code)]
+    BlockedTargetBranch(String),
+}
+
+impl std::fmt::Display for BranchValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BranchValidationError::BlockedSourceBranch(branch) => {
+                write!(f, "Source branch '{}' is blocked for AI automation", branch)
+            }
+            BranchValidationError::BlockedTargetBranch(branch) => {
+                write!(f, "Target branch '{}' is blocked for AI automation", branch)
+            }
+        }
+    }
+}
+
+impl std::error::Error for BranchValidationError {}
+
+/// Verify GitHub webhook signature using HMAC-SHA256 with constant-time comparison
 fn verify_github_signature(secret: &str, signature: &str, body: &[u8]) -> Result<(), AppError> {
     // Skip verification if GITHUB_SKIP_VERIFICATION=true (development)
     if std::env::var("GITHUB_SKIP_VERIFICATION").unwrap_or_default() == "true" {
@@ -23,8 +151,14 @@ fn verify_github_signature(secret: &str, signature: &str, body: &[u8]) -> Result
         return Ok(());
     }
 
-    let signature = signature.strip_prefix("sha256=").ok_or_else(|| {
+    let signature_hex = signature.strip_prefix("sha256=").ok_or_else(|| {
         warn!("Invalid GitHub signature format: missing sha256= prefix");
+        AppError::Unauthorized("Invalid signature format".to_string())
+    })?;
+
+    // Decode the hex signature from GitHub
+    let signature_bytes = hex::decode(signature_hex).map_err(|e| {
+        warn!(error = %e, "Invalid hex in GitHub signature");
         AppError::Unauthorized("Invalid signature format".to_string())
     })?;
 
@@ -35,12 +169,11 @@ fn verify_github_signature(secret: &str, signature: &str, body: &[u8]) -> Result
 
     mac.update(body);
 
-    let expected = hex::encode(mac.finalize().into_bytes());
-
-    if signature != expected {
+    // Use constant-time comparison to prevent timing attacks
+    mac.verify_slice(&signature_bytes).map_err(|_| {
         warn!("GitHub signature mismatch");
-        return Err(AppError::Unauthorized("Signature mismatch".to_string()));
-    }
+        AppError::Unauthorized("Signature mismatch".to_string())
+    })?;
 
     Ok(())
 }
@@ -263,13 +396,35 @@ fn handle_issue_comment_event(payload: IssueCommentPayload) -> Result<Option<Eve
 }
 
 /// Handle Pull Request events (opened, labeled)
+///
+/// Includes branch validation:
+/// - Validates head_ref (source branch) is not blocked
+/// - Logs warning if source branch is from blocked patterns
 fn handle_pull_request_event(payload: PullRequestPayload) -> Result<Option<Event>, AppError> {
     info!(
         action = %payload.action,
         pr_number = payload.pull_request.number,
         repository = %payload.repository.full_name,
+        head_ref = %payload.pull_request.head.ref_name,
+        base_ref = %payload.pull_request.base.ref_name,
         "Processing pull_request event"
     );
+
+    // Validate branches before processing
+    let validator = BranchValidator::new();
+    if let Err(e) = validator.validate_pr_branches(
+        &payload.pull_request.head.ref_name,
+        &payload.pull_request.base.ref_name,
+    ) {
+        warn!(
+            error = %e,
+            head_ref = %payload.pull_request.head.ref_name,
+            base_ref = %payload.pull_request.base.ref_name,
+            pr_number = payload.pull_request.number,
+            "PR branch validation failed - ignoring event"
+        );
+        return Ok(None);
+    }
 
     match payload.action.as_str() {
         "opened" => {
@@ -290,6 +445,7 @@ fn handle_pull_request_event(payload: PullRequestPayload) -> Result<Option<Event
                         "labels": payload.pull_request.labels.iter().map(|l| &l.name).collect::<Vec<_>>(),
                         "repository": payload.repository.full_name,
                         "sender": payload.sender.login,
+                        "branch_validated": true,
                     }),
                 )
                 .with_user(&payload.sender.login);
@@ -315,6 +471,7 @@ fn handle_pull_request_event(payload: PullRequestPayload) -> Result<Option<Event
                         "base_ref": payload.pull_request.base.ref_name,
                         "repository": payload.repository.full_name,
                         "sender": payload.sender.login,
+                        "branch_validated": true,
                     }),
                 )
                 .with_user(&payload.sender.login);
@@ -567,6 +724,280 @@ mod tests {
 
         // Assert
         assert!(result.is_none());
+    }
+
+    // ========================================================================
+    // Branch Validator Tests
+    // ========================================================================
+
+    #[test]
+    fn should_allow_fix_branch_pattern() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_allowed("fix/bug-123"));
+        assert!(validator.is_allowed("fix/issue-456"));
+        assert!(validator.is_allowed("fix/"));
+    }
+
+    #[test]
+    fn should_allow_hotfix_branch_pattern() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_allowed("hotfix/critical-bug"));
+        assert!(validator.is_allowed("hotfix/urgent-fix"));
+    }
+
+    #[test]
+    fn should_allow_ai_fix_branch_pattern() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_allowed("ai-fix/auto-generated"));
+        assert!(validator.is_allowed("ai-fix/issue-789"));
+    }
+
+    #[test]
+    fn should_allow_config_branch_pattern() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_allowed("config/update-settings"));
+        assert!(validator.is_allowed("config/env-changes"));
+    }
+
+    #[test]
+    fn should_allow_refactor_branch_pattern() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_allowed("refactor/cleanup"));
+        assert!(validator.is_allowed("refactor/code-improvements"));
+    }
+
+    #[test]
+    fn should_not_allow_feature_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(!validator.is_allowed("feature/new-feature"));
+        assert!(!validator.is_allowed("main"));
+        assert!(!validator.is_allowed("dev"));
+    }
+
+    #[test]
+    fn should_block_main_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_blocked("main"));
+    }
+
+    #[test]
+    fn should_block_master_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_blocked("master"));
+    }
+
+    #[test]
+    fn should_block_dev_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_blocked("dev"));
+    }
+
+    #[test]
+    fn should_block_release_branch_pattern() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(validator.is_blocked("release/1.0.0"));
+        assert!(validator.is_blocked("release/v2.0"));
+        assert!(validator.is_blocked("release/"));
+    }
+
+    #[test]
+    fn should_not_block_fix_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act & Assert
+        assert!(!validator.is_blocked("fix/bug-123"));
+        assert!(!validator.is_blocked("feature/something"));
+    }
+
+    #[test]
+    fn should_validate_pr_with_allowed_head_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act
+        let result = validator.validate_pr_branches("fix/bug-123", "dev");
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_reject_pr_with_blocked_head_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act
+        let result = validator.validate_pr_branches("main", "dev");
+
+        // Assert
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            BranchValidationError::BlockedSourceBranch("main".to_string())
+        );
+    }
+
+    #[test]
+    fn should_reject_pr_from_release_branch() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act
+        let result = validator.validate_pr_branches("release/1.0.0", "dev");
+
+        // Assert
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            BranchValidationError::BlockedSourceBranch("release/1.0.0".to_string())
+        );
+    }
+
+    #[test]
+    fn should_allow_pr_targeting_main() {
+        // Arrange
+        let validator = BranchValidator::new();
+
+        // Act - PRs can target main, the restriction is on the source branch
+        let result = validator.validate_pr_branches("fix/bug-123", "main");
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_match_glob_pattern_with_wildcard() {
+        // Arrange & Act & Assert
+        assert!(BranchValidator::matches_pattern("fix/bug", "fix/*"));
+        assert!(BranchValidator::matches_pattern("fix/nested/path", "fix/*"));
+        assert!(!BranchValidator::matches_pattern("feature/bug", "fix/*"));
+        assert!(!BranchValidator::matches_pattern("fix", "fix/*")); // must have slash
+    }
+
+    #[test]
+    fn should_match_exact_pattern() {
+        // Arrange & Act & Assert
+        assert!(BranchValidator::matches_pattern("main", "main"));
+        assert!(!BranchValidator::matches_pattern("main-backup", "main"));
+        assert!(!BranchValidator::matches_pattern("mains", "main"));
+    }
+
+    #[test]
+    fn should_not_create_event_for_pr_from_blocked_branch() {
+        // Arrange
+        let mut pr = create_test_pr(vec!["ai-review"]);
+        pr.head.ref_name = "main".to_string(); // blocked source branch
+
+        let payload = PullRequestPayload {
+            action: "opened".to_string(),
+            pull_request: pr,
+            label: None,
+            repository: create_test_repo(),
+            sender: create_test_user(),
+        };
+
+        // Act
+        let result = handle_pull_request_event(payload).unwrap();
+
+        // Assert - event should be ignored due to blocked branch
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn should_not_create_event_for_pr_labeled_from_blocked_branch() {
+        // Arrange
+        let mut pr = create_test_pr(vec!["ai-review"]);
+        pr.head.ref_name = "release/1.0.0".to_string(); // blocked source branch
+
+        let payload = PullRequestPayload {
+            action: "labeled".to_string(),
+            pull_request: pr,
+            label: Some(GitHubLabel {
+                name: "ai-review".to_string(),
+            }),
+            repository: create_test_repo(),
+            sender: create_test_user(),
+        };
+
+        // Act
+        let result = handle_pull_request_event(payload).unwrap();
+
+        // Assert - event should be ignored due to blocked branch
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn should_create_event_for_pr_from_allowed_branch() {
+        // Arrange
+        let mut pr = create_test_pr(vec!["ai-review"]);
+        pr.head.ref_name = "fix/bug-123".to_string(); // allowed source branch
+
+        let payload = PullRequestPayload {
+            action: "opened".to_string(),
+            pull_request: pr,
+            label: None,
+            repository: create_test_repo(),
+            sender: create_test_user(),
+        };
+
+        // Act
+        let result = handle_pull_request_event(payload).unwrap();
+
+        // Assert - event should be created
+        assert!(result.is_some());
+        let event = result.unwrap();
+        assert_eq!(event.event_type, "github.pr_opened");
+        assert_eq!(
+            event.data.get("branch_validated").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn branch_validation_error_display() {
+        // Arrange & Act & Assert
+        let error = BranchValidationError::BlockedSourceBranch("main".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Source branch 'main' is blocked for AI automation"
+        );
+
+        let error = BranchValidationError::BlockedTargetBranch("release/1.0".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Target branch 'release/1.0' is blocked for AI automation"
+        );
     }
 
     #[test]
