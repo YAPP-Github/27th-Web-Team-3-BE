@@ -2,6 +2,7 @@
 
 mod config;
 mod domain;
+mod event;
 mod global;
 mod state;
 mod utils;
