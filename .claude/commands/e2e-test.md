@@ -7,12 +7,12 @@
 ## 사용법
 
 ```
-/e2e-test <서버_URL>
+/e2e-test <서버_URL> [Bearer_Token]
 ```
 
 예시:
-- `/e2e-test https://dev-api.example.com`
 - `/e2e-test https://api.example.com`
+- `/e2e-test https://api.example.com eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
 
 ## 실행 단계
 
@@ -34,28 +34,78 @@ git checkout dev
 git pull origin dev
 ```
 
-### 3단계: Swagger 스펙 가져오기
+### 3단계: Swagger 엔드포인트 목록 조회
+
+**컨텍스트 절약을 위해 엔드포인트 목록만 조회합니다.**
+
 ```bash
-# {서버_URL}/swagger.json 에서 API 스펙 조회
-curl -s {서버_URL}/swagger.json | jq .
+# 엔드포인트 목록만 가져오기 (전체 Swagger JSON 가져오지 않음)
+curl -s {서버_URL}/api-docs/openapi.json | jq '.paths | keys'
 ```
 
-- Swagger 스펙에서 사용 가능한 엔드포인트 목록 파악
-- 각 엔드포인트의 요청/응답 스키마 확인
+특정 API의 상세 스펙이 필요할 때만 선택적으로 조회:
+```bash
+# 특정 API의 파라미터/응답 스펙 조회
+curl -s {서버_URL}/api-docs/openapi.json | jq '.paths["/api/v1/retro-rooms"]'
+```
 
 ### 4단계: API 테스트 실행
 
-`docs/api-specs/` 디렉토리의 각 API 문서를 읽고, 다음을 테스트:
+`docs/api-specs/` 디렉토리의 각 API 문서를 **하나씩** 읽고 테스트합니다.
 
-#### 성공 케이스 테스트
-- API 문서의 "사용 예시" 섹션의 cURL 명령어 기반
-- 예상 응답 코드와 실제 응답 비교
+#### 4-1. 문서에서 테스트 케이스 추출
 
-#### 에러 케이스 테스트
-- 필수 파라미터 누락 (400)
-- 인증 실패 (401)
-- 권한 없음 (403)
-- 리소스 없음 (404)
+각 API 문서에서 다음 섹션을 확인:
+
+1. **엔드포인트 정보**: 메서드, 경로
+2. **Request 섹션**: 필수 파라미터, 헤더
+3. **Response 섹션**: 성공 응답 구조
+4. **에러 응답 섹션**: 에러 코드별 조건
+
+예시 (`docs/api-specs/007-retro-room-list.md`):
+```markdown
+## 에러 응답
+### 401 Unauthorized - 인증 실패
+### 500 Internal Server Error - 서버 에러
+```
+
+#### 4-2. 성공 케이스 테스트
+
+```bash
+# API 문서의 "사용 예시" 기반으로 테스트
+curl -s -H "Authorization: Bearer {TOKEN}" {서버_URL}/api/v1/retro-rooms
+```
+
+검증:
+- `isSuccess: true` 확인
+- `code: "COMMON200"` 확인
+- `result` 구조가 문서와 일치하는지 확인
+
+#### 4-3. 에러 케이스 테스트 (문서 기반)
+
+**문서의 "에러 응답" 섹션에 정의된 모든 에러를 테스트합니다.**
+
+| 에러 코드 | 테스트 방법 |
+|----------|------------|
+| 400 Bad Request | 필수 파라미터 누락 또는 잘못된 값 전송 |
+| 401 Unauthorized | Authorization 헤더 제거 또는 잘못된 토큰 |
+| 403 Forbidden | 권한 없는 리소스 접근 (다른 사용자의 데이터) |
+| 404 Not Found | 존재하지 않는 ID 사용 (예: 99999) |
+| 409 Conflict | 중복 데이터 생성 시도 |
+
+```bash
+# 401 테스트: 인증 없이 요청
+curl -s {서버_URL}/api/v1/retro-rooms
+# 예상: {"isSuccess":false,"code":"AUTH4001",...}
+
+# 404 테스트: 없는 리소스
+curl -s -H "Authorization: Bearer {TOKEN}" {서버_URL}/api/v1/retrospects/99999
+# 예상: {"isSuccess":false,"code":"RETRO4041",...}
+
+# 400 테스트: 잘못된 파라미터
+curl -s -H "Authorization: Bearer {TOKEN}" "{서버_URL}/api/v1/retrospects/1/responses?category=INVALID"
+# 예상: {"isSuccess":false,"code":"RETRO4004",...}
+```
 
 ### 5단계: 결과 출력
 
@@ -66,19 +116,26 @@ curl -s {서버_URL}/swagger.json | jq .
 E2E 테스트 결과 ({서버_URL})
 ========================================
 
-[API-001] POST /api/v1/auth/social-login
-  - 성공 케이스: PASS / FAIL (응답 코드: 200)
-  - 에러 케이스 (400): PASS / FAIL
-  - 에러 케이스 (401): PASS / FAIL
+[Health] GET /health
+  ✅ 성공 케이스: PASS (200)
 
-[API-002] POST /api/v1/auth/signup
-  - 성공 케이스: SKIP (인증 필요)
-  - 에러 케이스 (400): PASS / FAIL
+[API-007] GET /api/v1/retro-rooms (회고방 목록)
+  ✅ 성공 케이스: PASS (200)
+  ✅ 에러 401 (인증없음): PASS - AUTH4001
 
-... (이하 생략)
+[API-013] GET /api/v1/retrospects/{id} (회고 상세)
+  ✅ 성공 케이스: PASS (200)
+  ✅ 에러 401 (인증없음): PASS - AUTH4001
+  ✅ 에러 404 (없는 ID): PASS - RETRO4041
+
+[API-021] GET /api/v1/retrospects/{id}/responses (응답 목록)
+  ✅ 성공 케이스: PASS (200)
+  ✅ 에러 400 (잘못된 category): PASS - RETRO4004
+  ✅ 에러 401 (인증없음): PASS - AUTH4001
 
 ========================================
 총 결과: X/Y 통과 (Z개 스킵)
+실패한 테스트: (있다면 나열)
 ========================================
 ```
 
@@ -93,39 +150,36 @@ if [ "$STASHED" = true ]; then
 fi
 ```
 
-## 테스트 대상 API 목록
+## 테스트 순서
 
-`docs/api-specs/` 디렉토리의 모든 API 문서를 대상으로 테스트합니다:
+1. **GET API 먼저** (데이터 변경 없음)
+2. **POST/PUT/DELETE는 주의** (데이터 변경됨)
+3. **auth/member API는 별도 요청 시에만** (토큰 관련)
 
-| 파일 | API | 인증 필요 |
-|------|-----|----------|
-| 001-auth-social-login.md | POST /api/v1/auth/social-login | No |
-| 002-auth-signup.md | POST /api/v1/auth/signup | Yes (signupToken) |
-| 003-auth-token-refresh.md | POST /api/v1/auth/token/refresh | Yes (refreshToken) |
-| 004-auth-logout.md | POST /api/v1/auth/logout | Yes |
-| ... | ... | ... |
+## 테스트 제외 대상
 
-## 테스트 전략
+다음 API는 기본적으로 제외 (사용자가 명시적으로 요청 시에만 테스트):
 
-### 인증이 필요한 API
-- 테스트용 계정으로 먼저 로그인하여 토큰 획득
-- 획득한 토큰으로 인증 필요 API 테스트
-- 테스트용 계정 정보는 환경변수 또는 사용자 입력으로 제공
-
-### 인증이 필요 없는 API
-- API 문서의 예시 요청을 그대로 실행
-- 응답 코드와 응답 구조 검증
-
-## 주의사항
-
-- 프로덕션 서버 테스트 시 데이터 변경에 주의
-- 테스트 후 생성된 데이터는 정리 필요
-- 네트워크 오류 시 재시도 로직 포함
-- 테스트 결과는 문서가 아닌 터미널에만 출력
+- `POST /api/v1/auth/*` - 인증 관련
+- `DELETE /*` - 데이터 삭제
+- `POST /api/v1/retrospects/{id}/questions/{questionId}/assistant` - AI 호출 (비용)
 
 ## 실패 시 행동
 
 1. 실패한 API 엔드포인트 식별
-2. 예상 응답 vs 실제 응답 비교 출력
-3. 가능한 원인 분석 (문서 불일치, 서버 버그 등)
-4. 사용자에게 후속 조치 제안
+2. **예상 응답 vs 실제 응답** 비교 출력:
+   ```
+   ❌ FAIL: GET /api/v1/retrospects/1
+   예상: {"isSuccess":true,"code":"COMMON200",...}
+   실제: {"isSuccess":false,"code":"RETRO4041",...}
+   원인: 테스트 데이터가 없거나 삭제됨
+   ```
+3. 가능한 원인 분석 (문서 불일치, 서버 버그, 테스트 데이터 문제)
+4. 후속 조치 제안
+
+## 주의사항
+
+- 프로덕션 서버 테스트 시 **GET만** 권장
+- POST/PUT/DELETE는 개발 서버에서만
+- 테스트 후 생성된 데이터는 정리 필요
+- 결과는 문서가 아닌 **터미널에만** 출력
