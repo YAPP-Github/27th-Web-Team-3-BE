@@ -7,12 +7,25 @@
 ## 사용법
 
 ```
-/e2e-test <서버_URL> [Bearer_Token]
+/e2e-test <서버_URL> [Bearer_Token] [옵션]
 ```
 
-예시:
-- `/e2e-test https://api.example.com`
-- `/e2e-test https://api.example.com eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+### 옵션
+
+| 옵션 | 설명 |
+|------|------|
+| (없음) | 모든 API 테스트 (GET, POST, PUT, DELETE 포함) |
+| `get` | GET API만 테스트 (데이터 손상 없음) |
+
+### 예시
+
+```bash
+# 모든 API 테스트 (기본값)
+/e2e-test https://api.example.com {TOKEN}
+
+# GET만 테스트 (안전 모드)
+/e2e-test https://api.example.com {TOKEN} get
+```
 
 ## 실행 단계
 
@@ -150,19 +163,37 @@ if [ "$STASHED" = true ]; then
 fi
 ```
 
-## 테스트 순서
+## 테스트 모드
 
-1. **GET API 먼저** (데이터 변경 없음)
-2. **POST/PUT/DELETE는 주의** (데이터 변경됨)
-3. **auth/member API는 별도 요청 시에만** (토큰 관련)
+### 기본 모드 (모든 API)
+
+모든 HTTP 메서드를 테스트합니다:
+
+1. **GET** - 조회 API
+2. **POST** - 생성 API (데이터 생성됨)
+3. **PUT/PATCH** - 수정 API (데이터 변경됨)
+4. **DELETE** - 삭제 API (데이터 삭제됨)
+
+테스트 순서:
+1. GET API 먼저 실행
+2. POST로 테스트 데이터 생성
+3. PUT/PATCH로 수정 테스트
+4. DELETE로 정리
+
+### GET 모드 (`get` 옵션)
+
+데이터 손상 없이 안전하게 테스트:
+
+- **GET API만** 테스트
+- POST, PUT, PATCH, DELETE 제외
+- 프로덕션 서버에서 권장
 
 ## 테스트 제외 대상
 
-다음 API는 기본적으로 제외 (사용자가 명시적으로 요청 시에만 테스트):
+다음 API는 항상 제외 (명시적 요청 시에만 테스트):
 
-- `POST /api/v1/auth/*` - 인증 관련
-- `DELETE /*` - 데이터 삭제
-- `POST /api/v1/retrospects/{id}/questions/{questionId}/assistant` - AI 호출 (비용)
+- `POST /api/v1/auth/*` - 인증 관련 (토큰 발급)
+- `POST /api/v1/retrospects/{id}/questions/{questionId}/assistant` - AI 호출 (비용 발생)
 
 ## 실패 시 행동
 
@@ -179,7 +210,7 @@ fi
 
 ## 주의사항
 
-- 프로덕션 서버 테스트 시 **GET만** 권장
-- POST/PUT/DELETE는 개발 서버에서만
-- 테스트 후 생성된 데이터는 정리 필요
+- **프로덕션 서버**: `get` 옵션 사용 권장
+- **개발 서버**: 기본 모드 (모든 API) 사용 가능
+- 기본 모드에서 생성된 테스트 데이터는 DELETE로 자동 정리 시도
 - 결과는 문서가 아닌 **터미널에만** 출력
