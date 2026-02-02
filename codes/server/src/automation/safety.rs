@@ -296,6 +296,7 @@ impl FixLimits {
             .replace('*', "[^/]*")
             .replace("{{DOUBLE_STAR}}", ".*");
 
+        // TODO: MVP 이후 once_cell::Lazy로 Regex 캐싱 고려 (현재 호출 빈도 낮음)
         regex::Regex::new(&format!("^{}$", regex_pattern))
             .map(|re| re.is_match(path))
             .unwrap_or(false)

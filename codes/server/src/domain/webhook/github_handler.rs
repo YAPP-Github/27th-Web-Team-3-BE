@@ -164,8 +164,8 @@ impl std::error::Error for BranchValidationError {}
 
 /// Verify GitHub webhook signature using HMAC-SHA256 with constant-time comparison
 fn verify_github_signature(secret: &str, signature: &str, body: &[u8]) -> Result<(), AppError> {
-    // Skip verification if GITHUB_SKIP_VERIFICATION=true (development)
-    if std::env::var("GITHUB_SKIP_VERIFICATION").unwrap_or_default() == "true" {
+    // WARNING: Only for development - name is intentionally verbose to prevent accidental production use
+    if std::env::var("GITHUB_SKIP_VERIFICATION_DEV_ONLY").unwrap_or_default() == "true" {
         warn!("GitHub signature verification skipped (development mode)");
         return Ok(());
     }

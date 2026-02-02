@@ -159,7 +159,7 @@ impl EventQueue for FileEventQueue {
     async fn push(&self, event: Event) -> QueueResult<()> {
         let _guard = self.lock.write().await;
 
-        // Check for duplicate fingerprint (use unlocked version since we already hold write lock)
+        // SAFETY: Caller holds write lock, using unlocked version to avoid deadlock
         if self.contains_fingerprint_unlocked(&event.metadata.fingerprint)? {
             warn!(
                 fingerprint = %event.metadata.fingerprint,

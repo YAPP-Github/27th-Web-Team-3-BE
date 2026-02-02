@@ -29,7 +29,7 @@ const MAX_TIMESTAMP_DIFF_SECS: i64 = 300;
 /// Discord uses Ed25519 signatures to verify request integrity.
 /// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
 ///
-/// Note: Caller should check DISCORD_SKIP_VERIFICATION before calling this function
+/// Note: Caller should check DISCORD_SKIP_VERIFICATION_DEV_ONLY before calling this function
 ///
 /// # Arguments
 /// * `public_key` - Discord application's public key (hex-encoded)
@@ -139,8 +139,9 @@ pub async fn handle_discord_webhook(
     body: Bytes,
 ) -> Result<Json<DiscordWebhookResponse>, AppError> {
     // 1. Check if we should skip verification BEFORE requiring headers
+    // WARNING: Only for development - name is intentionally verbose to prevent accidental production use
     let skip_verification =
-        std::env::var("DISCORD_SKIP_VERIFICATION").unwrap_or_default() == "true";
+        std::env::var("DISCORD_SKIP_VERIFICATION_DEV_ONLY").unwrap_or_default() == "true";
 
     if !skip_verification {
         // Extract and verify signature only when not skipping
