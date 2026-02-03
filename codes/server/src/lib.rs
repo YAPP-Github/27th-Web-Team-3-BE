@@ -2,6 +2,7 @@
 //!
 //! 이 모듈은 통합 테스트에서 사용할 수 있도록 공개 API를 제공합니다.
 
+pub mod automation;
 pub mod config;
 pub mod domain;
 pub mod event;

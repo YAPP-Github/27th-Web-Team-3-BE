@@ -1,6 +1,7 @@
 //! Event structure and related types for AI automation pipeline
-
-#![allow(dead_code)]
+//!
+//! TODO(MVP): 현재 dead_code 허용은 MVP 단계이므로 적용됨.
+//!            Phase 3 완료 후 실제 사용되지 않는 코드 정리 필요.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -57,14 +58,14 @@ pub enum Severity {
 }
 
 impl FromStr for Severity {
-    type Err = ();
+    type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "info" => Ok(Severity::Info),
             "warning" => Ok(Severity::Warning),
             "critical" => Ok(Severity::Critical),
-            _ => Err(()),
+            _ => Err("invalid severity value: expected 'info', 'warning', or 'critical'"),
         }
     }
 }
@@ -312,7 +313,14 @@ mod tests {
         assert_eq!(Severity::from_str("CRITICAL"), Ok(Severity::Critical));
         assert_eq!(Severity::from_str("warning"), Ok(Severity::Warning));
         assert_eq!(Severity::from_str("info"), Ok(Severity::Info));
-        assert!(Severity::from_str("unknown").is_err());
+
+        // Error case should return descriptive message
+        let err = Severity::from_str("unknown");
+        assert!(err.is_err());
+        assert_eq!(
+            err.unwrap_err(),
+            "invalid severity value: expected 'info', 'warning', or 'critical'"
+        );
     }
 
     #[test]

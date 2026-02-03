@@ -19,15 +19,105 @@ pub struct DiscordWebhookPayload {
     pub interaction_type: i32,
     /// Interaction token
     pub token: String,
-    /// Channel ID
-    pub channel_id: String,
+    /// Channel ID (optional - not present in PING interactions)
+    pub channel_id: Option<String>,
     /// Guild ID (optional)
     pub guild_id: Option<String>,
-    /// Message data (for message interactions)
-    pub data: Option<DiscordMessageData>,
+    /// Interaction data (for application commands)
+    pub data: Option<DiscordInteractionData>,
+    /// Member info (for guild interactions)
+    pub member: Option<DiscordMember>,
+    /// User info (for DM interactions)
+    pub user: Option<DiscordUser>,
 }
 
-/// Discord message data within interaction
+impl DiscordWebhookPayload {
+    /// Get channel ID or "unknown" for logging
+    pub fn channel_id_or_unknown(&self) -> &str {
+        self.channel_id.as_deref().unwrap_or("unknown")
+    }
+
+    /// Get username from member or user
+    pub fn get_username(&self) -> Option<&str> {
+        self.member
+            .as_ref()
+            .and_then(|m| m.user.as_ref())
+            .map(|u| u.username.as_str())
+            .or_else(|| self.user.as_ref().map(|u| u.username.as_str()))
+    }
+}
+
+/// Discord interaction data (for application commands and components)
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscordInteractionData {
+    /// Command name (for application commands)
+    pub name: Option<String>,
+    /// Command options
+    #[serde(default)]
+    pub options: Vec<DiscordCommandOption>,
+    /// Custom ID (for components)
+    pub custom_id: Option<String>,
+    /// Message content (for message-based triggers, if any)
+    pub content: Option<String>,
+}
+
+impl DiscordInteractionData {
+    /// Get content for command parsing
+    /// Constructs content from command name/options if content is not present
+    pub fn get_content_for_parsing(&self) -> String {
+        if let Some(content) = &self.content {
+            return content.clone();
+        }
+        // For slash commands, construct content from name and options
+        if let Some(name) = &self.name {
+            let args: Vec<String> = self
+                .options
+                .iter()
+                .filter_map(|opt| opt.value.as_ref().map(|v| v.to_string()))
+                .collect();
+            return format!("@AI {} {}", name, args.join(" "));
+        }
+        String::new()
+    }
+}
+
+/// Discord command option
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscordCommandOption {
+    /// Option name
+    pub name: String,
+    /// Option value
+    pub value: Option<serde_json::Value>,
+}
+
+/// Discord member information (guild context)
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscordMember {
+    /// User information
+    pub user: Option<DiscordUser>,
+    /// Nickname in guild
+    pub nick: Option<String>,
+}
+
+/// Discord user information
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscordUser {
+    /// User ID
+    pub id: String,
+    /// Username
+    pub username: String,
+}
+
+/// Discord author information (legacy, for backwards compatibility)
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscordAuthor {
+    /// User ID
+    pub id: String,
+    /// Username
+    pub username: String,
+}
+
+/// Discord message data (legacy, for message-based interactions)
 #[derive(Debug, Clone, Deserialize)]
 pub struct DiscordMessageData {
     /// Message content
@@ -36,15 +126,6 @@ pub struct DiscordMessageData {
     pub author: DiscordAuthor,
     /// Timestamp
     pub timestamp: String,
-}
-
-/// Discord author information
-#[derive(Debug, Clone, Deserialize)]
-pub struct DiscordAuthor {
-    /// User ID
-    pub id: String,
-    /// Username
-    pub username: String,
 }
 
 /// Discord webhook response
@@ -372,13 +453,26 @@ impl IssueCommentPayload {
         self.comment.body.to_lowercase().contains("@ai-bot")
     }
 
-    /// Parse AI bot command from comment
+    /// Parse AI bot command from comment (Unicode-safe)
     pub fn parse_ai_command(&self) -> Option<String> {
         let body_lower = self.comment.body.to_lowercase();
-        if body_lower.contains("@ai-bot") {
-            // Extract command after @ai-bot mention
-            if let Some(pos) = body_lower.find("@ai-bot") {
-                let after = &self.comment.body[pos + 7..].trim();
+        if let Some(pos) = body_lower.find("@ai-bot") {
+            // Use char-count conversion to handle Unicode safely
+            // (lowercasing can change byte lengths for non-ASCII characters)
+            let char_start = body_lower[..pos].chars().count();
+            let mention_chars = "@ai-bot".chars().count(); // 7 characters
+
+            // Convert character position to byte position in original string
+            let byte_start: usize = self
+                .comment
+                .body
+                .chars()
+                .take(char_start + mention_chars)
+                .map(|c| c.len_utf8())
+                .sum();
+
+            if byte_start <= self.comment.body.len() {
+                let after = self.comment.body[byte_start..].trim();
                 if !after.is_empty() {
                     return Some(after.to_string());
                 }
