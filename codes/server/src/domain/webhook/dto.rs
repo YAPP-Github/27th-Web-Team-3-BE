@@ -73,8 +73,16 @@ impl DiscordInteractionData {
             let args: Vec<String> = self
                 .options
                 .iter()
-                .filter_map(|opt| opt.value.as_ref().map(|v| v.to_string()))
+                .filter_map(|opt| opt.value.as_ref())
+                .map(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| v.to_string())
+                })
                 .collect();
+            if args.is_empty() {
+                return format!("@AI {}", name);
+            }
             return format!("@AI {} {}", name, args.join(" "));
         }
         String::new()
@@ -130,6 +138,7 @@ pub struct DiscordMessageData {
 
 /// Discord webhook response
 #[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DiscordWebhookResponse {
     /// Response type (1 = Pong, 4 = Channel Message with Source, etc.)
     #[serde(rename = "type")]
@@ -160,6 +169,7 @@ impl DiscordWebhookResponse {
 
 /// Discord response data
 #[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DiscordResponseData {
     /// Message content
     pub content: String,

@@ -91,6 +91,14 @@ impl Default for RateLimiter {
     }
 }
 
+/// Clone implementation that shares the same rate limit state.
+///
+/// **Note**: Cloning a `RateLimiter` shares the underlying sliding window data
+/// via `Arc`. This means all clones will share the same rate limit counts.
+/// This is intentional for use cases where you want a single rate limit
+/// across multiple handlers or threads.
+///
+/// If you need independent rate limiters, create a new instance with `RateLimiter::new()`.
 impl Clone for RateLimiter {
     fn clone(&self) -> Self {
         Self {
@@ -361,16 +369,7 @@ impl TriggerFilter {
     /// If no rate limiter is configured, always returns true.
     pub fn check_rate_limit(&self, action: RateLimitAction) -> bool {
         match &self.rate_limiter {
-            Some(limiter) => {
-                let allowed = limiter.try_acquire(action);
-                if !allowed {
-                    warn!(
-                        action = ?action,
-                        "Rate limit exceeded for action"
-                    );
-                }
-                allowed
-            }
+            Some(limiter) => limiter.try_acquire(action),
             None => true,
         }
     }

@@ -1,0 +1,125 @@
+# CODEOWNERS - 27th Web Team 3 Backend
+# GitHub 코드 소유자 설정 파일
+# PR 리뷰 요청 시 자동으로 리뷰어가 할당됩니다.
+#
+# 형식: <패턴> <소유자1> <소유자2> ...
+# 참고: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ⚠️ 주의: 아래 사용자/팀이 GitHub 조직에 존재하는지 확인 필요
+# 존재하지 않는 팀이 있으면 해당 라인은 무시됩니다.
+# 실제 팀 설정 전까지 임시로 주석 처리합니다.
+
+# ============================================
+# 전체 코드베이스 기본 소유자
+# ============================================
+# * @backend-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 도메인별 담당자
+# ============================================
+# AI 도메인 (회고 생성, 프롬프트 등)
+# codes/server/src/domain/ai/ @ai-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# 회고 도메인
+# codes/server/src/domain/retrospect/ @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# 회원 도메인
+# codes/server/src/domain/member/ @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# 인증 도메인
+# codes/server/src/domain/auth/ @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# Webhook 도메인
+# codes/server/src/domain/webhook/ @backend-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 핵심 시스템 컴포넌트
+# ============================================
+# 이벤트 시스템
+# codes/server/src/event/ @backend-lead @ai-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# 모니터링 시스템
+# codes/server/src/monitoring/ @devops-team @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# 자동화 시스템
+# codes/server/src/automation/ @ai-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# 공통 유틸리티
+# codes/server/src/utils/ @backend-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# 설정
+# codes/server/src/config/ @backend-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# 글로벌 미들웨어
+# codes/server/src/global/ @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# 애플리케이션 진입점
+# codes/server/src/main.rs @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+# codes/server/src/lib.rs @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+# codes/server/src/state.rs @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 테스트
+# ============================================
+# codes/server/tests/ @backend-team @qa-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 빌드 및 의존성
+# ============================================
+# codes/server/Cargo.toml @backend-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+# codes/server/Cargo.lock @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 인프라 및 CI/CD
+# ============================================
+# .github/ @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+# .github/workflows/ @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+# .github/CODEOWNERS @backend-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# ci/ @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+# ci/terraform/ @devops-team @infra-lead  # TODO: 실제 팀/사용자로 교체 필요
+# ci/nginx/ @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+# ci/scripts/ @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 스크립트 및 자동화
+# ============================================
+# scripts/ @devops-team @ai-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# Claude Code 설정
+# ============================================
+# .claude/ @ai-lead @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+# CLAUDE.md @ai-lead @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 문서
+# ============================================
+# docs/ @tech-writer @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# API 명세서
+# docs/api-specs/ @backend-lead @tech-writer  # TODO: 실제 팀/사용자로 교체 필요
+
+# AI 컨벤션 가이드
+# docs/ai-conventions/ @ai-lead @tech-writer  # TODO: 실제 팀/사용자로 교체 필요
+
+# AI 자동화 문서
+# docs/ai-automation/ @ai-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# AI 모니터링 문서
+# docs/ai-monitoring/ @ai-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+
+# 구현 문서
+# docs/implementations/ @backend-team @tech-writer  # TODO: 실제 팀/사용자로 교체 필요
+
+# 리뷰 문서
+# docs/reviews/ @backend-team @tech-writer  # TODO: 실제 팀/사용자로 교체 필요
+
+# 요구사항 문서
+# docs/requirements/ @tech-writer @backend-lead  # TODO: 실제 팀/사용자로 교체 필요
+
+# ============================================
+# 환경 설정 파일 (주의 필요)
+# ============================================
+# .env* @backend-lead @devops-team  # TODO: 실제 팀/사용자로 교체 필요
+# *.example @backend-lead  # TODO: 실제 팀/사용자로 교체 필요

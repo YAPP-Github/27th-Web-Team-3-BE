@@ -159,7 +159,7 @@ impl EventQueue for FileEventQueue {
     async fn push(&self, event: Event) -> QueueResult<()> {
         let _guard = self.lock.write().await;
 
-        // Check for duplicate fingerprint (use unlocked version since we already hold write lock)
+        // SAFETY: Caller holds write lock, using unlocked version to avoid deadlock
         if self.contains_fingerprint_unlocked(&event.metadata.fingerprint)? {
             warn!(
                 fingerprint = %event.metadata.fingerprint,
@@ -421,27 +421,29 @@ impl FileEventQueue {
 
         // Check completed directory within dedup window
         let completed_dir = self.completed_dir();
-        if let Ok(entries) = fs::read_dir(&completed_dir) {
-            let dedup_window = std::time::Duration::from_secs(self.config.dedup_window_secs);
-            let now = std::time::SystemTime::now();
+        let entries = fs::read_dir(&completed_dir).map_err(|e| {
+            AppError::InternalError(format!("Failed to read completed directory: {}", e))
+        })?;
 
-            for entry in entries.flatten() {
-                // Check file modification time for dedup window
-                if let Ok(metadata) = entry.metadata() {
-                    if let Ok(modified) = metadata.modified() {
-                        if let Ok(age) = now.duration_since(modified) {
-                            if age > dedup_window {
-                                continue; // Skip files older than dedup window
-                            }
+        let dedup_window = std::time::Duration::from_secs(self.config.dedup_window_secs);
+        let now = std::time::SystemTime::now();
+
+        for entry in entries.flatten() {
+            // Check file modification time for dedup window
+            if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(age) = now.duration_since(modified) {
+                        if age > dedup_window {
+                            continue; // Skip files older than dedup window
                         }
                     }
                 }
+            }
 
-                if let Ok(content) = fs::read_to_string(entry.path()) {
-                    if let Ok(event) = serde_json::from_str::<Event>(&content) {
-                        if event.metadata.fingerprint == fingerprint {
-                            return Ok(true);
-                        }
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if let Ok(event) = serde_json::from_str::<Event>(&content) {
+                    if event.metadata.fingerprint == fingerprint {
+                        return Ok(true);
                     }
                 }
             }
@@ -727,13 +729,13 @@ mod tests {
         let popped = queue.pop().await.expect("Failed to pop").unwrap();
         queue.complete(popped.id).await.expect("Failed to complete");
 
-        // Manually set file modification time to the past (simulate old event)
+        // Touch the file (mtime updated to now); with a 0s dedup window any completed event is out-of-window.
         let completed_files: Vec<_> = fs::read_dir(test_dir.join("completed"))
             .unwrap()
             .filter_map(|e| e.ok())
             .collect();
         for entry in completed_files {
-            // Touch the file with old timestamp (by rewriting with same content)
+            // Rewrite file to update mtime to now (with 0s dedup window, this is still out-of-window)
             let content = fs::read_to_string(entry.path()).unwrap();
             fs::write(entry.path(), content).unwrap();
         }
