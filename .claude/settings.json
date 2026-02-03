@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "file_path=$(echo $CLAUDE_TOOL_INPUT | jq -r '.file_path // empty'); if [[ \"$file_path\" == *.rs ]]; then cd rust && cargo fmt --quiet 2>/dev/null; fi"
+            "command": "file_path=$(echo $CLAUDE_TOOL_INPUT | jq -r '.file_path // empty'); if [[ \"$file_path\" == *.rs ]]; then cd codes/server && cargo fmt --quiet 2>/dev/null; fi"
           }
         ]
       }
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -d rust ]; then cd rust && cargo check --quiet 2>/dev/null || true; fi"
+            "command": "if [ -d codes/server ]; then cd codes/server && cargo check --quiet 2>/dev/null || true; fi"
           }
         ]
       }
