@@ -177,11 +177,25 @@ impl LogWatcher {
             return Ok(vec![]);
         }
 
-        // Load state and dedup cache for today
-        self.load_dedup_cache(today)?;
+        // Load state and dedup cache for today (best-effort, won't fail on read errors)
+        self.load_dedup_cache(today);
 
         // Get last read position
-        let last_line = self.get_last_line_number(today)?;
+        let mut last_line = self.get_last_line_number(today)?;
+
+        // Check for log rotation: if current file line count is less than last_line,
+        // the file was truncated/rotated, so reset to read from the beginning
+        let current_line_count = self.count_file_lines(&log_file)?;
+        if current_line_count < last_line {
+            info!(
+                previous_line = last_line,
+                current_lines = current_line_count,
+                "Log file appears to have been rotated/truncated, resetting line counter"
+            );
+            last_line = 0;
+            // Also reset the saved state file
+            self.save_last_line_number(today, 0)?;
+        }
 
         // Read new lines
         let entries = self.read_new_entries(&log_file, last_line)?;
@@ -197,8 +211,8 @@ impl LogWatcher {
         for (line_num, entry) in entries {
             new_line_count = line_num;
 
-            // Only process ERROR level logs
-            if entry.level != "ERROR" {
+            // Only process ERROR level logs (case-insensitive)
+            if !entry.is_error() {
                 continue;
             }
 
@@ -270,6 +284,9 @@ impl LogWatcher {
     }
 
     /// Create an Event from a LogEntry
+    ///
+    /// Event data uses snake_case keys for consistency with Rust conventions
+    /// and compatibility with downstream processors (processor.rs, discord_alert.rs, trigger.rs)
     pub fn create_event(&self, entry: &LogEntry) -> Event {
         let severity = entry.severity();
         let priority = match severity {
@@ -278,13 +295,14 @@ impl LogWatcher {
             Severity::Info => Priority::P2,
         };
 
+        // Use snake_case keys for consistency with downstream processors
         let data = serde_json::json!({
-            "errorCode": entry.error_code,
+            "error_code": entry.error_code,
             "severity": format!("{:?}", severity).to_lowercase(),
             "message": entry.message,
             "target": entry.target,
-            "requestId": entry.request_id,
-            "logLine": serde_json::to_string(entry).unwrap_or_default(),
+            "request_id": entry.request_id,
+            "log_line": serde_json::to_string(entry).unwrap_or_default(),
             "timestamp": entry.timestamp.to_rfc3339(),
         });
 
@@ -355,19 +373,43 @@ impl LogWatcher {
         Ok(())
     }
 
+    /// Count the number of lines in a file
+    fn count_file_lines(&self, log_file: &PathBuf) -> LogWatcherResult<usize> {
+        let file = File::open(log_file).map_err(|e| {
+            error!(error = %e, file = %log_file.display(), "Failed to open log file for line count");
+            AppError::InternalError(format!("Failed to open log file: {}", e))
+        })?;
+
+        let reader = BufReader::new(file);
+        let mut count = 0usize;
+        for line in reader.lines() {
+            line.map_err(|e| {
+                error!(error = %e, file = %log_file.display(), "Failed to read log file for line count");
+                AppError::InternalError(format!("Failed to read log file: {}", e))
+            })?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
     /// Load deduplication cache from file
-    fn load_dedup_cache(&mut self, date: NaiveDate) -> LogWatcherResult<()> {
+    /// Uses best-effort approach: if read fails, logs warning and starts with empty cache
+    fn load_dedup_cache(&mut self, date: NaiveDate) {
         let dedup_file = self.get_dedup_file_path(date);
 
         if !dedup_file.exists() {
             self.dedup_cache.clear();
-            return Ok(());
+            return;
         }
 
-        let content = fs::read_to_string(&dedup_file).map_err(|e| {
-            warn!(error = %e, file = %dedup_file.display(), "Failed to read dedup file, starting fresh");
-            AppError::InternalError(format!("Failed to read dedup file: {}", e))
-        })?;
+        let content = match fs::read_to_string(&dedup_file) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(error = %e, file = %dedup_file.display(), "Failed to read dedup file, starting with fresh cache");
+                self.dedup_cache.clear();
+                return;
+            }
+        };
 
         self.dedup_cache.clear();
         let now = Utc::now();
@@ -387,7 +429,6 @@ impl LogWatcher {
         }
 
         debug!(entries = self.dedup_cache.len(), "Loaded dedup cache");
-        Ok(())
     }
 
     /// Save deduplication cache to file
@@ -414,9 +455,14 @@ impl LogWatcher {
                     first_seen: *first_seen,
                     count: 1,
                 };
-                if let Ok(json) = serde_json::to_string(&entry) {
-                    writeln!(file, "{}", json).ok();
-                }
+                let json = serde_json::to_string(&entry).map_err(|e| {
+                    error!(error = %e, "Failed to serialize dedup entry");
+                    AppError::InternalError(format!("Failed to serialize dedup entry: {}", e))
+                })?;
+                writeln!(file, "{}", json).map_err(|e| {
+                    error!(error = %e, "Failed to write dedup entry");
+                    AppError::InternalError(format!("Failed to write dedup entry: {}", e))
+                })?;
             }
         }
 
@@ -737,6 +783,32 @@ mod tests {
     }
 
     #[test]
+    fn should_create_event_with_snake_case_keys() {
+        // Arrange
+        let watcher = create_test_watcher();
+        let entry = LogEntry {
+            level: "ERROR".to_string(),
+            error_code: Some("AI5002".to_string()),
+            message: "OpenAI API timeout".to_string(),
+            target: "server::domain::ai::service".to_string(),
+            request_id: Some("req-123".to_string()),
+            timestamp: Utc::now(),
+        };
+
+        // Act
+        let event = watcher.create_event(&entry);
+
+        // Assert - Verify snake_case keys are used
+        assert!(event.data.get("error_code").is_some());
+        assert!(event.data.get("request_id").is_some());
+        assert!(event.data.get("log_line").is_some());
+        // Verify camelCase keys are NOT used
+        assert!(event.data.get("errorCode").is_none());
+        assert!(event.data.get("requestId").is_none());
+        assert!(event.data.get("logLine").is_none());
+    }
+
+    #[test]
     fn should_create_event_with_p1_priority_for_warning() {
         // Arrange
         let watcher = create_test_watcher();
@@ -1008,6 +1080,32 @@ mod tests {
     }
 
     #[test]
+    fn should_check_is_error_case_insensitive() {
+        // Arrange
+        let lowercase_error = LogEntry {
+            level: "error".to_string(),
+            error_code: None,
+            message: "test".to_string(),
+            target: "test".to_string(),
+            request_id: None,
+            timestamp: Utc::now(),
+        };
+
+        let mixed_case_error = LogEntry {
+            level: "Error".to_string(),
+            error_code: None,
+            message: "test".to_string(),
+            target: "test".to_string(),
+            request_id: None,
+            timestamp: Utc::now(),
+        };
+
+        // Act & Assert
+        assert!(lowercase_error.is_error());
+        assert!(mixed_case_error.is_error());
+    }
+
+    #[test]
     fn should_check_is_warning_correctly() {
         // Arrange
         let warn_entry = LogEntry {
@@ -1122,5 +1220,66 @@ this is not valid json
 
         // Assert - should skip invalid line and process others
         assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn should_detect_log_rotation_and_reset_line_counter() {
+        // Arrange
+        let test_dir = temp_dir().join(format!("test_rotation_{}", Uuid::new_v4()));
+        let log_dir = test_dir.join("logs");
+        let state_dir = test_dir.join("state");
+        fs::create_dir_all(&log_dir).expect("Failed to create log dir");
+
+        let mut watcher =
+            LogWatcher::new(log_dir.clone(), state_dir.clone()).expect("Failed to create watcher");
+        let today = Utc::now().date_naive();
+
+        // First: write 3 lines
+        let content = r#"{"timestamp":"2026-01-31T14:50:00Z","level":"ERROR","target":"server::ai","fields":{"error_code":"AI5001"},"message":"Error 1"}
+{"timestamp":"2026-01-31T14:51:00Z","level":"ERROR","target":"server::ai","fields":{"error_code":"AI5002"},"message":"Error 2"}
+{"timestamp":"2026-01-31T14:52:00Z","level":"ERROR","target":"server::ai","fields":{"error_code":"AI5003"},"message":"Error 3"}"#;
+        create_test_log_file(&log_dir, today, content);
+
+        // Watch first time - should get 3 events
+        let events1 = watcher.watch().expect("Failed to watch");
+        assert_eq!(events1.len(), 3);
+
+        // Simulate log rotation: truncate file and write only 1 new line
+        let rotated_content = r#"{"timestamp":"2026-01-31T15:00:00Z","level":"ERROR","target":"server::auth","fields":{"error_code":"AUTH4001"},"message":"New error after rotation"}"#;
+        create_test_log_file(&log_dir, today, rotated_content);
+
+        // Create new watcher (simulating restart or continuing)
+        let mut watcher2 = LogWatcher::new(log_dir, state_dir).expect("Failed to create watcher");
+
+        // Watch again - should detect rotation and read the new error
+        let events2 = watcher2.watch().expect("Failed to watch");
+
+        // Assert - should have detected the rotation and read the new error
+        assert_eq!(events2.len(), 1);
+        assert_eq!(events2[0].data["message"], "New error after rotation");
+    }
+
+    #[test]
+    fn should_process_lowercase_error_level() {
+        // Arrange
+        let test_dir = temp_dir().join(format!("test_lowercase_{}", Uuid::new_v4()));
+        let log_dir = test_dir.join("logs");
+        let state_dir = test_dir.join("state");
+        fs::create_dir_all(&log_dir).expect("Failed to create log dir");
+
+        let mut watcher =
+            LogWatcher::new(log_dir.clone(), state_dir).expect("Failed to create watcher");
+        let today = Utc::now().date_naive();
+
+        // Use lowercase "error" level
+        let content = r#"{"timestamp":"2026-01-31T14:50:00Z","level":"error","target":"server::ai","fields":{"error_code":"AI5002"},"message":"Lowercase error"}"#;
+        create_test_log_file(&log_dir, today, content);
+
+        // Act
+        let events = watcher.watch().expect("Failed to watch");
+
+        // Assert - should detect lowercase error
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].data["message"], "Lowercase error");
     }
 }

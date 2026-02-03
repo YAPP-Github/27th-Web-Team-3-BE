@@ -8,6 +8,16 @@
 //! ├── completed/   # Successfully processed events (optional retention)
 //! └── dlq/         # Dead letter queue for failed events
 //! ```
+//!
+//! ## TODO(MVP): 프로덕션 전 개선 필요 사항
+//!
+//! 1. **비동기 파일 I/O**: 현재 `std::fs` 사용 중. 프로덕션에서는 `tokio::fs`로
+//!    전환하거나 `tokio::task::spawn_blocking`으로 감싸야 함.
+//!
+//! 2. **Completed 디렉토리 Cleanup**: 완료된 이벤트가 계속 쌓임. 다음 중 하나 필요:
+//!    - 주기적 cleanup 작업 (일정 기간 이후 삭제)
+//!    - 완료 이벤트 즉시 삭제
+//!    - 최대 보관 개수 제한
 
 use crate::event::queue::{EventQueue, QueueConfig, QueueResult};
 use crate::event::{Event, EventStatus};
@@ -149,11 +159,8 @@ impl EventQueue for FileEventQueue {
     async fn push(&self, event: Event) -> QueueResult<()> {
         let _guard = self.lock.write().await;
 
-        // Check for duplicate fingerprint
-        if self
-            .contains_fingerprint(&event.metadata.fingerprint)
-            .await?
-        {
+        // SAFETY: Caller holds write lock, using unlocked version to avoid deadlock
+        if self.contains_fingerprint_unlocked(&event.metadata.fingerprint)? {
             warn!(
                 fingerprint = %event.metadata.fingerprint,
                 "Duplicate event detected, skipping"
@@ -198,9 +205,11 @@ impl EventQueue for FileEventQueue {
             for entry in entries.flatten() {
                 let filename = entry.file_name().to_string_lossy().to_string();
                 if filename.starts_with(&prefix) && filename.ends_with(".json") {
-                    // Move to processing directory
+                    let original_path = entry.path();
                     let new_path = processing_dir.join(&filename);
-                    fs::rename(entry.path(), &new_path).map_err(|e| {
+
+                    // Move to processing directory
+                    fs::rename(&original_path, &new_path).map_err(|e| {
                         error!(error = %e, "Failed to move event to processing");
                         AppError::InternalError(format!(
                             "Failed to move event to processing: {}",
@@ -208,19 +217,49 @@ impl EventQueue for FileEventQueue {
                         ))
                     })?;
 
-                    // Read and parse event
-                    let mut event = self.read_event_file(&new_path)?;
+                    // Read and parse event - with rollback on failure
+                    let mut event = match self.read_event_file(&new_path) {
+                        Ok(e) => e,
+                        Err(e) => {
+                            // Rollback: move back to pending or to DLQ if corrupted
+                            error!(error = %e, path = %new_path.display(), "Failed to parse event, moving to DLQ");
+                            let dlq_path = self.dlq_dir().join(&filename);
+                            if let Err(move_err) = fs::rename(&new_path, &dlq_path) {
+                                error!(error = %move_err, "Failed to move corrupted event to DLQ, attempting rollback to pending");
+                                let _ = fs::rename(&new_path, &original_path);
+                            }
+                            return Err(e);
+                        }
+                    };
                     event.status = EventStatus::Processing;
 
-                    // Persist status change to file
-                    let content = serde_json::to_string_pretty(&event).map_err(|e| {
-                        error!(error = %e, "Failed to serialize event");
-                        AppError::InternalError(format!("Failed to serialize event: {}", e))
-                    })?;
-                    fs::write(&new_path, content).map_err(|e| {
-                        error!(error = %e, path = %new_path.display(), "Failed to update event file");
-                        AppError::InternalError(format!("Failed to update event file: {}", e))
-                    })?;
+                    // Persist status change to file - with rollback on failure
+                    let content = match serde_json::to_string_pretty(&event) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            error!(error = %e, "Failed to serialize event, rolling back");
+                            // Rollback: move back to pending
+                            if let Err(rollback_err) = fs::rename(&new_path, &original_path) {
+                                error!(error = %rollback_err, "Failed to rollback event to pending");
+                            }
+                            return Err(AppError::InternalError(format!(
+                                "Failed to serialize event: {}",
+                                e
+                            )));
+                        }
+                    };
+
+                    if let Err(e) = fs::write(&new_path, content) {
+                        error!(error = %e, path = %new_path.display(), "Failed to update event file, rolling back");
+                        // Rollback: move back to pending
+                        if let Err(rollback_err) = fs::rename(&new_path, &original_path) {
+                            error!(error = %rollback_err, "Failed to rollback event to pending");
+                        }
+                        return Err(AppError::InternalError(format!(
+                            "Failed to update event file: {}",
+                            e
+                        )));
+                    }
 
                     info!(
                         event_id = %event.id,
@@ -332,6 +371,20 @@ impl EventQueue for FileEventQueue {
     }
 
     async fn contains_fingerprint(&self, fingerprint: &str) -> QueueResult<bool> {
+        // Acquire read lock for thread-safe external calls
+        // Note: Internal calls from push() use contains_fingerprint_unlocked() directly
+        // while holding the write lock to avoid deadlock.
+        let _guard = self.lock.read().await;
+        self.contains_fingerprint_unlocked(fingerprint)
+    }
+}
+
+impl FileEventQueue {
+    /// Internal unlocked method to check fingerprint.
+    /// SAFETY: Caller must ensure proper locking (either read or write lock).
+    /// - Called from `push()` while holding write lock
+    /// - Called from `contains_fingerprint()` while holding read lock
+    fn contains_fingerprint_unlocked(&self, fingerprint: &str) -> QueueResult<bool> {
         // Check pending directory
         let pending_dir = self.pending_dir();
         let entries = fs::read_dir(&pending_dir).map_err(|e| {
@@ -366,6 +419,36 @@ impl EventQueue for FileEventQueue {
             }
         }
 
+        // Check completed directory within dedup window
+        let completed_dir = self.completed_dir();
+        let entries = fs::read_dir(&completed_dir).map_err(|e| {
+            AppError::InternalError(format!("Failed to read completed directory: {}", e))
+        })?;
+
+        let dedup_window = std::time::Duration::from_secs(self.config.dedup_window_secs);
+        let now = std::time::SystemTime::now();
+
+        for entry in entries.flatten() {
+            // Check file modification time for dedup window
+            if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(age) = now.duration_since(modified) {
+                        if age > dedup_window {
+                            continue; // Skip files older than dedup window
+                        }
+                    }
+                }
+            }
+
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if let Ok(event) = serde_json::from_str::<Event>(&content) {
+                    if event.metadata.fingerprint == fingerprint {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+
         Ok(false)
     }
 }
@@ -376,6 +459,11 @@ mod tests {
     use crate::event::Priority;
     use std::env::temp_dir;
     use uuid::Uuid;
+
+    // TODO(MVP): 테스트 임시 디렉토리 자동 정리 필요
+    // 옵션 1: `tempfile` crate의 `TempDir` 사용 (자동 cleanup)
+    // 옵션 2: Drop trait 구현하여 테스트 종료 시 cleanup
+    // 현재는 시스템 임시 디렉토리 사용으로 OS가 정리
 
     fn create_test_queue() -> FileEventQueue {
         let test_dir = temp_dir().join(format!("test_queue_{}", Uuid::new_v4()));
@@ -565,5 +653,99 @@ mod tests {
         // After pop
         assert_eq!(queue.pending_count().await.unwrap(), 1);
         assert_eq!(queue.processing_count().await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn should_move_corrupted_json_to_dlq() {
+        // Arrange
+        let test_dir = temp_dir().join(format!("test_queue_{}", Uuid::new_v4()));
+        let queue = FileEventQueue::new(test_dir.clone()).expect("Failed to create queue");
+
+        // Write a corrupted JSON file directly to pending
+        let corrupted_file = test_dir.join("pending").join("p1_corrupted.json");
+        fs::write(&corrupted_file, "{ invalid json }").expect("Failed to write corrupted file");
+
+        // Act
+        let result = queue.pop().await;
+
+        // Assert
+        assert!(result.is_err());
+
+        // Corrupted file should be in DLQ
+        let dlq_count = fs::read_dir(test_dir.join("dlq"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .count();
+        assert_eq!(dlq_count, 1);
+
+        // Pending should be empty (file moved to DLQ)
+        assert_eq!(queue.pending_count().await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn should_detect_duplicate_in_completed_within_dedup_window() {
+        // Arrange
+        let config = QueueConfig {
+            max_retries: 3,
+            dedup_window_secs: 300, // 5 minutes
+        };
+        let test_dir = temp_dir().join(format!("test_queue_{}", Uuid::new_v4()));
+        let queue =
+            FileEventQueue::with_config(test_dir.clone(), config).expect("Failed to create queue");
+
+        let fingerprint = "unique_fingerprint_for_dedup_test";
+
+        // Push, pop, and complete an event
+        let event1 = create_test_event(Priority::P1).with_fingerprint(fingerprint);
+        queue.push(event1.clone()).await.expect("Failed to push");
+        let popped = queue.pop().await.expect("Failed to pop").unwrap();
+        queue.complete(popped.id).await.expect("Failed to complete");
+
+        // Act: Try to push another event with same fingerprint (should be detected as duplicate)
+        let event2 = create_test_event(Priority::P1).with_fingerprint(fingerprint);
+        queue.push(event2).await.expect("Failed to push");
+
+        // Assert: Only one event should be in completed, none in pending (duplicate skipped)
+        let pending = queue.pending_count().await.unwrap();
+        assert_eq!(pending, 0);
+    }
+
+    #[tokio::test]
+    async fn should_not_detect_duplicate_outside_dedup_window() {
+        // Arrange
+        let config = QueueConfig {
+            max_retries: 3,
+            dedup_window_secs: 0, // No dedup window
+        };
+        let test_dir = temp_dir().join(format!("test_queue_{}", Uuid::new_v4()));
+        let queue =
+            FileEventQueue::with_config(test_dir.clone(), config).expect("Failed to create queue");
+
+        let fingerprint = "unique_fingerprint_for_window_test";
+
+        // Push, pop, and complete an event
+        let event1 = create_test_event(Priority::P1).with_fingerprint(fingerprint);
+        queue.push(event1.clone()).await.expect("Failed to push");
+        let popped = queue.pop().await.expect("Failed to pop").unwrap();
+        queue.complete(popped.id).await.expect("Failed to complete");
+
+        // Touch the file (mtime updated to now); with a 0s dedup window any completed event is out-of-window.
+        let completed_files: Vec<_> = fs::read_dir(test_dir.join("completed"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        for entry in completed_files {
+            // Rewrite file to update mtime to now (with 0s dedup window, this is still out-of-window)
+            let content = fs::read_to_string(entry.path()).unwrap();
+            fs::write(entry.path(), content).unwrap();
+        }
+
+        // Act: Try to push another event with same fingerprint
+        let event2 = create_test_event(Priority::P1).with_fingerprint(fingerprint);
+        queue.push(event2).await.expect("Failed to push");
+
+        // Assert: With 0 second dedup window, event should be allowed
+        let pending = queue.pending_count().await.unwrap();
+        assert_eq!(pending, 1);
     }
 }
