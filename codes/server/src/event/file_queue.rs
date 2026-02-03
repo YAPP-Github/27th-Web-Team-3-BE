@@ -729,13 +729,13 @@ mod tests {
         let popped = queue.pop().await.expect("Failed to pop").unwrap();
         queue.complete(popped.id).await.expect("Failed to complete");
 
-        // Manually set file modification time to the past (simulate old event)
+        // Touch the file (mtime updated to now); with a 0s dedup window any completed event is out-of-window.
         let completed_files: Vec<_> = fs::read_dir(test_dir.join("completed"))
             .unwrap()
             .filter_map(|e| e.ok())
             .collect();
         for entry in completed_files {
-            // Touch the file with old timestamp (by rewriting with same content)
+            // Rewrite file to update mtime to now (with 0s dedup window, this is still out-of-window)
             let content = fs::read_to_string(entry.path()).unwrap();
             fs::write(entry.path(), content).unwrap();
         }

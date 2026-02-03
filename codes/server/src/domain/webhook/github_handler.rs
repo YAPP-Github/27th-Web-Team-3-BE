@@ -1082,7 +1082,7 @@ mod tests {
     #[test]
     fn should_verify_github_signature() {
         // Arrange
-        std::env::set_var("GITHUB_SKIP_VERIFICATION", "false");
+        std::env::set_var("GITHUB_SKIP_VERIFICATION_DEV_ONLY", "false");
         let secret = "test_secret";
         let body = b"test body";
 
@@ -1098,13 +1098,13 @@ mod tests {
         assert!(result.is_ok());
 
         // Cleanup
-        std::env::remove_var("GITHUB_SKIP_VERIFICATION");
+        std::env::remove_var("GITHUB_SKIP_VERIFICATION_DEV_ONLY");
     }
 
     #[test]
     fn should_reject_invalid_github_signature() {
         // Arrange
-        std::env::set_var("GITHUB_SKIP_VERIFICATION", "false");
+        std::env::set_var("GITHUB_SKIP_VERIFICATION_DEV_ONLY", "false");
         let secret = "test_secret";
         let body = b"test body";
         let invalid_signature = "sha256=invalid";
@@ -1116,6 +1116,6 @@ mod tests {
         assert!(result.is_err());
 
         // Cleanup
-        std::env::remove_var("GITHUB_SKIP_VERIFICATION");
+        std::env::remove_var("GITHUB_SKIP_VERIFICATION_DEV_ONLY");
     }
 }
