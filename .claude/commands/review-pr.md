@@ -13,21 +13,34 @@ PR의 변경사항을 분석하고 인라인 코드 리뷰를 작성합니다.
 | 파라미터 | 설명 | 기본값 |
 |----------|------|--------|
 | PR번호 | 리뷰할 PR 번호 | 현재 브랜치의 PR |
-| 옵션 | `comment`, `approve`, `request-changes` | `comment` |
+| 옵션 | `comment`, `approve`, `request-changes` | 자동 판단 |
+
+### 리뷰 결과 자동 판단 기준
+
+옵션을 지정하지 않으면 리뷰 결과에 따라 자동으로 판단합니다:
+
+| 조건 | 결과 |
+|------|------|
+| 🔴 Bug/Security 이슈 있음 | `request-changes` |
+| 🟡 개선 필요 사항만 있음 | `comment` |
+| 🟢 문제 없음 | `approve` |
 
 ### 예시
 
 ```bash
-# 현재 브랜치의 PR 리뷰
+# 현재 브랜치의 PR 리뷰 (자동 판단)
 /review-pr
 
-# 특정 PR 리뷰
+# 특정 PR 리뷰 (자동 판단)
 /review-pr 91
 
-# 승인과 함께 리뷰
+# 강제로 코멘트만 (승인/거절 없음)
+/review-pr 91 comment
+
+# 강제로 승인
 /review-pr 91 approve
 
-# 변경 요청
+# 강제로 변경 요청
 /review-pr 91 request-changes
 ```
 
