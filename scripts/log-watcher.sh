@@ -114,7 +114,9 @@ echo "$CURRENT_INODE" > "$STATE_FILE.inode"
 
 # 마지막 처리 라인
 LAST_LINE=$(cat "$STATE_FILE" 2>/dev/null || echo 0)
+[ -z "$LAST_LINE" ] && LAST_LINE=0
 CURRENT_LINES=$(wc -l < "$LOG_FILE")
+CURRENT_LINES=${CURRENT_LINES:-0}
 
 # 파일이 truncate된 경우 (같은 inode지만 라인 수 감소) 처음부터 읽기
 if [ "$CURRENT_LINES" -lt "$LAST_LINE" ]; then
