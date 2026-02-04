@@ -30,6 +30,10 @@ pub struct SocialLoginRequest {
     /// 소셜 서비스에서 발급받은 인가 코드 (Authorization Code)
     #[validate(length(min = 1, message = "code는 필수입니다"))]
     pub code: String,
+
+    /// 인가 코드 발급 시 사용한 리다이렉트 URI
+    #[validate(length(min = 1, message = "redirectUri는 필수입니다"))]
+    pub redirect_uri: String,
 }
 
 /// [API-001] 소셜 로그인 응답 DTO
