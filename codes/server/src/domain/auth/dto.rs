@@ -27,13 +27,14 @@ pub struct SocialLoginRequest {
     /// 소셜 서비스 구분 (GOOGLE, KAKAO)
     pub provider: SocialType,
 
-    /// 소셜 서비스에서 발급받은 Access Token
-    #[validate(length(min = 1, message = "accessToken은 필수입니다"))]
-    pub access_token: String,
+    /// 소셜 서비스에서 발급받은 인가 코드 (Authorization Code)
+    #[validate(length(min = 1, message = "code는 필수입니다"))]
+    pub code: String,
 }
 
 /// [API-001] 소셜 로그인 응답 DTO
-#[derive(Debug, Serialize, ToSchema)]
+/// 토큰은 쿠키로 전달됩니다. 이메일은 signupToken에 포함되어 있습니다.
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SocialLoginResponse {
     /// 신규 회원 여부
@@ -44,22 +45,16 @@ pub struct SocialLoginResponse {
     /// 서비스 Refresh Token (기존 회원인 경우)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
-    /// 소셜 계정 이메일 (신규 회원인 경우)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
-    /// 회원가입용 임시 토큰 (신규 회원인 경우)
+    /// 회원가입용 임시 토큰 (신규 회원인 경우, 이메일/provider 정보 포함)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signup_token: Option<String>,
 }
 
 /// [API-002] 회원가입 요청 DTO
+/// 이메일은 signupToken에서 추출됩니다.
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SignupRequest {
-    /// 소셜 로그인에서 반환받은 이메일
-    #[validate(email(message = "이메일 형식이 올바르지 않습니다"))]
-    pub email: String,
-
     /// 사용자 닉네임 (1~20자, 특수문자 제외)
     #[validate(
         length(min = 1, max = 20, message = "닉네임은 1~20자 이내로 입력해야 합니다"),
@@ -72,6 +67,7 @@ pub struct SignupRequest {
 }
 
 /// [API-002] 회원가입 응답 DTO
+/// 토큰은 쿠키로 전달됩니다.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SignupResponse {
@@ -79,10 +75,6 @@ pub struct SignupResponse {
     pub member_id: i64,
     /// 설정된 닉네임
     pub nickname: String,
-    /// 서비스 Access Token
-    pub access_token: String,
-    /// 서비스 Refresh Token
-    pub refresh_token: String,
 }
 
 // --- [API-003] 토큰 갱신 ---
@@ -97,13 +89,11 @@ pub struct TokenRefreshRequest {
 }
 
 /// [API-003] 토큰 갱신 응답 DTO
+/// 토큰은 쿠키로 전달됩니다.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenRefreshResponse {
-    /// 새로 발급된 Access Token
-    pub access_token: String,
-    /// 새로 발급된 Refresh Token
-    pub refresh_token: String,
+    // 토큰은 쿠키로 전달되므로 본문은 비어있음
 }
 
 // --- [API-004] 로그아웃 ---
@@ -126,14 +116,12 @@ pub struct EmailLoginRequest {
     pub email: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+/// 이메일 로그인 응답 DTO (테스트용)
+/// 토큰은 쿠키로 전달됩니다.
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailLoginResponse {
     pub is_new_member: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub access_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refresh_token: Option<String>,
 }
 
 // --- Swagger용 래핑 DTO ---

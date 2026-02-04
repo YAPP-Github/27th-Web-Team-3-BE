@@ -1,15 +1,19 @@
 use chrono::{Duration, Utc};
 use reqwest::Client;
 use sea_orm::{DbErr, RuntimeErr, *};
+use std::time::Duration as StdDuration;
 
 use super::dto::{
-    EmailLoginRequest, EmailLoginResponse, LogoutRequest, SignupRequest, SignupResponse,
-    SocialLoginRequest, SocialLoginResponse, TokenRefreshRequest, TokenRefreshResponse,
+    EmailLoginRequest, LogoutRequest, SignupRequest, SocialLoginRequest, SocialLoginResponse,
+    TokenRefreshRequest,
 };
 use crate::domain::member::entity::member::{self, Entity as Member, SocialType};
 use crate::state::AppState;
 use crate::utils::error::AppError;
 use crate::utils::jwt::{decode_token, encode_refresh_token, encode_signup_token, encode_token};
+
+/// OAuth 요청 타임아웃 (초)
+const OAUTH_TIMEOUT_SECS: u64 = 10;
 
 pub struct AuthService;
 
@@ -18,16 +22,58 @@ struct SocialUserInfo {
     email: String,
 }
 
+/// 회원가입 결과 (내부용)
+#[derive(Debug)]
+pub struct SignupResult {
+    pub member_id: i64,
+    pub nickname: String,
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+/// 이메일 로그인 결과 (내부용)
+#[derive(Debug)]
+pub struct EmailLoginResult {
+    pub is_new_member: bool,
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+/// 토큰 갱신 결과 (내부용)
+#[derive(Debug)]
+pub struct TokenRefreshResult {
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
 impl AuthService {
     /// [API-001] 소셜 로그인
     pub async fn social_login(
         state: AppState,
         req: SocialLoginRequest,
     ) -> Result<SocialLoginResponse, AppError> {
-        // 1. 소셜 제공자로부터 유저 정보 가져오기
+        // 1. 인가 코드로 access_token 교환 후 유저 정보 가져오기
         let social_info = match req.provider {
-            SocialType::Kakao => Self::fetch_kakao_user_info(&req.access_token).await?,
-            SocialType::Google => Self::fetch_google_user_info(&req.access_token).await?,
+            SocialType::Kakao => {
+                let access_token = Self::exchange_kakao_code(
+                    &req.code,
+                    &state.config.kakao_client_id,
+                    &state.config.kakao_client_secret,
+                    &state.config.kakao_redirect_uri,
+                )
+                .await?;
+                Self::fetch_kakao_user_info(&access_token).await?
+            }
+            SocialType::Google => {
+                let access_token = Self::exchange_google_code(
+                    &req.code,
+                    &state.config.google_client_id,
+                    &state.config.google_client_secret,
+                    &state.config.google_redirect_uri,
+                )
+                .await?;
+                Self::fetch_google_user_info(&access_token).await?
+            }
         };
 
         // 2. DB에서 유저 조회 (이메일 + 소셜 타입)
@@ -66,7 +112,6 @@ impl AuthService {
                     is_new_member: false,
                     access_token: Some(access_token),
                     refresh_token: Some(refresh_token_str),
-                    email: None,
                     signup_token: None,
                 })
             }
@@ -87,7 +132,6 @@ impl AuthService {
                     is_new_member: true,
                     access_token: None,
                     refresh_token: None,
-                    email: Some(social_info.email),
                     signup_token: Some(signup_token),
                 })
             }
@@ -99,7 +143,7 @@ impl AuthService {
         state: AppState,
         req: SignupRequest,
         signup_token: &str,
-    ) -> Result<SignupResponse, AppError> {
+    ) -> Result<SignupResult, AppError> {
         // 1. signupToken 검증
         let claims = decode_token(signup_token, &state.config.jwt_secret)?;
 
@@ -110,16 +154,10 @@ impl AuthService {
             ));
         }
 
-        // 3. 이메일 일치 여부 확인
-        let token_email = claims
+        // 3. 토큰에서 이메일 추출
+        let email = claims
             .email
             .ok_or_else(|| AppError::Unauthorized("토큰에 이메일 정보가 없습니다.".into()))?;
-
-        if token_email != req.email {
-            return Err(AppError::Unauthorized(
-                "이메일 정보가 일치하지 않습니다.".into(),
-            ));
-        }
 
         // 4. provider 정보 추출
         let social_type = match claims.provider.as_deref() {
@@ -145,7 +183,7 @@ impl AuthService {
 
         // 6. 회원 생성
         let active_model = member::ActiveModel {
-            email: Set(req.email),
+            email: Set(email),
             nickname: Set(Some(req.nickname.clone())),
             social_type: Set(social_type),
             insight_count: Set(0),
@@ -187,7 +225,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok(SignupResponse {
+        Ok(SignupResult {
             member_id: new_member.member_id,
             nickname: req.nickname,
             access_token,
@@ -199,7 +237,7 @@ impl AuthService {
     pub async fn login_by_email(
         state: AppState,
         req: EmailLoginRequest,
-    ) -> Result<EmailLoginResponse, AppError> {
+    ) -> Result<EmailLoginResult, AppError> {
         // DB에서 유저 조회 (이메일 기반)
         let member = Member::find()
             .filter(member::Column::Email.eq(&req.email))
@@ -232,10 +270,10 @@ impl AuthService {
         )
         .await?;
 
-        Ok(EmailLoginResponse {
+        Ok(EmailLoginResult {
             is_new_member: false,
-            access_token: Some(access_token),
-            refresh_token: Some(refresh_token_str),
+            access_token,
+            refresh_token: refresh_token_str,
         })
     }
 
@@ -243,7 +281,7 @@ impl AuthService {
     pub async fn refresh_token(
         state: AppState,
         req: TokenRefreshRequest,
-    ) -> Result<TokenRefreshResponse, AppError> {
+    ) -> Result<TokenRefreshResult, AppError> {
         // 1. Refresh Token JWT 검증
         let claims = decode_token(&req.refresh_token, &state.config.jwt_secret).map_err(|_| {
             AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
@@ -322,7 +360,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok(TokenRefreshResponse {
+        Ok(TokenRefreshResult {
             access_token: new_access_token,
             refresh_token: new_refresh_token,
         })
@@ -412,8 +450,97 @@ impl AuthService {
         Self::social_login(state, req).await
     }
 
+    /// OAuth HTTP 클라이언트 생성 (타임아웃 설정)
+    fn oauth_client() -> Result<Client, AppError> {
+        Client::builder()
+            .timeout(StdDuration::from_secs(OAUTH_TIMEOUT_SECS))
+            .build()
+            .map_err(|e| AppError::InternalError(format!("HTTP client init failed: {}", e)))
+    }
+
+    /// 카카오 인가 코드로 access_token 교환
+    async fn exchange_kakao_code(
+        code: &str,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uri: &str,
+    ) -> Result<String, AppError> {
+        let client = Self::oauth_client()?;
+        let response = client
+            .post("https://kauth.kakao.com/oauth/token")
+            .form(&[
+                ("grant_type", "authorization_code"),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("redirect_uri", redirect_uri),
+                ("code", code),
+            ])
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Kakao token exchange failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!("Kakao token exchange error: {}", error_body);
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 인가 코드입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        json["access_token"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| AppError::SocialAuthFailed("토큰 응답 파싱 실패".into()))
+    }
+
+    /// 구글 인가 코드로 access_token 교환
+    async fn exchange_google_code(
+        code: &str,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uri: &str,
+    ) -> Result<String, AppError> {
+        let client = Self::oauth_client()?;
+        let response = client
+            .post("https://oauth2.googleapis.com/token")
+            .form(&[
+                ("grant_type", "authorization_code"),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("redirect_uri", redirect_uri),
+                ("code", code),
+            ])
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Google token exchange failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!("Google token exchange error: {}", error_body);
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 인가 코드입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        json["access_token"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| AppError::SocialAuthFailed("토큰 응답 파싱 실패".into()))
+    }
+
+    /// 카카오 access_token으로 유저 정보 조회
     async fn fetch_kakao_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
-        let client = Client::new();
+        let client = Self::oauth_client()?;
         let response = client
             .get("https://kapi.kakao.com/v2/user/me")
             .header("Authorization", format!("Bearer {}", token))
@@ -440,8 +567,9 @@ impl AuthService {
         Ok(SocialUserInfo { email })
     }
 
+    /// 구글 access_token으로 유저 정보 조회
     async fn fetch_google_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
-        let client = Client::new();
+        let client = Self::oauth_client()?;
         let response = client
             .get("https://www.googleapis.com/oauth2/v2/userinfo")
             .header("Authorization", format!("Bearer {}", token))

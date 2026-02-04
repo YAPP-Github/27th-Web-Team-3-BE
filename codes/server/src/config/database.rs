@@ -86,7 +86,16 @@ async fn create_tables(db: &DatabaseConnection) -> Result<(), DbErr> {
 /// Apply ALTER TABLE migrations for existing tables.
 /// This handles adding new columns to tables that already exist.
 async fn apply_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
-    // Migration: Add refresh_token and refresh_token_expires_at columns to member table
+    // Migration: Add missing columns to member table
+    add_column_if_not_exists(db, "member", "nickname", "VARCHAR(255) NULL").await?;
+    add_column_if_not_exists(
+        db,
+        "member",
+        "social_type",
+        "ENUM('KAKAO', 'GOOGLE') NOT NULL DEFAULT 'KAKAO'",
+    )
+    .await?;
+    add_column_if_not_exists(db, "member", "insight_count", "INT NOT NULL DEFAULT 0").await?;
     add_column_if_not_exists(db, "member", "refresh_token", "VARCHAR(500) NULL").await?;
     add_column_if_not_exists(db, "member", "refresh_token_expires_at", "DATETIME NULL").await?;
 
