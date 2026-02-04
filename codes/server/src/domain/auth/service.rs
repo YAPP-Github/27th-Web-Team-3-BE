@@ -59,7 +59,7 @@ impl AuthService {
                     &req.code,
                     &state.config.kakao_client_id,
                     &state.config.kakao_client_secret,
-                    &state.config.kakao_redirect_uri,
+                    &req.redirect_uri,
                 )
                 .await?;
                 Self::fetch_kakao_user_info(&access_token).await?
@@ -69,7 +69,7 @@ impl AuthService {
                     &req.code,
                     &state.config.google_client_id,
                     &state.config.google_client_secret,
-                    &state.config.google_redirect_uri,
+                    &req.redirect_uri,
                 )
                 .await?;
                 Self::fetch_google_user_info(&access_token).await?

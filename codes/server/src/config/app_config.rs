@@ -13,10 +13,8 @@ pub struct AppConfig {
     // Social Login
     pub google_client_id: String,
     pub google_client_secret: String,
-    pub google_redirect_uri: String,
     pub kakao_client_id: String,
     pub kakao_client_secret: String,
-    pub kakao_redirect_uri: String,
 
     // AI Service
     pub openai_api_key: String,
@@ -65,7 +63,6 @@ impl AppConfig {
             }
             Err(_) => return Err(ConfigError::MissingGoogleClientSecret),
         };
-        let google_redirect_uri = env::var("GOOGLE_REDIRECT_URI").unwrap_or_default();
         let kakao_client_id = env::var("KAKAO_CLIENT_ID").unwrap_or_default();
         let kakao_client_secret = match env::var("KAKAO_CLIENT_SECRET") {
             Ok(v) => v,
@@ -75,7 +72,6 @@ impl AppConfig {
             }
             Err(_) => return Err(ConfigError::MissingKakaoClientSecret),
         };
-        let kakao_redirect_uri = env::var("KAKAO_REDIRECT_URI").unwrap_or_default();
 
         let openai_api_key = env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
             tracing::warn!(
@@ -91,10 +87,8 @@ impl AppConfig {
             signup_token_expiration,
             google_client_id,
             google_client_secret,
-            google_redirect_uri,
             kakao_client_id,
             kakao_client_secret,
-            kakao_redirect_uri,
             openai_api_key,
         })
     }
