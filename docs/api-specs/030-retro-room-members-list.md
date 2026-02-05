@@ -111,7 +111,7 @@ GET /api/v1/retro-rooms/{retroRoomId}/members
 {
   "isSuccess": false,
   "code": "COMMON400",
-  "message": "retroRoomId는 1 이상의 양수여야 합니다.",
+  "message": "retroRoomId가 유효한 숫자 형식이 아닙니다.",
   "result": null
 }
 ```
@@ -164,7 +164,7 @@ GET /api/v1/retro-rooms/{retroRoomId}/members
 
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|----------|
-| COMMON400 | 400 | 잘못된 요청 | retroRoomId가 0 이하의 값 |
+| COMMON400 | 400 | 잘못된 요청 | retroRoomId가 유효한 숫자 형식이 아닌 경우 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
 | RETRO4031 | 403 | 해당 회고방에 접근 권한 없음 (멤버가 아님) | 요청자가 해당 회고방의 멤버가 아닌 경우 |
 | RETRO4041 | 404 | 존재하지 않는 회고방 | 존재하지 않거나 삭제된 회고방의 retroRoomId로 요청 |

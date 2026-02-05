@@ -5,8 +5,8 @@ use genpdf::elements::{Break, Paragraph};
 use genpdf::style;
 use genpdf::Element;
 use sea_orm::{
-    sea_query::LockType, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, ModelTrait,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
+    sea_query::LockType, ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, FromQueryResult,
+    ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 use tracing::{error, info, warn};
 
@@ -311,13 +311,11 @@ impl RetrospectService {
             .collect();
 
         // OWNER 먼저, 그 다음 MEMBER
-        // 동일 role 내에서는 member_retrospect_room_id 오름차순 (가입일 오름차순)
+        // 동일 role 내에서는 created_at 오름차순 (회고방 가입일 오름차순)
         result.sort_by(|(mr_a, _), (mr_b, _)| match (&mr_a.role, &mr_b.role) {
             (RoomRole::Owner, RoomRole::Member) => std::cmp::Ordering::Less,
             (RoomRole::Member, RoomRole::Owner) => std::cmp::Ordering::Greater,
-            _ => mr_a
-                .member_retrospect_room_id
-                .cmp(&mr_b.member_retrospect_room_id),
+            _ => mr_a.created_at.cmp(&mr_b.created_at),
         });
 
         // 8. DTO로 변환
@@ -334,10 +332,7 @@ impl RetrospectService {
                     RoomRole::Owner => "OWNER".to_string(),
                     RoomRole::Member => "MEMBER".to_string(),
                 };
-                // created_at은 member 테이블의 created_at을 사용 (회원 가입일)
-                // 회고방 가입일을 별도로 추적하지 않으므로 member_retrospect_room_id를
-                // 가입 순서의 대리자로 사용하고, 표시용으로는 member.created_at 사용
-                let joined_at = member.created_at.format("%Y-%m-%dT%H:%M:%S").to_string();
+                let joined_at = mr.created_at.format("%Y-%m-%dT%H:%M:%S").to_string();
 
                 Some(RetroRoomMemberItem {
                     member_id: member.member_id,
@@ -714,26 +709,47 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        // 4. 각 회고별 참여자 수 조회
+        // 4. 한 번의 쿼리로 모든 회고의 참여자 수 집계 (N+1 쿼리 최적화)
         use crate::domain::member::entity::member_retro::Entity as MemberRetro;
-        let mut result: Vec<RetrospectListItem> = Vec::with_capacity(retrospects.len());
 
-        for r in retrospects {
-            let participant_count = MemberRetro::find()
-                .filter(member_retro::Column::RetrospectId.eq(r.retrospect_id))
-                .count(&state.db)
-                .await
-                .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
-
-            result.push(RetrospectListItem {
-                retrospect_id: r.retrospect_id,
-                project_name: r.title,
-                retrospect_method: r.retrospect_method.to_string(),
-                retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
-                retrospect_time: r.start_time.format("%H:%M").to_string(),
-                participant_count: participant_count as i64,
-            });
+        #[derive(FromQueryResult)]
+        struct ParticipantCount {
+            retrospect_id: i64,
+            count: i64,
         }
+
+        let retrospect_ids: Vec<i64> = retrospects.iter().map(|r| r.retrospect_id).collect();
+
+        let counts: Vec<ParticipantCount> = MemberRetro::find()
+            .select_only()
+            .column(member_retro::Column::RetrospectId)
+            .column_as(member_retro::Column::MemberRetroId.count(), "count")
+            .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids))
+            .group_by(member_retro::Column::RetrospectId)
+            .into_model::<ParticipantCount>()
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let count_map: HashMap<i64, i64> = counts
+            .into_iter()
+            .map(|c| (c.retrospect_id, c.count))
+            .collect();
+
+        let result: Vec<RetrospectListItem> = retrospects
+            .into_iter()
+            .map(|r| {
+                let participant_count = count_map.get(&r.retrospect_id).copied().unwrap_or(0);
+                RetrospectListItem {
+                    retrospect_id: r.retrospect_id,
+                    project_name: r.title,
+                    retrospect_method: r.retrospect_method.to_string(),
+                    retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
+                    retrospect_time: r.start_time.format("%H:%M").to_string(),
+                    participant_count,
+                }
+            })
+            .collect();
 
         Ok(result)
     }
