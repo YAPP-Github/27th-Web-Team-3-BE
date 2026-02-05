@@ -25,7 +25,9 @@ use crate::domain::auth::dto::{
     SuccessSignupResponse, SuccessSocialLoginResponse, SuccessTokenRefreshResponse,
     TokenRefreshRequest, TokenRefreshResponse,
 };
-use crate::domain::member::dto::SuccessWithdrawResponse;
+use crate::domain::member::dto::{
+    MemberProfileResponse, SuccessProfileResponse, SuccessWithdrawResponse,
+};
 use crate::domain::member::entity::member_retro::RetrospectStatus;
 use crate::domain::retrospect::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
@@ -90,6 +92,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::toggle_like,
         domain::retrospect::handler::assistant_guide,
         // Member APIs
+        domain::member::handler::get_profile,
         domain::member::handler::withdraw
     ),
     components(
@@ -184,6 +187,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
             GuideType,
             SuccessAssistantResponse,
             // Member DTOs
+            MemberProfileResponse,
+            SuccessProfileResponse,
             SuccessWithdrawResponse
         )
     ),
@@ -192,7 +197,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         (name = "Auth", description = "인증 API"),
         (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
-        (name = "Response", description = "회고 답변 API")
+        (name = "Response", description = "회고 답변 API"),
+        (name = "Member", description = "회원 API")
     ),
     modifiers(&SecurityAddon),
     info(
@@ -396,6 +402,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/responses/:response_id/likes",
             axum::routing::post(domain::retrospect::handler::toggle_like),
+        )
+        // 로그인된 유저 프로필 조회
+        .route(
+            "/api/v1/members/me",
+            axum::routing::get(domain::member::handler::get_profile),
         )
         // [API-025] 서비스 탈퇴
         .route(
