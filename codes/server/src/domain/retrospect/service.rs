@@ -741,7 +741,8 @@ impl RetrospectService {
         let result: Vec<RetrospectListItem> = retrospects
             .into_iter()
             .map(|r| {
-                let participant_count = count_map.get(&r.retrospect_id).copied().unwrap_or_default();
+                let participant_count =
+                    count_map.get(&r.retrospect_id).copied().unwrap_or_default();
                 RetrospectListItem {
                     retrospect_id: r.retrospect_id,
                     project_name: r.title,
