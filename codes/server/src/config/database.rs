@@ -99,6 +99,15 @@ async fn apply_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
     add_column_if_not_exists(db, "member", "refresh_token", "VARCHAR(500) NULL").await?;
     add_column_if_not_exists(db, "member", "refresh_token_expires_at", "DATETIME NULL").await?;
 
+    // Migration: Add created_at column to member_retro_room table
+    add_column_if_not_exists(
+        db,
+        "member_retro_room",
+        "created_at",
+        "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    )
+    .await?;
+
     Ok(())
 }
 
