@@ -18,6 +18,7 @@ fn should_serialize_retrospect_list_item_in_camel_case() {
         retrospect_method: "KPT".to_string(),
         retrospect_date: "2026-01-26".to_string(),
         retrospect_time: "10:00".to_string(),
+        participant_count: 5,
     };
 
     // Act
@@ -30,11 +31,14 @@ fn should_serialize_retrospect_list_item_in_camel_case() {
     assert!(parsed.get("retrospectMethod").is_some());
     assert!(parsed.get("retrospectDate").is_some());
     assert!(parsed.get("retrospectTime").is_some());
+    assert!(parsed.get("participantCount").is_some());
     assert_eq!(parsed["retrospectId"], 1);
     assert_eq!(parsed["projectName"], "프로젝트");
+    assert_eq!(parsed["participantCount"], 5);
     // snake_case 키가 없어야 함
     assert!(parsed.get("retrospect_id").is_none());
     assert!(parsed.get("project_name").is_none());
+    assert!(parsed.get("participant_count").is_none());
 }
 
 #[test]
@@ -68,6 +72,7 @@ fn should_serialize_list_with_multiple_retrospects() {
                 retrospect_method: "KPT".to_string(),
                 retrospect_date: "2026-01-26".to_string(),
                 retrospect_time: "10:00".to_string(),
+                participant_count: 3,
             },
             RetrospectListItem {
                 retrospect_id: 2,
@@ -75,6 +80,7 @@ fn should_serialize_list_with_multiple_retrospects() {
                 retrospect_method: "FOUR_L".to_string(),
                 retrospect_date: "2026-01-27".to_string(),
                 retrospect_time: "14:00".to_string(),
+                participant_count: 5,
             },
         ],
     };
@@ -87,6 +93,8 @@ fn should_serialize_list_with_multiple_retrospects() {
     assert!(json.contains("프로젝트2"));
     assert!(json.contains("KPT"));
     assert!(json.contains("FOUR_L"));
+    assert!(json.contains("\"participantCount\":3"));
+    assert!(json.contains("\"participantCount\":5"));
 }
 
 #[test]
@@ -101,6 +109,7 @@ fn should_preserve_retrospect_method_values() {
             retrospect_method: method.to_string(),
             retrospect_date: "2026-01-26".to_string(),
             retrospect_time: "10:00".to_string(),
+            participant_count: 2,
         };
 
         // Act
@@ -120,6 +129,7 @@ fn should_preserve_date_format() {
         retrospect_method: "KPT".to_string(),
         retrospect_date: "2026-12-31".to_string(),
         retrospect_time: "23:59".to_string(),
+        participant_count: 4,
     };
 
     // Act

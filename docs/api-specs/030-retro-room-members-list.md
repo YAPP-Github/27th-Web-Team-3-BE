@@ -1,25 +1,25 @@
-# [API-011] GET /api/v1/retro-rooms/{retroRoomId}/retrospects
+# [API-030] GET /api/v1/retro-rooms/{retroRoomId}/members
 
-회고방 내 전체 회고 목록 조회 API
+회고방 멤버 목록 조회 API
 
 ## 개요
 
-특정 회고방에 속한 모든 회고 목록을 조회합니다.
+특정 회고방에 참여한 모든 멤버 목록을 조회합니다.
 
-- 과거, 오늘, 예정된 회고 데이터가 모두 포함됩니다.
-- 클라이언트(프론트엔드)의 유연한 UI 대응을 위해 별도의 필터링 없이 전체 목록을 제공합니다.
+- 회고방에 가입된 모든 멤버 정보를 반환합니다.
+- 방장(OWNER)이 먼저, 그 다음 일반 멤버(MEMBER)가 표시됩니다.
+- 동일한 역할 내에서는 가입일시 기준 오름차순으로 정렬됩니다.
 
 ## 버전
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
-| 1.0.0 | 2025-01-25 | 최초 작성 |
-| 1.1.0 | 2026-02-05 | participantCount 필드 추가 |
+| 1.0.0 | 2026-02-05 | 최초 작성 |
 
 ## 엔드포인트
 
 ```
-GET /api/v1/retro-rooms/{retroRoomId}/retrospects
+GET /api/v1/retro-rooms/{retroRoomId}/members
 ```
 
 ## 인증
@@ -48,23 +48,25 @@ GET /api/v1/retro-rooms/{retroRoomId}/retrospects
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "회고방 내 전체 회고 목록 조회를 성공했습니다.",
+  "message": "회고방 멤버 목록 조회를 성공했습니다.",
   "result": [
     {
-      "retrospectId": 100,
-      "projectName": "지난 주 프로젝트 회고",
-      "retrospectMethod": "PMI",
-      "retrospectDate": "2026-01-20",
-      "retrospectTime": "10:00",
-      "participantCount": 5
+      "memberId": 1,
+      "nickname": "방장닉네임",
+      "role": "OWNER",
+      "joinedAt": "2026-01-01T10:00:00"
     },
     {
-      "retrospectId": 101,
-      "projectName": "오늘 진행할 정기 회고",
-      "retrospectMethod": "KPT",
-      "retrospectDate": "2026-01-24",
-      "retrospectTime": "16:00",
-      "participantCount": 3
+      "memberId": 2,
+      "nickname": "첫번째멤버",
+      "role": "MEMBER",
+      "joinedAt": "2026-01-05T14:30:00"
+    },
+    {
+      "memberId": 3,
+      "nickname": "두번째멤버",
+      "role": "MEMBER",
+      "joinedAt": "2026-01-10T09:15:00"
     }
   ]
 }
@@ -74,39 +76,45 @@ GET /api/v1/retro-rooms/{retroRoomId}/retrospects
 
 | Field | Type | Description |
 |-------|------|-------------|
-| retrospectId | long | 회고 고유 식별자 |
-| projectName | string | 프로젝트 이름 |
-| retrospectMethod | string (Enum) | 회고 방식 |
-| retrospectDate | string | 회고 날짜 (yyyy-MM-dd) |
-| retrospectTime | string | 회고 시간 (HH:mm) |
-| participantCount | integer | 참여인원 수 (해당 회고에 참여 등록된 총 인원) |
+| memberId | long | 멤버 고유 식별자 |
+| nickname | string | 멤버 닉네임 |
+| role | string (Enum) | 멤버 역할 |
+| joinedAt | string | 회고방 가입 일시 (yyyy-MM-ddTHH:mm:ss) |
 
-#### retrospectMethod Enum 값
+#### role Enum 값
 
 | 값 | 설명 |
 |----|------|
-| KPT | Keep-Problem-Try 방식 |
-| FOUR_L | 4L (Liked, Learned, Lacked, Longed For) 방식 |
-| FIVE_F | 5F (Facts, Feelings, Findings, Future, Feedback) 방식 |
-| PMI | Plus-Minus-Interesting 방식 |
-| FREE | 자유 형식 |
+| OWNER | 회고방 방장 (생성자) |
+| MEMBER | 일반 멤버 (초대를 통해 가입) |
 
-> **정렬 순서**: 응답 배열은 `retrospectDate` + `retrospectTime` 기준 **최신순(내림차순)**으로 정렬됩니다.
+> **정렬 순서**: 응답 배열은 `role` 기준 **OWNER 우선**, 동일 role 내에서는 `joinedAt` 기준 **오름차순**으로 정렬됩니다.
 
 ### 빈 결과 응답
 
-회고가 없는 경우 빈 배열을 반환합니다.
+멤버가 없는 경우 빈 배열을 반환합니다. (단, 회고방에는 최소 1명의 OWNER가 항상 존재합니다.)
 
 ```json
 {
   "isSuccess": true,
   "code": "COMMON200",
-  "message": "회고방 내 전체 회고 목록 조회를 성공했습니다.",
+  "message": "회고방 멤버 목록 조회를 성공했습니다.",
   "result": []
 }
 ```
 
 ## 에러 응답
+
+### 400 Bad Request - 잘못된 Path Parameter
+
+```json
+{
+  "isSuccess": false,
+  "code": "COMMON400",
+  "message": "retroRoomId가 유효한 숫자 형식이 아닙니다.",
+  "result": null
+}
+```
 
 ### 401 Unauthorized - 인증 실패
 
@@ -156,16 +164,17 @@ GET /api/v1/retro-rooms/{retroRoomId}/retrospects
 
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|----------|
+| COMMON400 | 400 | 잘못된 요청 | retroRoomId가 유효한 숫자 형식이 아닌 경우 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | Authorization 헤더 누락, 토큰 만료, 잘못된 토큰 형식 |
 | RETRO4031 | 403 | 해당 회고방에 접근 권한 없음 (멤버가 아님) | 요청자가 해당 회고방의 멤버가 아닌 경우 |
 | RETRO4041 | 404 | 존재하지 않는 회고방 | 존재하지 않거나 삭제된 회고방의 retroRoomId로 요청 |
-| COMMON500 | 500 | 회고 목록 조회 중 서버 에러 | 데이터베이스 연결 실패, 쿼리 실행 오류 |
+| COMMON500 | 500 | 멤버 목록 조회 중 서버 에러 | 데이터베이스 연결 실패, 쿼리 실행 오류 |
 
 ## 사용 예시
 
 ### cURL
 
 ```bash
-curl -X GET https://api.example.com/api/v1/retro-rooms/1/retrospects \
+curl -X GET https://api.example.com/api/v1/retro-rooms/1/members \
   -H "Authorization: Bearer {accessToken}"
 ```

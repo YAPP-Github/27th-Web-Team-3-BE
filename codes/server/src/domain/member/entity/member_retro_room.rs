@@ -20,6 +20,7 @@ pub struct Model {
     pub role: RoomRole,
     #[sea_orm(default_value = "1")]
     pub order_index: i32,
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
