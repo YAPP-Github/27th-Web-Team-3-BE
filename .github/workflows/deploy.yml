@@ -1,0 +1,152 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'codes/**'
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - 'codes/**'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: codes/server
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: codes/server
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Test
+        run: cargo test
+
+      - name: Upload artifact
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-binary
+          path: codes/server/target/release/server
+          retention-days: 1
+
+      - name: Upload fonts artifact
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-fonts
+          path: codes/server/fonts/
+          retention-days: 1
+
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-binary
+
+      - name: Download fonts artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-fonts
+          path: fonts
+
+      - name: Deploy to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "server"
+          target: "/opt/app/"
+
+      - name: Deploy fonts to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "fonts"
+          target: "/opt/app/"
+
+      - name: Create .env file
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: ENV_FILE
+          script: |
+            echo "$ENV_FILE" > /opt/app/.env
+            # PDF 환경변수 자동 추가 (secrets.ENV_FILE에 없는 경우)
+            grep -q "PDF_FONT_DIR" /opt/app/.env || echo "PDF_FONT_DIR=/opt/app/fonts" >> /opt/app/.env
+            grep -q "PDF_FONT_FAMILY" /opt/app/.env || echo "PDF_FONT_FAMILY=NanumGothic" >> /opt/app/.env
+
+      - name: Setup and restart application
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            chmod +x /opt/app/server
+
+            # systemd 서비스 파일 생성 (없으면)
+            if [ ! -f /etc/systemd/system/app.service ]; then
+              sudo tee /etc/systemd/system/app.service > /dev/null <<EOF
+            [Unit]
+            Description=Web Team 3 Backend Server
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=ubuntu
+            WorkingDirectory=/opt/app
+            ExecStart=/opt/app/server
+            Restart=always
+            RestartSec=5
+            EnvironmentFile=/opt/app/.env
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+              sudo systemctl daemon-reload
+              sudo systemctl enable app
+            fi
+
+            sudo systemctl restart app

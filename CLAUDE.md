@@ -1,22 +1,7 @@
 # Web-3 Backend Project (Rust)
 
 ## 프로젝트 개요
-
-**회고록 작성을 도와주는 AI 서비스**의 Rust 백엔드입니다.
-
-### 주요 기능
-- **회고 작성 가이드**: 작성 중인 회고 내용에 맞춰 AI가 가이드 메시지 제공
-- **말투 정제**: 작성된 회고를 선택한 말투(상냥체/정중체)로 정제
-
-## 기술 스택
-
-- **언어**: Rust 1.84+
-- **프레임워크**: Axum
-- **Async Runtime**: Tokio
-- **AI**: async-openai (OpenAI API)
-- **검증**: validator
-- **로깅**: tracing
-- **문서화**: utoipa (OpenAPI)
+회고록 작성을 도와주는 AI 서비스의 Rust 백엔드입니다.
 
 ## 디렉토리 구조
 
@@ -32,10 +17,11 @@
 │   └── server/                 # 백엔드 서버
 │       ├── Cargo.toml
 │       ├── src/
+|       |   |── config/
+|       |   |   └── mod.rs      # 설정 모듈
+|       │   |   └── app_config.rs # 애플리케이션 설정
+|       |   |   └── database.rs   # 데이터베이스 설정
 │       │   ├── main.rs
-│       │   ├── config.rs       # 환경 설정
-│       │   ├── error.rs        # 에러 타입
-│       │   ├── response.rs     # 공통 응답
 │       │   ├── utils/          # 공통 유틸리티
 │       │   │   ├── mod.rs
 │       │   │   ├── error.rs    # AppError 정의
@@ -62,17 +48,6 @@
 ```
 
 ## 빠른 시작
-
-### 환경 설정
-```bash
-# Rust 설치
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup component add rustfmt clippy
-
-# 환경 변수 설정
-cp codes/server/.env.example codes/server/.env
-# .env 파일 편집하여 API 키 설정
-```
 
 ### 빌드 및 실행
 ```bash
@@ -112,67 +87,6 @@ cargo fmt
 # 린트 (경고를 에러로)
 cargo clippy -- -D warnings
 ```
-
-## API 스펙
-
-### POST /api/ai/retrospective/guide
-회고 작성 가이드 제공
-
-**Request**
-```json
-{
-  "currentContent": "오늘 프로젝트를 진행하면서...",
-  "secretKey": "your-secret-key"
-}
-```
-
-**Response (200)**
-```json
-{
-  "isSuccess": true,
-  "code": "COMMON200",
-  "message": "성공입니다.",
-  "result": {
-    "currentContent": "오늘 프로젝트를 진행하면서...",
-    "guideMessage": "좋은 시작이에요! ..."
-  }
-}
-```
-
-### POST /api/ai/retrospective/refine
-회고 말투 정제
-
-**Request**
-```json
-{
-  "content": "오늘 일 힘들었음",
-  "toneStyle": "KIND",
-  "secretKey": "your-secret-key"
-}
-```
-
-**Response (200)**
-```json
-{
-  "isSuccess": true,
-  "code": "COMMON200",
-  "message": "성공입니다.",
-  "result": {
-    "originalContent": "오늘 일 힘들었음",
-    "refinedContent": "오늘 일이 많이 힘들었어요.",
-    "toneStyle": "KIND"
-  }
-}
-```
-
-## 에러 코드
-
-| 코드 | HTTP | 설명 |
-|------|------|------|
-| AI_001 | 401 | 유효하지 않은 비밀 키 |
-| AI_002 | 400 | 유효하지 않은 말투 스타일 (KIND/POLITE만 가능) |
-| COMMON400 | 400 | 잘못된 요청 (필드 누락 등) |
-| COMMON500 | 500 | 서버 내부 에러 |
 
 ## 개발 원칙
 
@@ -223,25 +137,17 @@ cargo clippy -- -D warnings
 | `rust-tests` | `codes/server/tests/**/*.rs` | 테스트 구조, AAA 패턴 |
 | `api-design` | `handler.rs`, `dto.rs` | 응답 형식, 검증 |
 
-### 자동화 워크플로우
-```
-[코드 작성] → [cargo fmt 자동 적용] → [검증]
-     ↓
-[/build 또는 /test 실행]
-     ↓
-[clippy 경고 확인]
-     ↓
-[커밋 전 체크리스트 확인]
-```
-
 ## 작업 순서
 
-1. 공통 유틸리티 확인 (`src/utils`)
-2. 전체 API 테스트 및 green 테스트 작성
-3. 구현
-4. 전체 테스트 실행 및 검증 (서버 실행 후 `/health` 체크가 되면 그 다음 진행)
-5. `docs/reviews/{api_name}.md` 문서 작성
-6. 코드 리뷰 체크리스트 확인
+1. **요구사항 분석**: `docs/api-specs/{api_name}.md`를 정독하여 기능 요구사항과 입출력 스펙을 파악합니다. (문서가 없을 경우 작성을 요청하거나 선행해야 합니다)
+2. **컨벤션 확인**: `docs/ai-conventions/`를 참고하여 아키텍처 및 코딩 스타일을 확인합니다.
+3. 공통 유틸리티 확인 (`src/utils`), .env.example 확인
+4. 전체 API 테스트 및 green 테스트 작성 (TDD: Red)
+5. 구현 코드 작성 (TDD: Green -> Refactor)
+6. 같은 dto 에 스웨거용 전체 dto 만들고 핸들러에 스웨거 작성 
+7. 전체 테스트 실행 및 검증 (서버 실행 후 `/health` 체크가 되면 그 다음 진행)
+8. `docs/reviews/{api_name}.md` 문서 작성
+9. 코드 리뷰 체크리스트 확인
 
 ## 코드 리뷰 체크리스트
 

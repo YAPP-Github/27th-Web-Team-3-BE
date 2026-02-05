@@ -1,0 +1,219 @@
+name: PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  pr-validation:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check PR Title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            refactor
+            test
+            chore
+
+      - name: Check PR Size
+        uses: codelytv/pr-size-labeler@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: 'size/XS'
+          xs_max_size: 10
+          s_label: 'size/S'
+          s_max_size: 100
+          m_label: 'size/M'
+          m_max_size: 500
+          l_label: 'size/L'
+          l_max_size: 1000
+          xl_label: 'size/XL'
+
+      - name: AI Label Check
+        if: contains(github.event.pull_request.title, '[AI]')
+        run: |
+          echo "AI-generated PR detected"
+          # 라벨이 존재하는지 확인하고 없으면 생성
+          if ! gh label list --json name --jq '.[].name' | grep -q '^ai-generated$'; then
+            echo "Creating ai-generated label..."
+            gh label create "ai-generated" --color "7057FF" --description "AI가 자동 생성한 PR" --force || true
+          fi
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "ai-generated"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  path-labeler:
+    name: Path-based Labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files_yaml: |
+            domain:
+              - 'codes/server/src/domain/**'
+            test:
+              - 'codes/server/tests/**'
+              - '**/*_test.rs'
+              - '**/*.test.rs'
+            documentation:
+              - 'docs/**'
+              - '**/*.md'
+              - '!CLAUDE.md'
+            cicd:
+              - '.github/**'
+              - 'ci/**'
+            config:
+              - 'codes/server/src/config/**'
+              - '**/*.toml'
+              - '**/*.yaml'
+              - '**/*.yml'
+              - '!.github/**'
+
+      - name: Ensure labels exist
+        run: |
+          # 필요한 라벨 목록과 색상 정의
+          declare -A LABELS=(
+            ["domain"]="0E8A16"
+            ["test"]="FBCA04"
+            ["documentation"]="0075CA"
+            ["ci/cd"]="D93F0B"
+            ["config"]="1D76DB"
+          )
+
+          # 기존 라벨 목록 가져오기
+          EXISTING_LABELS=$(gh label list --json name --jq '.[].name')
+
+          for label in "${!LABELS[@]}"; do
+            if ! echo "$EXISTING_LABELS" | grep -q "^${label}$"; then
+              echo "Creating label: $label"
+              gh label create "$label" --color "${LABELS[$label]}" --force || true
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add domain label
+        if: steps.changed-files.outputs.domain_any_changed == 'true'
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-label "domain"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add test label
+        if: steps.changed-files.outputs.test_any_changed == 'true'
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-label "test"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add documentation label
+        if: steps.changed-files.outputs.documentation_any_changed == 'true'
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-label "documentation"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add ci/cd label
+        if: steps.changed-files.outputs.cicd_any_changed == 'true'
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-label "ci/cd"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add config label
+        if: steps.changed-files.outputs.config_any_changed == 'true'
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-label "config"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  ci-status:
+    name: CI Status Report
+    runs-on: ubuntu-latest
+    needs: [pr-validation, path-labeler]
+    if: always()
+    steps:
+      - name: Check job results
+        id: check
+        run: |
+          if [[ "${{ needs.pr-validation.result }}" == "failure" ]] || [[ "${{ needs.path-labeler.result }}" == "failure" ]]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on CI failure
+        if: steps.check.outputs.status == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prValidationResult = '${{ needs.pr-validation.result }}';
+            const pathLabelerResult = '${{ needs.path-labeler.result }}';
+
+            let failureReasons = [];
+
+            if (prValidationResult === 'failure') {
+              failureReasons.push('- PR Validation failed (check PR title format or size)');
+            }
+            if (pathLabelerResult === 'failure') {
+              failureReasons.push('- Path-based labeling failed');
+            }
+
+            const body = `## CI Check Failed
+
+            The following checks failed:
+            ${failureReasons.join('\n')}
+
+            ### PR Title Format
+            PR titles must follow the semantic format: \`type: description\`
+
+            Valid types: \`feat\`, \`fix\`, \`docs\`, \`refactor\`, \`test\`, \`chore\`
+
+            Example: \`feat: add user authentication\`
+
+            ---
+            *This comment was automatically generated by the PR Check workflow.*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Comment on CI success
+        if: steps.check.outputs.status == 'success' && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## PR Check Passed
+
+            All validation checks have passed:
+            - PR title format is valid
+            - PR size labels have been applied
+            - Path-based labels have been applied
+
+            ---
+            *This comment was automatically generated by the PR Check workflow.*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

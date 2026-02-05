@@ -1,0 +1,39 @@
+# AI 코드 수정 범위 제한 설정
+# Phase 3: AI 코드 수정 시스템
+#
+# 이 설정은 AI가 자동으로 수정할 수 있는 코드의 범위를 제한합니다.
+# 과도한 변경을 방지하고 안전한 수정만 허용합니다.
+
+limits:
+  # 한 번에 수정 가능한 최대 파일 수
+  max_files_per_fix: 3
+
+  # 파일당 최대 수정 라인 수
+  max_lines_per_file: 50
+
+  # 수정 가능한 최대 함수 수
+  max_functions_modified: 2
+
+# 수정 허용 경로
+# 이 경로들에 해당하는 파일만 AI가 자동으로 수정할 수 있습니다.
+allowed_paths:
+  - "codes/server/src/domain/**/*.rs"
+  - "codes/server/src/utils/**/*.rs"
+
+# 수정 금지 경로
+# 이 경로들에 해당하는 파일은 절대로 AI가 자동 수정하지 않습니다.
+# 수동 검토가 필요합니다.
+forbidden_paths:
+  - "codes/server/src/main.rs"
+  - "codes/server/src/config/**"
+  - "**/*.sql"
+  - "**/*.env*"
+  - "**/migrations/**"
+
+# 금지된 작업
+# AI가 절대 수행해서는 안 되는 작업들입니다.
+forbidden_operations:
+  - "delete_file"
+  - "rename_file"
+  - "modify_cargo_toml"
+  - "modify_database_schema"

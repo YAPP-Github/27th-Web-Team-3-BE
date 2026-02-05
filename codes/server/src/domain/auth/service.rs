@@ -1,0 +1,598 @@
+use chrono::{Duration, Utc};
+use reqwest::Client;
+use sea_orm::{DbErr, RuntimeErr, *};
+use std::time::Duration as StdDuration;
+
+use super::dto::{
+    EmailLoginRequest, LogoutRequest, SignupRequest, SocialLoginRequest, SocialLoginResponse,
+    TokenRefreshRequest,
+};
+use crate::domain::member::entity::member::{self, Entity as Member, SocialType};
+use crate::state::AppState;
+use crate::utils::error::AppError;
+use crate::utils::jwt::{decode_token, encode_refresh_token, encode_signup_token, encode_token};
+
+/// OAuth 요청 타임아웃 (초)
+const OAUTH_TIMEOUT_SECS: u64 = 10;
+
+pub struct AuthService;
+
+#[derive(Debug)]
+struct SocialUserInfo {
+    email: String,
+}
+
+/// 회원가입 결과 (내부용)
+#[derive(Debug)]
+pub struct SignupResult {
+    pub member_id: i64,
+    pub nickname: String,
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+/// 이메일 로그인 결과 (내부용)
+#[derive(Debug)]
+pub struct EmailLoginResult {
+    pub is_new_member: bool,
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+/// 토큰 갱신 결과 (내부용)
+#[derive(Debug)]
+pub struct TokenRefreshResult {
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+impl AuthService {
+    /// [API-001] 소셜 로그인
+    pub async fn social_login(
+        state: AppState,
+        req: SocialLoginRequest,
+    ) -> Result<SocialLoginResponse, AppError> {
+        // 1. 인가 코드로 access_token 교환 후 유저 정보 가져오기
+        let social_info = match req.provider {
+            SocialType::Kakao => {
+                let access_token = Self::exchange_kakao_code(
+                    &req.code,
+                    &state.config.kakao_client_id,
+                    &state.config.kakao_client_secret,
+                    &req.redirect_uri,
+                )
+                .await?;
+                Self::fetch_kakao_user_info(&access_token).await?
+            }
+            SocialType::Google => {
+                let access_token = Self::exchange_google_code(
+                    &req.code,
+                    &state.config.google_client_id,
+                    &state.config.google_client_secret,
+                    &req.redirect_uri,
+                )
+                .await?;
+                Self::fetch_google_user_info(&access_token).await?
+            }
+        };
+
+        // 2. DB에서 유저 조회 (이메일 + 소셜 타입)
+        let member = Member::find()
+            .filter(member::Column::Email.eq(&social_info.email))
+            .filter(member::Column::SocialType.eq(req.provider.clone()))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        match member {
+            Some(member) => {
+                // 기존 회원: Access/Refresh Token 발급
+                let access_token = encode_token(
+                    member.member_id.to_string(),
+                    &state.config.jwt_secret,
+                    state.config.jwt_expiration,
+                )?;
+
+                let refresh_token_str = encode_refresh_token(
+                    member.member_id.to_string(),
+                    &state.config.jwt_secret,
+                    state.config.refresh_token_expiration,
+                )?;
+
+                // Refresh Token DB 저장
+                Self::store_refresh_token(
+                    &state.db,
+                    member.member_id,
+                    &refresh_token_str,
+                    state.config.refresh_token_expiration,
+                )
+                .await?;
+
+                Ok(SocialLoginResponse {
+                    is_new_member: false,
+                    access_token: Some(access_token),
+                    refresh_token: Some(refresh_token_str),
+                    signup_token: None,
+                })
+            }
+            None => {
+                // 신규 회원: Signup Token 발급 (provider 정보 포함)
+                let provider_str = match req.provider {
+                    SocialType::Kakao => "KAKAO",
+                    SocialType::Google => "GOOGLE",
+                };
+                let signup_token = encode_signup_token(
+                    social_info.email.clone(),
+                    provider_str.to_string(),
+                    &state.config.jwt_secret,
+                    state.config.signup_token_expiration,
+                )?;
+
+                Ok(SocialLoginResponse {
+                    is_new_member: true,
+                    access_token: None,
+                    refresh_token: None,
+                    signup_token: Some(signup_token),
+                })
+            }
+        }
+    }
+
+    /// [API-002] 회원가입
+    pub async fn signup(
+        state: AppState,
+        req: SignupRequest,
+        signup_token: &str,
+    ) -> Result<SignupResult, AppError> {
+        // 1. signupToken 검증
+        let claims = decode_token(signup_token, &state.config.jwt_secret)?;
+
+        // 2. 토큰 타입 확인
+        if claims.token_type.as_deref() != Some("signup") {
+            return Err(AppError::Unauthorized(
+                "유효하지 않은 토큰 타입입니다.".into(),
+            ));
+        }
+
+        // 3. 토큰에서 이메일 추출
+        let email = claims
+            .email
+            .ok_or_else(|| AppError::Unauthorized("토큰에 이메일 정보가 없습니다.".into()))?;
+
+        // 4. provider 정보 추출
+        let social_type = match claims.provider.as_deref() {
+            Some("KAKAO") => SocialType::Kakao,
+            Some("GOOGLE") => SocialType::Google,
+            _ => {
+                return Err(AppError::Unauthorized(
+                    "토큰에 유효한 provider 정보가 없습니다.".into(),
+                ))
+            }
+        };
+
+        // 5. 닉네임 중복 확인
+        let existing_nickname = Member::find()
+            .filter(member::Column::Nickname.eq(&req.nickname))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if existing_nickname.is_some() {
+            return Err(AppError::Conflict("이미 사용 중인 닉네임입니다.".into()));
+        }
+
+        // 6. 회원 생성
+        let active_model = member::ActiveModel {
+            email: Set(email),
+            nickname: Set(Some(req.nickname.clone())),
+            social_type: Set(social_type),
+            insight_count: Set(0),
+            created_at: Set(Utc::now().naive_utc()),
+            updated_at: Set(Utc::now().naive_utc()),
+            ..Default::default()
+        };
+
+        let new_member = active_model.insert(&state.db).await.map_err(|e| {
+            // DB unique constraint 위반 시 Conflict 에러 반환 (TOCTOU 경쟁 조건 방어)
+            if let DbErr::Query(RuntimeErr::SqlxError(sqlx_err)) = &e {
+                let err_str = sqlx_err.to_string();
+                if err_str.contains("UNIQUE") || err_str.contains("duplicate") {
+                    return AppError::Conflict("이미 사용 중인 닉네임입니다.".into());
+                }
+            }
+            AppError::InternalError(format!("회원가입 실패: {}", e))
+        })?;
+
+        // 7. JWT 토큰 발급
+        let access_token = encode_token(
+            new_member.member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.jwt_expiration,
+        )?;
+
+        let refresh_token_str = encode_refresh_token(
+            new_member.member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
+        // 8. Refresh Token DB 저장
+        Self::store_refresh_token(
+            &state.db,
+            new_member.member_id,
+            &refresh_token_str,
+            state.config.refresh_token_expiration,
+        )
+        .await?;
+
+        Ok(SignupResult {
+            member_id: new_member.member_id,
+            nickname: req.nickname,
+            access_token,
+            refresh_token: refresh_token_str,
+        })
+    }
+
+    /// 이메일 기반 로그인 (테스트/개발용)
+    pub async fn login_by_email(
+        state: AppState,
+        req: EmailLoginRequest,
+    ) -> Result<EmailLoginResult, AppError> {
+        // DB에서 유저 조회 (이메일 기반)
+        let member = Member::find()
+            .filter(member::Column::Email.eq(&req.email))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let member =
+            member.ok_or_else(|| AppError::Unauthorized("존재하지 않는 사용자입니다.".into()))?;
+
+        // JWT 발급
+        let access_token = encode_token(
+            member.member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.jwt_expiration,
+        )?;
+
+        let refresh_token_str = encode_refresh_token(
+            member.member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
+        // Refresh Token DB 저장
+        Self::store_refresh_token(
+            &state.db,
+            member.member_id,
+            &refresh_token_str,
+            state.config.refresh_token_expiration,
+        )
+        .await?;
+
+        Ok(EmailLoginResult {
+            is_new_member: false,
+            access_token,
+            refresh_token: refresh_token_str,
+        })
+    }
+
+    /// [API-003] 토큰 갱신
+    pub async fn refresh_token(
+        state: AppState,
+        req: TokenRefreshRequest,
+    ) -> Result<TokenRefreshResult, AppError> {
+        // 1. Refresh Token JWT 검증
+        let claims = decode_token(&req.refresh_token, &state.config.jwt_secret).map_err(|_| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        // 2. 토큰 타입 확인
+        if claims.token_type.as_deref() != Some("refresh") {
+            return Err(AppError::InvalidRefreshToken(
+                "유효하지 않거나 만료된 Refresh Token입니다.".into(),
+            ));
+        }
+
+        // 3. claims.sub(member_id)로 회원 조회 (PK 조회로 효율적)
+        let member_id: i64 = claims.sub.parse().map_err(|_| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        let stored_member = Member::find_by_id(member_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let stored_member = stored_member.ok_or_else(|| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        // 4. 저장된 토큰과 요청 토큰 일치 확인
+        let stored_token = stored_member.refresh_token.as_ref().ok_or_else(|| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        if stored_token != &req.refresh_token {
+            return Err(AppError::InvalidRefreshToken(
+                "유효하지 않거나 만료된 Refresh Token입니다.".into(),
+            ));
+        }
+
+        // 5. 만료 시간 확인
+        let expires_at = stored_member.refresh_token_expires_at.ok_or_else(|| {
+            AppError::InvalidRefreshToken("유효하지 않거나 만료된 Refresh Token입니다.".into())
+        })?;
+
+        if expires_at < Utc::now().naive_utc() {
+            // 만료된 토큰 삭제
+            if let Err(e) = Self::clear_refresh_token(&state.db, member_id).await {
+                tracing::warn!(
+                    "Failed to clear expired refresh token for member {}: {:?}",
+                    member_id,
+                    e
+                );
+            }
+            return Err(AppError::InvalidRefreshToken(
+                "유효하지 않거나 만료된 Refresh Token입니다.".into(),
+            ));
+        }
+
+        // 5. 새 토큰 발급
+        let new_access_token = encode_token(
+            member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.jwt_expiration,
+        )?;
+
+        let new_refresh_token = encode_refresh_token(
+            member_id.to_string(),
+            &state.config.jwt_secret,
+            state.config.refresh_token_expiration,
+        )?;
+
+        // 6. 새 Refresh Token DB 저장 (기존 토큰 자동 덮어쓰기)
+        Self::store_refresh_token(
+            &state.db,
+            member_id,
+            &new_refresh_token,
+            state.config.refresh_token_expiration,
+        )
+        .await?;
+
+        Ok(TokenRefreshResult {
+            access_token: new_access_token,
+            refresh_token: new_refresh_token,
+        })
+    }
+
+    /// [API-004] 로그아웃
+    pub async fn logout(state: AppState, req: LogoutRequest, user_id: i64) -> Result<(), AppError> {
+        // 1. Refresh Token JWT 검증
+        let claims = decode_token(&req.refresh_token, &state.config.jwt_secret).map_err(|_| {
+            AppError::InvalidToken("이미 로그아웃되었거나 유효하지 않은 토큰입니다.".into())
+        })?;
+
+        // 2. 토큰 타입 확인
+        if claims.token_type.as_deref() != Some("refresh") {
+            return Err(AppError::InvalidToken(
+                "이미 로그아웃되었거나 유효하지 않은 토큰입니다.".into(),
+            ));
+        }
+
+        // 3. Access Token의 user_id와 Refresh Token의 sub 일치 확인
+        // 타인의 Refresh Token을 무효화하는 공격 방지
+        if claims.sub != user_id.to_string() {
+            return Err(AppError::InvalidToken(
+                "토큰 소유자가 일치하지 않습니다.".into(),
+            ));
+        }
+
+        // 4. DB에서 해당 회원의 Refresh Token 삭제
+        Self::clear_refresh_token(&state.db, user_id).await?;
+
+        Ok(())
+    }
+
+    /// 회원의 Refresh Token 삭제 (로그아웃/만료 시)
+    async fn clear_refresh_token(db: &DatabaseConnection, member_id: i64) -> Result<(), AppError> {
+        let update_model = member::ActiveModel {
+            member_id: Set(member_id),
+            refresh_token: Set(None),
+            refresh_token_expires_at: Set(None),
+            updated_at: Set(Utc::now().naive_utc()),
+            ..Default::default()
+        };
+
+        update_model
+            .update(db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("Refresh Token 초기화 실패: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Refresh Token을 member 테이블에 저장 (기존 토큰 덮어쓰기)
+    async fn store_refresh_token(
+        db: &DatabaseConnection,
+        member_id: i64,
+        token: &str,
+        expiration_seconds: i64,
+    ) -> Result<(), AppError> {
+        let expires_at = Utc::now()
+            .checked_add_signed(Duration::seconds(expiration_seconds))
+            .ok_or_else(|| AppError::InternalError("유효하지 않은 토큰 만료 시간입니다.".into()))?
+            .naive_utc();
+
+        let update_model = member::ActiveModel {
+            member_id: Set(member_id),
+            refresh_token: Set(Some(token.to_string())),
+            refresh_token_expires_at: Set(Some(expires_at)),
+            updated_at: Set(Utc::now().naive_utc()),
+            ..Default::default()
+        };
+
+        update_model
+            .update(db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("Refresh Token 저장 실패: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// 하위 호환성을 위한 login 메서드 (deprecated)
+    #[deprecated(note = "Use social_login instead")]
+    #[allow(dead_code)]
+    pub async fn login(
+        state: AppState,
+        req: SocialLoginRequest,
+    ) -> Result<SocialLoginResponse, AppError> {
+        Self::social_login(state, req).await
+    }
+
+    /// OAuth HTTP 클라이언트 생성 (타임아웃 설정)
+    fn oauth_client() -> Result<Client, AppError> {
+        Client::builder()
+            .timeout(StdDuration::from_secs(OAUTH_TIMEOUT_SECS))
+            .build()
+            .map_err(|e| AppError::InternalError(format!("HTTP client init failed: {}", e)))
+    }
+
+    /// 카카오 인가 코드로 access_token 교환
+    async fn exchange_kakao_code(
+        code: &str,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uri: &str,
+    ) -> Result<String, AppError> {
+        let client = Self::oauth_client()?;
+        let response = client
+            .post("https://kauth.kakao.com/oauth/token")
+            .form(&[
+                ("grant_type", "authorization_code"),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("redirect_uri", redirect_uri),
+                ("code", code),
+            ])
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Kakao token exchange failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!("Kakao token exchange error: {}", error_body);
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 인가 코드입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        json["access_token"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| AppError::SocialAuthFailed("토큰 응답 파싱 실패".into()))
+    }
+
+    /// 구글 인가 코드로 access_token 교환
+    async fn exchange_google_code(
+        code: &str,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uri: &str,
+    ) -> Result<String, AppError> {
+        let client = Self::oauth_client()?;
+        let response = client
+            .post("https://oauth2.googleapis.com/token")
+            .form(&[
+                ("grant_type", "authorization_code"),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+                ("redirect_uri", redirect_uri),
+                ("code", code),
+            ])
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Google token exchange failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            tracing::error!("Google token exchange error: {}", error_body);
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 인가 코드입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        json["access_token"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| AppError::SocialAuthFailed("토큰 응답 파싱 실패".into()))
+    }
+
+    /// 카카오 access_token으로 유저 정보 조회
+    async fn fetch_kakao_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
+        let client = Self::oauth_client()?;
+        let response = client
+            .get("https://kapi.kakao.com/v2/user/me")
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Kakao API req failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 소셜 토큰입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        let email = json["kakao_account"]["email"]
+            .as_str()
+            .ok_or(AppError::ValidationError("Kakao 이메일 정보 없음".into()))?
+            .to_string();
+
+        Ok(SocialUserInfo { email })
+    }
+
+    /// 구글 access_token으로 유저 정보 조회
+    async fn fetch_google_user_info(token: &str) -> Result<SocialUserInfo, AppError> {
+        let client = Self::oauth_client()?;
+        let response = client
+            .get("https://www.googleapis.com/oauth2/v2/userinfo")
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .map_err(|e| AppError::InternalError(format!("Google API req failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(AppError::SocialAuthFailed(
+                "유효하지 않은 소셜 토큰입니다.".into(),
+            ));
+        }
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::JsonParseFailed(e.to_string()))?;
+
+        let email = json["email"]
+            .as_str()
+            .ok_or(AppError::ValidationError("Google 이메일 정보 없음".into()))?
+            .to_string();
+
+        Ok(SocialUserInfo { email })
+    }
+}

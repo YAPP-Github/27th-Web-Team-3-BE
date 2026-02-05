@@ -1,0 +1,73 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web Framework
+axum = { version = "0.7", features = ["json", "macros"] }
+axum-extra = { version = "0.9", features = ["cookie"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+
+# OpenAI API
+async-openai = "0.25"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "time"] }
+time = { version = "0.3", features = ["formatting"] }
+
+# Environment
+dotenvy = "0.15"
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Random
+rand = "0.8"
+
+# OpenAPI Documentation
+utoipa = { version = "4", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "7", features = ["axum"] }
+
+# Error handling
+thiserror = "1.0"
+
+# UUID
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Async trait support
+async-trait = "0.1"
+
+# Regex for log parsing
+regex = "1.10"
+
+# HMAC/SHA256 for webhook signature verification
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+# Ed25519 for Discord signature verification
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+
+sea-orm = { version = "1.1.19", features = ["sqlx-mysql", "runtime-tokio-native-tls", "macros"] }
+
+# PDF Generation
+genpdf = "0.2"
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+reqwest = { version = "0.13.1", features = ["json", "form"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+hyper = "1.0"
