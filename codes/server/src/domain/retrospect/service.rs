@@ -124,6 +124,7 @@ impl RetrospectService {
                         member_id: Set(Some(member_id)),
                         retrospect_room_id: Set(result.retrospect_room_id),
                         role: Set(RoomRole::Owner),
+                        created_at: Set(now),
                         ..Default::default()
                     };
 
@@ -188,6 +189,7 @@ impl RetrospectService {
             member_id: Set(Some(member_id)),
             retrospect_room_id: Set(room.retrospect_room_id),
             role: Set(RoomRole::Member),
+            created_at: Set(now),
             ..Default::default()
         };
 
