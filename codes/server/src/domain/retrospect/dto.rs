@@ -82,6 +82,32 @@ pub struct SuccessRetroRoomListResponse {
     pub result: Vec<RetroRoomListItem>,
 }
 
+// ============== API-030: 회고방 멤버 목록 조회 ==============
+
+/// 회고방 멤버 아이템
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetroRoomMemberItem {
+    /// 멤버 고유 식별자
+    pub member_id: i64,
+    /// 멤버 닉네임
+    pub nickname: String,
+    /// 회고방 내 역할 ("OWNER" 또는 "MEMBER")
+    pub role: String,
+    /// 회고방 참여 일시 (ISO 8601 형식)
+    pub joined_at: String,
+}
+
+/// Swagger용 회고방 멤버 목록 조회 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessRetroRoomMembersResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: Vec<RetroRoomMemberItem>,
+}
+
 // ============== API-007: 회고방 순서 변경 ==============
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
@@ -164,6 +190,8 @@ pub struct RetrospectListItem {
     pub retrospect_method: String,
     pub retrospect_date: String,
     pub retrospect_time: String,
+    /// 해당 회고의 참여자 수
+    pub participant_count: i64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

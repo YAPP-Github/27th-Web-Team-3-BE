@@ -35,12 +35,12 @@ use super::dto::{
     CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
     DraftSaveResponse, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
     ListCommentsResponse, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
-    RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetrospectDetailResponse,
-    RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams,
-    SearchRetrospectItem, StorageQueryParams, StorageResponse, StorageRetrospectItem,
-    StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest, SubmitRetrospectResponse,
-    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
-    REFERENCE_URL_MAX_LENGTH,
+    RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetroRoomMemberItem,
+    RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
+    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
+    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
+    UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -240,6 +240,121 @@ impl RetrospectService {
             .collect();
 
         Ok(result)
+    }
+
+    /// 회고방 멤버 목록 조회
+    /// - member_retro_room 테이블과 member 테이블을 조인하여 조회
+    /// - 정렬: role 기준 (OWNER 먼저), 동일 role 내에서는 가입일 오름차순
+    pub async fn list_retro_room_members(
+        state: AppState,
+        member_id: i64,
+        retro_room_id: i64,
+    ) -> Result<Vec<RetroRoomMemberItem>, AppError> {
+        // 1. 회고방 존재 여부 확인
+        let room = RetroRoom::find_by_id(retro_room_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if room.is_none() {
+            return Err(AppError::RetroRoomNotFound(
+                "존재하지 않는 회고방입니다.".into(),
+            ));
+        }
+
+        // 2. 요청자가 해당 회고방의 멤버인지 확인
+        let member_room = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if member_room.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방에 접근 권한이 없습니다.".into(),
+            ));
+        }
+
+        // 3. 회고방의 모든 멤버십 정보 조회
+        let member_rooms = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        // 4. 멤버 ID 목록 추출
+        let member_ids: Vec<i64> = member_rooms.iter().filter_map(|mr| mr.member_id).collect();
+
+        if member_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // 5. 멤버 정보 조회
+        let members = member::Entity::find()
+            .filter(member::Column::MemberId.is_in(member_ids))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        // 6. 멤버 정보를 HashMap으로 변환 (member_id -> member)
+        let member_map: HashMap<i64, member::Model> =
+            members.into_iter().map(|m| (m.member_id, m)).collect();
+
+        // 7. 결과 리스트 생성 (role, member_retrospect_room_id 순으로 정렬)
+        let mut result: Vec<(member_retro_room::Model, Option<member::Model>)> = member_rooms
+            .into_iter()
+            .map(|mr| {
+                let member_opt = mr.member_id.and_then(|id| member_map.get(&id).cloned());
+                (mr, member_opt)
+            })
+            .collect();
+
+        // OWNER 먼저, 그 다음 MEMBER
+        // 동일 role 내에서는 member_retrospect_room_id 오름차순 (가입일 오름차순)
+        result.sort_by(|(mr_a, _), (mr_b, _)| match (&mr_a.role, &mr_b.role) {
+            (RoomRole::Owner, RoomRole::Member) => std::cmp::Ordering::Less,
+            (RoomRole::Member, RoomRole::Owner) => std::cmp::Ordering::Greater,
+            _ => mr_a
+                .member_retrospect_room_id
+                .cmp(&mr_b.member_retrospect_room_id),
+        });
+
+        // 8. DTO로 변환
+        let items: Vec<RetroRoomMemberItem> = result
+            .into_iter()
+            .filter_map(|(mr, member_opt)| {
+                let member = member_opt?;
+                let nickname = member
+                    .nickname
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let role = match mr.role {
+                    RoomRole::Owner => "OWNER".to_string(),
+                    RoomRole::Member => "MEMBER".to_string(),
+                };
+                // created_at은 member 테이블의 created_at을 사용 (회원 가입일)
+                // 회고방 가입일을 별도로 추적하지 않으므로 member_retrospect_room_id를
+                // 가입 순서의 대리자로 사용하고, 표시용으로는 member.created_at 사용
+                let joined_at = member.created_at.format("%Y-%m-%dT%H:%M:%S").to_string();
+
+                Some(RetroRoomMemberItem {
+                    member_id: member.member_id,
+                    nickname,
+                    role,
+                    joined_at,
+                })
+            })
+            .collect();
+
+        info!(
+            retro_room_id = retro_room_id,
+            member_count = items.len(),
+            "회고방 멤버 목록 조회 완료"
+        );
+
+        Ok(items)
     }
 
     /// API-007: 회고방 순서 변경
@@ -599,16 +714,26 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        let result: Vec<RetrospectListItem> = retrospects
-            .into_iter()
-            .map(|r| RetrospectListItem {
+        // 4. 각 회고별 참여자 수 조회
+        use crate::domain::member::entity::member_retro::Entity as MemberRetro;
+        let mut result: Vec<RetrospectListItem> = Vec::with_capacity(retrospects.len());
+
+        for r in retrospects {
+            let participant_count = MemberRetro::find()
+                .filter(member_retro::Column::RetrospectId.eq(r.retrospect_id))
+                .count(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+            result.push(RetrospectListItem {
                 retrospect_id: r.retrospect_id,
                 project_name: r.title,
                 retrospect_method: r.retrospect_method.to_string(),
                 retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
                 retrospect_time: r.start_time.format("%H:%M").to_string(),
-            })
-            .collect();
+                participant_count: participant_count as i64,
+            });
+        }
 
         Ok(result)
     }

@@ -19,9 +19,10 @@ use super::dto::{
     JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery,
     ListCommentsResponse, ReferenceItem, ResponseCategory, ResponsesListResponse,
     ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
-    RetrospectDetailResponse, RetrospectListItem, SearchQueryParams, SearchRetrospectItem,
-    StorageQueryParams, StorageResponse, SubmitRetrospectRequest, SubmitRetrospectResponse,
-    UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
+    RetroRoomMemberItem, RetrospectDetailResponse, RetrospectListItem, SearchQueryParams,
+    SearchRetrospectItem, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
+    UpdateRetroRoomOrderRequest,
 };
 use super::service::RetrospectService;
 
@@ -123,6 +124,40 @@ pub async fn list_retro_rooms(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "참여 중인 회고방 목록 조회를 성공했습니다.",
+    )))
+}
+
+/// 회고방 멤버 목록 조회 API (API-030)
+///
+/// 특정 회고방에 참여한 모든 멤버 목록을 조회합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retro-rooms/{retro_room_id}/members",
+    params(
+        ("retro_room_id" = i64, Path, description = "회고방 ID")
+    ),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "회고방 멤버 목록 조회 성공", body = SuccessRetroRoomMembersResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 404, description = "회고방 없음", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn list_retro_room_members(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(retro_room_id): Path<i64>,
+) -> Result<Json<BaseResponse<Vec<RetroRoomMemberItem>>>, AppError> {
+    let member_id = user.user_id()?;
+
+    let result =
+        RetrospectService::list_retro_room_members(state, member_id, retro_room_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "회고방 멤버 목록 조회를 성공했습니다.",
     )))
 }
 
