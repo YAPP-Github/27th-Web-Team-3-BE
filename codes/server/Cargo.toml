@@ -24,6 +24,7 @@ async-openai = "0.25"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "time"] }
+tracing-appender = "0.2"
 time = { version = "0.3", features = ["formatting"] }
 
 # Environment
