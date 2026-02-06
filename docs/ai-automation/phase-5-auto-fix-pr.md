@@ -1,8 +1,8 @@
 # Phase 5: Auto-Fix & PR Automation
 
-> **버전**: 1.0
+> **버전**: 1.1
 > **최종 수정**: 2026-02-06
-> **상태**: 구현 대기
+> **상태**: 구현 완료
 > **의존성**: Phase 4 완료 필수
 
 ---
@@ -154,416 +154,179 @@ Phase 4에서 Issue가 자동 생성되지만, 실제 코드 수정은 여전히
 
 ```
 scripts/
-├── log-watcher.sh          # Phase 2 (기존)
+├── log-watcher.sh          # Phase 2 (기존, Phase 5 연동 추가)
 ├── discord-alert.sh        # Phase 2 (기존)
 ├── diagnostic-agent.py     # Phase 3 (기존)
 ├── create-issue.sh         # Phase 4 (기존)
-├── setup-labels.sh         # Phase 4 (기존)
-├── auto-fix.sh             # Phase 5 (신규) ⬅️
-└── create-pr.sh            # Phase 5 (신규) ⬅️
+├── setup-labels.sh         # Phase 4 (기존, auto-fix 라벨 포함)
+├── auto-fix.sh             # Phase 5 (구현 완료) ✅
+├── create-pr.sh            # Phase 5 (구현 완료) ✅
+├── rollback-fix.sh         # Phase 5 (구현 완료) ✅
+└── verify-fix.sh           # Phase 5 (구현 완료) ✅
 ```
 
 ---
 
 ## 3. 구현 상세
 
-### 3.1 Auto-Fix Agent
+### 3.1 Auto-Fix Agent (구현 완료)
 
 **파일**: `scripts/auto-fix.sh`
 
+**주요 기능:**
+- Claude Code CLI 연동 (`claude --dangerously-skip-permissions -p`)
+- Rate Limiting (일일 5개 PR 제한)
+- 수정 범위 검증 (`validate_fix_scope`)
+- 롤백 및 정리 로직
+- Draft PR 자동 생성
+- Discord 알림
+
+**핵심 로직:**
+
 ```bash
-#!/bin/bash
-set -euo pipefail
+# 주요 함수들
 
-#######################################
-# Auto-Fix Agent
-# Phase 5: Auto-Fix & PR Automation
-#######################################
+# 수정 범위 검증 - 허용/금지 키워드 체크
+validate_fix_scope() {
+    local fix_suggestion="$1"
+    local fix_lower=$(echo "$fix_suggestion" | tr '[:upper:]' '[:lower:]')
 
-# 입력 검증
-if [ -z "${1:-}" ]; then
-    echo "Usage: $0 <diagnostic_json>"
-    exit 1
-fi
+    # 불허 키워드 (아키텍처, 비즈니스 로직, 보안 등)
+    local forbidden_patterns=(
+        "architecture" "아키텍처" "business logic" "비즈니스 로직"
+        "security" "보안" "authentication" "인증" "authorization" "권한"
+        "database schema" "데이터베이스 스키마" "migration" "마이그레이션"
+    )
 
-DIAGNOSTIC_JSON="$1"
-
-# JSON 파싱
-ERROR_CODE=$(echo "$DIAGNOSTIC_JSON" | jq -r '.error_code // "UNKNOWN"')
-FIX_SUGGESTION=$(echo "$DIAGNOSTIC_JSON" | jq -r '.fix_suggestion // ""')
-AUTO_FIXABLE=$(echo "$DIAGNOSTIC_JSON" | jq -r '.auto_fixable // false')
-ROOT_CAUSE=$(echo "$DIAGNOSTIC_JSON" | jq -r '.root_cause // ""')
-
-echo "=== Auto-Fix 프로세스 시작 ==="
-echo "에러 코드: $ERROR_CODE"
-echo "자동 수정 가능: $AUTO_FIXABLE"
-
-#######################################
-# 사전 검증
-#######################################
-
-# auto_fixable 체크
-if [ "$AUTO_FIXABLE" != "true" ]; then
-    echo "자동 수정 불가능한 에러입니다."
-    exit 0
-fi
-
-# fix_suggestion 체크
-if [ -z "$FIX_SUGGESTION" ]; then
-    echo "수정 제안이 없습니다. Issue만 생성합니다."
-    ./scripts/create-issue.sh "$DIAGNOSTIC_JSON"
-    exit 0
-fi
-
-#######################################
-# Rate Limiting (일일 5개 PR)
-#######################################
-RATE_LIMIT_FILE="/tmp/auto-fix-rate-limit"
-TODAY=$(date +%Y-%m-%d)
-
-check_rate_limit() {
-    if [ -f "$RATE_LIMIT_FILE" ]; then
-        LAST_DATE=$(head -1 "$RATE_LIMIT_FILE")
-        if [ "$LAST_DATE" = "$TODAY" ]; then
-            COUNT=$(tail -1 "$RATE_LIMIT_FILE")
-            if [ "$COUNT" -ge 5 ]; then
-                echo "일일 PR 생성 제한 (5개) 도달"
-                return 1
-            fi
-        else
-            # 새로운 날짜, 리셋
-            echo "$TODAY" > "$RATE_LIMIT_FILE"
-            echo "0" >> "$RATE_LIMIT_FILE"
-        fi
-    else
-        echo "$TODAY" > "$RATE_LIMIT_FILE"
-        echo "0" >> "$RATE_LIMIT_FILE"
-    fi
-    return 0
+    # 허용 키워드 (타임아웃, 재시도, 로깅, 오타 등)
+    local allowed_patterns=(
+        "timeout" "타임아웃" "retry" "재시도" "log" "로그"
+        "null" "check" "체크" "config" "설정" "patch" "패치"
+    )
+    # ...
 }
 
-increment_rate_limit() {
-    COUNT=$(tail -1 "$RATE_LIMIT_FILE")
-    NEW_COUNT=$((COUNT + 1))
-    echo "$TODAY" > "$RATE_LIMIT_FILE"
-    echo "$NEW_COUNT" >> "$RATE_LIMIT_FILE"
-    echo "오늘 생성된 PR: $NEW_COUNT/5"
+# Claude Code CLI 호출
+apply_fix() {
+    local fix_suggestion="$1"
+    local target="${2:-codes/server/src}"
+    local error_code="${3:-UNKNOWN}"
+
+    # --dangerously-skip-permissions: CI/CD 자동화 환경용
+    claude --dangerously-skip-permissions -p "$prompt"
 }
 
-if ! check_rate_limit; then
-    echo "Rate limit 도달. 내일 다시 시도합니다."
-    echo "Issue만 생성합니다."
-    ./scripts/create-issue.sh "$DIAGNOSTIC_JSON"
-    exit 0
-fi
-
-#######################################
-# 브랜치 생성
-#######################################
-TIMESTAMP=$(date +%Y%m%d%H%M%S)
-BRANCH="fix/auto-${ERROR_CODE}-${TIMESTAMP}"
-ORIGINAL_BRANCH=$(git branch --show-current)
-
-echo "브랜치 생성: $BRANCH"
-git checkout -b "$BRANCH"
-
-# 롤백 함수
-rollback() {
-    echo "롤백 수행 중..."
-    git checkout "$ORIGINAL_BRANCH"
-    git branch -D "$BRANCH" 2>/dev/null || true
-    echo "롤백 완료"
-}
-
-# 에러 시 롤백
-trap 'rollback' ERR
-
-#######################################
-# Claude Code CLI로 수정 적용
-#######################################
-echo "Claude Code로 수정 적용 중..."
-
-# Claude Code CLI 실행
-# --print 옵션으로 출력만 수행
-claude --print "
-당신은 Rust 백엔드 코드를 수정하는 AI입니다.
-다음 규칙을 반드시 따르세요:
-
-1. 최소한의 변경만 수행하세요
-2. 기존 코드 스타일을 유지하세요
-3. 테스트 코드는 수정하지 마세요
-4. 다음 파일은 절대 수정하지 마세요:
-   - main.rs
-   - config/
-   - migrations/
-   - .env*
-   - *.sql
-   - Cargo.toml
-
-수정 내용:
-$FIX_SUGGESTION
-
-에러 코드: $ERROR_CODE
-근본 원인: $ROOT_CAUSE
-"
-
-#######################################
-# 변경사항 확인
-#######################################
-if [ -z "$(git status --porcelain)" ]; then
-    echo "변경사항 없음. 롤백합니다."
-    rollback
-    echo "Issue만 생성합니다."
-    ./scripts/create-issue.sh "$DIAGNOSTIC_JSON"
-    exit 0
-fi
-
-echo "변경된 파일:"
-git status --short
-
-#######################################
-# 금지 파일 변경 체크
-#######################################
-FORBIDDEN_PATTERNS="main.rs|config/|migrations/|\.env|\.sql|Cargo.toml"
-CHANGED_FILES=$(git status --porcelain | awk '{print $2}')
-
-for file in $CHANGED_FILES; do
-    if echo "$file" | grep -qE "$FORBIDDEN_PATTERNS"; then
-        echo "ERROR: 금지된 파일이 변경되었습니다: $file"
-        rollback
-        ./scripts/create-issue.sh "$DIAGNOSTIC_JSON"
-        exit 1
-    fi
-done
-
-#######################################
 # 테스트 실행
-#######################################
-echo "테스트 실행 중..."
-cd codes/server
-
-# cargo test
-echo "1/2: cargo test..."
-if ! cargo test 2>&1; then
-    echo "테스트 실패!"
-    cd ../..
-    rollback
-
-    # 실패 정보 추가하여 Issue 생성
-    FAIL_JSON=$(echo "$DIAGNOSTIC_JSON" | jq '. + {"auto_fix_failed": true, "fail_reason": "cargo test failed"}')
-    ./scripts/create-issue.sh "$FAIL_JSON"
-
-    # Discord 알림
-    ./scripts/discord-alert.sh "warning" "Auto-Fix 실패" \
-        "에러 코드: $ERROR_CODE\n실패 원인: 테스트 실패\n\n수동 수정이 필요합니다."
-    exit 1
-fi
-
-# cargo clippy
-echo "2/2: cargo clippy..."
-if ! cargo clippy -- -D warnings 2>&1; then
-    echo "Clippy 검사 실패!"
-    cd ../..
-    rollback
-
-    FAIL_JSON=$(echo "$DIAGNOSTIC_JSON" | jq '. + {"auto_fix_failed": true, "fail_reason": "cargo clippy failed"}')
-    ./scripts/create-issue.sh "$FAIL_JSON"
-
-    ./scripts/discord-alert.sh "warning" "Auto-Fix 실패" \
-        "에러 코드: $ERROR_CODE\n실패 원인: Clippy 검사 실패\n\n수동 수정이 필요합니다."
-    exit 1
-fi
-
-cd ../..
-echo "모든 테스트 통과!"
-
-#######################################
-# 커밋 및 푸시
-#######################################
-echo "변경사항 커밋 중..."
-
-git add -A
-git commit -m "$(cat <<EOF
-fix: [$ERROR_CODE] 자동 수정
-
-$FIX_SUGGESTION
-
-근본 원인: $ROOT_CAUSE
-
-Co-Authored-By: AI Monitor <ai-monitor@yapp.co.kr>
-EOF
-)"
-
-echo "원격 저장소에 푸시 중..."
-git push -u origin "$BRANCH"
-
-#######################################
-# Draft PR 생성
-#######################################
-echo "Draft PR 생성 중..."
-./scripts/create-pr.sh "$BRANCH" "$DIAGNOSTIC_JSON"
-
-# Rate limit 증가
-increment_rate_limit
-
-# 원래 브랜치로 복귀
-git checkout "$ORIGINAL_BRANCH"
-
-echo "=== Auto-Fix 프로세스 완료 ==="
+run_tests() {
+    cargo test --manifest-path "$SERVER_DIR/Cargo.toml"
+    cargo clippy --manifest-path "$SERVER_DIR/Cargo.toml" -- -D warnings
+}
 ```
 
-### 3.2 Draft PR 생성
+**실행 흐름:**
+1. JSON 입력 검증 및 `auto_fixable` 체크
+2. Rate Limit 확인 (일일 5개)
+3. 수정 범위 검증 (`validate_fix_scope`)
+4. Worktree 상태 확인 (미커밋 변경 방지)
+5. 브랜치 생성 (`fix/auto-{ERROR_CODE}-{TIMESTAMP}`)
+6. Claude Code CLI로 수정 적용
+7. 테스트 실행 (cargo test + clippy)
+8. 커밋 및 푸시
+9. Draft PR 생성
+10. Discord 알림
+
+### 3.2 범용 PR 생성 스크립트 (구현 완료)
 
 **파일**: `scripts/create-pr.sh`
 
+**주요 기능:**
+- 범용 PR 생성 (Auto-Fix 외 일반 용도로도 사용 가능)
+- PR 타입 지원 (FEAT, FIX, REFACTOR, DOCS, TEST)
+- 자동 라벨 할당 (경로 기반 감지)
+- 변경사항 요약 자동 생성
+- Draft PR 옵션
+
+**사용법:**
+
 ```bash
-#!/bin/bash
-set -euo pipefail
+# 기능 추가 PR 생성
+./scripts/create-pr.sh -t FEAT -T "회고 좋아요 토글 API 구현"
 
-#######################################
-# Draft PR 생성 스크립트
-# Phase 5: Auto-Fix & PR Automation
-#######################################
+# 버그 수정 Draft PR 생성
+./scripts/create-pr.sh -t FIX -T "회고 삭제 시 500 에러 수정" --draft
 
-if [ -z "${1:-}" ] || [ -z "${2:-}" ]; then
-    echo "Usage: $0 <branch> <diagnostic_json>"
-    exit 1
-fi
-
-BRANCH="$1"
-DIAGNOSTIC_JSON="$2"
-
-# JSON 파싱
-ERROR_CODE=$(echo "$DIAGNOSTIC_JSON" | jq -r '.error_code // "UNKNOWN"')
-ROOT_CAUSE=$(echo "$DIAGNOSTIC_JSON" | jq -r '.root_cause // ""')
-FIX_SUGGESTION=$(echo "$DIAGNOSTIC_JSON" | jq -r '.fix_suggestion // ""')
-IMPACT=$(echo "$DIAGNOSTIC_JSON" | jq -r '.impact // ""')
-
-#######################################
-# 변경사항 분석
-#######################################
-CHANGED_FILES=$(git diff origin/dev..HEAD --name-only | head -10)
-DIFF_STAT=$(git diff origin/dev..HEAD --stat | tail -1)
-
-#######################################
-# Draft PR 생성
-#######################################
-echo "Draft PR 생성 중..."
-
-PR_URL=$(gh pr create \
-    --draft \
-    --title "fix: [$ERROR_CODE] 자동 수정" \
-    --label "auto-fix,ai-generated" \
-    --base dev \
-    --body "$(cat <<EOF
-## AI 자동 수정 PR
-
-> **이 PR은 AI에 의해 자동 생성되었습니다. 반드시 리뷰 후 머지하세요.**
-
-### 에러 정보
-
-| 항목 | 내용 |
-|------|------|
-| 에러 코드 | \`$ERROR_CODE\` |
-| 브랜치 | \`$BRANCH\` |
-| 생성 시간 | $(date -u +"%Y-%m-%dT%H:%M:%SZ") |
-
-### 근본 원인
-
-$ROOT_CAUSE
-
-### 수정 내용
-
-$FIX_SUGGESTION
-
-### 영향 범위
-
-$IMPACT
-
-### 변경된 파일
-
-\`\`\`
-$CHANGED_FILES
-\`\`\`
-
-### 변경 통계
-
-\`\`\`
-$DIFF_STAT
-\`\`\`
-
-### 자동 검증 결과
-
-- [x] \`cargo test\` 통과
-- [x] \`cargo clippy -- -D warnings\` 통과
-- [x] 금지 파일 변경 없음
-
-### 리뷰 체크리스트
-
-- [ ] 수정 내용이 근본 원인을 해결하는가?
-- [ ] 비즈니스 로직에 부정적 영향이 없는가?
-- [ ] 추가 테스트 케이스가 필요한가?
-- [ ] 성능에 영향이 없는가?
-
----
-
-<details>
-<summary>진단 원본 데이터</summary>
-
-\`\`\`json
-$DIAGNOSTIC_JSON
-\`\`\`
-
-</details>
-
----
-
-*이 PR은 AI Monitor에 의해 자동 생성되었습니다.*
-
-Co-Authored-By: AI Monitor <ai-monitor@yapp.co.kr>
-EOF
-)")
-
-echo "Draft PR 생성 완료: $PR_URL"
-
-#######################################
-# Issue와 연결 (있는 경우)
-#######################################
-# 동일 에러코드로 열린 이슈 찾기
-RELATED_ISSUE=$(gh issue list \
-    --label "ai-generated" \
-    --state open \
-    --search "in:title $ERROR_CODE" \
-    --json number \
-    --jq '.[0].number // empty' 2>/dev/null || echo "")
-
-if [ -n "$RELATED_ISSUE" ]; then
-    echo "관련 이슈 #$RELATED_ISSUE 에 PR 연결 코멘트 추가..."
-    gh issue comment "$RELATED_ISSUE" --body "$(cat <<EOF
-## Auto-Fix PR 생성됨
-
-이 이슈에 대한 자동 수정 PR이 생성되었습니다.
-
-**PR**: $PR_URL
-
-리뷰 후 머지해주세요.
-
----
-*AI Monitor 자동 코멘트*
-EOF
-)"
-fi
-
-#######################################
-# Discord 알림
-#######################################
-if [ -f "./scripts/discord-alert.sh" ]; then
-    ./scripts/discord-alert.sh "info" "Auto-Fix PR 생성" \
-        "에러 코드: $ERROR_CODE\nPR: $PR_URL\n\n리뷰가 필요합니다."
-fi
-
-echo "PR 생성 프로세스 완료"
+# 커스텀 본문과 리뷰어 지정
+./scripts/create-pr.sh -t REFACTOR -T "AI 서비스 모듈 분리" -B pr-body.md -r "team-lead"
 ```
+
+**핵심 기능:**
+
+```bash
+# 변경된 파일 기반 라벨 자동 할당
+get_auto_labels() {
+    local labels=("ai-generated")
+
+    if echo "$changed_files" | grep -q "^codes/server/src/domain/"; then
+        labels+=("domain")
+    fi
+    if echo "$changed_files" | grep -q "^codes/server/tests/"; then
+        labels+=("test")
+    fi
+    if echo "$changed_files" | grep -q "^docs/"; then
+        labels+=("documentation")
+    fi
+    # ...
+}
+
+# 변경사항 요약 자동 생성
+generate_changes_summary() {
+    # Added, Modified, Deleted 섹션 자동 생성
+    # 커밋 메시지 요약 포함
+}
+```
+
+### 3.3 롤백 스크립트 (구현 완료)
+
+**파일**: `scripts/rollback-fix.sh`
+
+**사용법:**
+```bash
+./scripts/rollback-fix.sh <branch-name>
+# 예시: ./scripts/rollback-fix.sh fix/auto-AI5001-20260206143025
+```
+
+**기능:**
+- 로컬 브랜치 삭제
+- 원격 브랜치 삭제
+- 관련 PR 자동 닫기 (gh CLI 사용)
+
+### 3.4 검증 스크립트 (구현 완료)
+
+**파일**: `scripts/verify-fix.sh`
+
+**5단계 검증:**
+1. 문법 검증 (`cargo check`)
+2. 컴파일 검증 (`cargo build`)
+3. 테스트 검증 (`cargo test`)
+4. Clippy 검증 (`cargo clippy -- -D warnings`)
+5. 포맷팅 검증 (`cargo fmt --check`)
+
+### 3.5 log-watcher.sh Phase 5 연동 (구현 완료)
+
+**위치**: `scripts/log-watcher.sh` (Line 277-281)
+
+```bash
+# Auto-Fix 시도 (auto_fixable인 경우만)
+if [ "$AUTO_FIXABLE" = "true" ]; then
+    echo "[$(date)] Attempting Auto-Fix for: $ERROR_CODE"
+    "$SCRIPT_DIR/auto-fix.sh" "$DIAGNOSTIC_WITH_CODE" || true
+fi
+```
+
+**동작 흐름:**
+1. 진단 결과에서 `auto_fixable` 필드 확인
+2. `true`인 경우 `auto-fix.sh` 자동 호출
+3. 실패해도 전체 파이프라인은 계속 진행 (`|| true`)
 
 ---
 
@@ -662,6 +425,45 @@ for file in $CHANGED_FILES; do
 done
 ```
 
+### 5.6 크로스 플랫폼 지원 (macOS/Linux)
+
+구현된 스크립트들은 macOS와 Linux 모두에서 동작합니다:
+
+```bash
+# SHA256 해시 (중복 방지용)
+sha256_hash() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum | cut -d' ' -f1      # Linux
+    elif command -v shasum &>/dev/null; then
+        shasum -a 256 | cut -d' ' -f1  # macOS
+    elif command -v openssl &>/dev/null; then
+        openssl dgst -sha256 | awk '{print $NF}'  # fallback
+    fi
+}
+
+# 락 획득 (동시 실행 방지)
+acquire_lock() {
+    if command -v flock &>/dev/null; then
+        flock -w "$timeout" 200        # Linux
+    else
+        # macOS fallback: mkdir은 atomic operation
+        while ! mkdir "$lock_dir" 2>/dev/null; do
+            sleep 1
+        done
+    fi
+}
+```
+
+### 5.7 Worktree 상태 확인
+
+```bash
+# 미커밋 변경이 새 브랜치에 섞이는 것 방지
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    log_error "Working tree is not clean"
+    exit 1
+fi
+```
+
 ---
 
 ## 6. Claude Code CLI 연동
@@ -726,16 +528,22 @@ npm install -g @anthropic-ai/claude-code
 # 2. gh CLI 인증 (Phase 4에서 완료)
 gh auth login
 
-# 3. auto-fix 라벨 추가 (최초 1회)
-gh label create "auto-fix" \
-    --color "0e8a16" \
-    --description "AI 자동 수정 PR" \
-    --force
+# 3. 라벨 설정 (auto-fix 라벨 포함)
+# setup-labels.sh가 이미 auto-fix 라벨을 포함하고 있음
+./scripts/setup-labels.sh
 
 # 4. 스크립트 실행 권한
 chmod +x scripts/auto-fix.sh
 chmod +x scripts/create-pr.sh
+chmod +x scripts/rollback-fix.sh
+chmod +x scripts/verify-fix.sh
 ```
+
+**setup-labels.sh에 포함된 라벨:**
+- `ai-generated` - AI 모니터링 시스템이 자동 생성
+- `priority:critical/high/medium/low` - 우선순위
+- `domain:ai/auth/db` - 도메인
+- `auto-fix` - AI 자동 수정 PR (Phase 5)
 
 ---
 
@@ -799,27 +607,35 @@ chmod +x scripts/create-pr.sh
 
 ### Week 1: 기본 구현
 
-- [ ] Claude Code CLI 설치 및 테스트
-- [ ] `scripts/auto-fix.sh` 구현
-- [ ] `scripts/create-pr.sh` 구현
-- [ ] Rate Limiting 구현
-- [ ] 롤백 로직 구현
+- [x] Claude Code CLI 설치 및 테스트
+- [x] `scripts/auto-fix.sh` 구현
+- [x] `scripts/create-pr.sh` 구현
+- [x] Rate Limiting 구현 (일일 5개 PR 제한)
+- [x] 롤백 로직 구현 (`scripts/rollback-fix.sh`)
 
 ### Week 2: 연동 및 테스트
 
-- [ ] `log-watcher.sh`에 Phase 5 연동
-- [ ] 성공 케이스 테스트
-- [ ] 실패 케이스 테스트 (롤백 확인)
-- [ ] Rate Limit 테스트
-- [ ] 금지 파일 보호 테스트
-- [ ] Issue-PR 연결 테스트
+- [x] `log-watcher.sh`에 Phase 5 연동 (auto_fixable 체크 후 auto-fix.sh 호출)
+- [x] 성공 케이스 테스트
+- [x] 실패 케이스 테스트 (롤백 확인)
+- [x] Rate Limit 테스트
+- [x] 금지 파일 보호 테스트
+- [x] Issue-PR 연결 테스트
+
+### 추가 구현
+
+- [x] `scripts/verify-fix.sh` 구현 (5단계 검증: syntax, compile, test, clippy, format)
+- [x] `scripts/setup-labels.sh`에 `auto-fix` 라벨 추가
+- [x] 크로스 플랫폼 지원 (macOS/Linux 호환 - sha256, flock fallback)
+- [x] 수정 범위 검증 로직 (`validate_fix_scope`)
+- [x] Worktree 상태 확인 (미커밋 변경 방지)
 
 ### 검증
 
-- [ ] E2E 테스트 (실제 에러 시뮬레이션)
-- [ ] Draft PR 생성 확인
-- [ ] Discord 알림 모든 시나리오
-- [ ] 롤백 완전성 검증
+- [x] E2E 테스트 (실제 에러 시뮬레이션)
+- [x] Draft PR 생성 확인
+- [x] Discord 알림 모든 시나리오
+- [x] 롤백 완전성 검증
 
 ---
 
