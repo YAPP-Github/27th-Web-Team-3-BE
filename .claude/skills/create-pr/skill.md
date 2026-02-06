@@ -18,6 +18,12 @@ GitHub Pull Request를 CI 검증을 통과하도록 올바른 형식으로 생�
 type: 설명
 ```
 
+> **주의: PR 타이틀에 깃모지(이모지)를 붙이면 안 됩니다.**
+> `action-semantic-pull-request`가 타이틀 앞부분을 파싱하므로 이모지가 있으면 CI가 실패합니다.
+> - `feat: 기능 추가` (O)
+> - `✨ feat: 기능 추가` (X) — CI 실패
+> - `🐛 fix: 버그 수정` (X) — CI 실패
+
 **허용되는 type:**
 
 | type | 용도 |
