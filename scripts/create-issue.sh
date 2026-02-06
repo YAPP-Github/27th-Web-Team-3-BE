@@ -42,7 +42,7 @@ Example:
 JSON 형식:
   {
     "error_code": "API_001",
-    "severity": "critical|warning|info",
+    "severity": "critical|high|medium|low",
     "root_cause": "에러 원인 설명",
     "impact": "영향 범위",
     "recommendations": [{"effort": "low|medium|high", "action": "조치 내용"}],
@@ -118,10 +118,13 @@ get_priority_label() {
         critical)
             echo "priority:critical"
             ;;
-        warning)
+        high)
             echo "priority:high"
             ;;
-        info)
+        medium)
+            echo "priority:medium"
+            ;;
+        low)
             echo "priority:low"
             ;;
         *)
@@ -138,10 +141,13 @@ get_severity_emoji() {
         critical)
             echo "🚨"
             ;;
-        warning)
+        high)
             echo "⚠️"
             ;;
-        info)
+        medium)
+            echo "📋"
+            ;;
+        low)
             echo "ℹ️"
             ;;
         *)
