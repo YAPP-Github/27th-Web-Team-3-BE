@@ -67,7 +67,7 @@ else
 fi
 
 # CRITICAL 에러 수 (AI5xxx, COMMON500)
-CRITICAL_COUNT=$(jq -r 'select(.level == "ERROR") | select(.fields.error_code != null) | .fields.error_code' "$LOG_FILE" 2>/dev/null | grep -cE "(COMMON500|AI5[0-9]{3})" || echo "0")
+CRITICAL_COUNT=$(jq -r 'select(.level == "ERROR") | select(.fields.error_code != null) | .fields.error_code' "$LOG_FILE" 2>/dev/null | grep -cE "(COMMON500|AI5[0-9]{3})" || true)
 
 # CPU 사용률 (현재 스냅샷)
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -85,7 +85,21 @@ fi
 
 # 리포트 메시지 구성
 REPORT_TITLE="📊 일일 서버 리포트 ($YESTERDAY)"
-REPORT_MESSAGE="**요청**\n총 ${TOTAL_REQUESTS}건\n\n**응답시간**\nP50  ${P50}ms\nP95  ${P95}ms\nP99  ${P99}ms\n\n**에러**\n에러율  ${ERROR_RATE}% (${ERROR_COUNT}건)\nCRITICAL  ${CRITICAL_COUNT}건\n\n**시스템**\nCPU  ${CPU_USAGE}%\nMemory  ${MEM_USAGE}%"
+REPORT_MESSAGE="**요청**
+총 ${TOTAL_REQUESTS}건
+
+**응답시간**
+P50  ${P50}ms
+P95  ${P95}ms
+P99  ${P99}ms
+
+**에러**
+에러율  ${ERROR_RATE}% (${ERROR_COUNT}건)
+CRITICAL  ${CRITICAL_COUNT}건
+
+**시스템**
+CPU  ${CPU_USAGE}%
+Memory  ${MEM_USAGE}%"
 
 # Discord 전송
 "$SCRIPT_DIR/discord-alert.sh" "info" "$REPORT_TITLE" "$REPORT_MESSAGE" "DAILY_REPORT"

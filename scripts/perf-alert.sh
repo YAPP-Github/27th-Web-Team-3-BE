@@ -119,7 +119,7 @@ if [ -f "$LOG_FILE" ]; then
 
     RECENT_ERRORS=$(grep "\"level\":\"ERROR\"" "$LOG_FILE" 2>/dev/null | \
         grep "\"timestamp\":\"${ONE_MIN_AGO}" 2>/dev/null | \
-        wc -l | tr -d ' ' || echo "0")
+        wc -l | tr -d ' ' || true)
 
     if [ "$RECENT_ERRORS" -ge "$ERROR_BURST_THRESHOLD" ]; then
         if check_dedup "error_burst"; then
