@@ -12,7 +12,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 /// 기본값은 `info,server=debug`입니다.
 ///
 /// 로그는 stdout과 `logs/` 디렉토리의 일별 파일에 동시 출력됩니다.
-/// 파일명 형식: `server.YYYY-MM-DD.log`
+/// 파일명 형식: `server.log.YYYY-MM-DD`
 pub fn init_logging() {
     let log_dir = std::env::var("LOG_DIR").unwrap_or_else(|_| "logs".to_string());
 

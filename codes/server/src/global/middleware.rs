@@ -1,5 +1,5 @@
 use axum::{extract::Request, middleware::Next, response::Response};
-use tracing::{info, Instrument};
+use tracing::{error, info, warn, Instrument};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -36,13 +36,25 @@ pub async fn request_id_middleware(mut request: Request, next: Next) -> Response
         let duration_ms = start.elapsed().as_millis() as u64;
         let status = response.status().as_u16();
 
-        info!(
-            duration_ms = duration_ms,
-            status = status,
-            method = %method,
-            path = %path,
-            "request completed"
-        );
+        if status >= 500 {
+            error!(
+                duration_ms = duration_ms,
+                status = status,
+                "request completed"
+            );
+        } else if status >= 400 {
+            warn!(
+                duration_ms = duration_ms,
+                status = status,
+                "request completed"
+            );
+        } else {
+            info!(
+                duration_ms = duration_ms,
+                status = status,
+                "request completed"
+            );
+        }
 
         response.headers_mut().insert(
             "x-request-id",
