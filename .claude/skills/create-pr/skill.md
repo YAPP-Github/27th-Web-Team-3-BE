@@ -90,6 +90,7 @@ type: 설명
 gh pr create \
   --title "feat: 회고방 초대 코드 조회 API 추가" \
   --base dev \
+  --assignee @me \
   --body "$(cat <<'EOF'
 # ☝️Issue Number
 - #103
@@ -126,4 +127,5 @@ EOF
 3. **관련 이슈 번호**를 Issue Number와 Related Issues에 모두 기재
 4. **Checklist 항목**은 실제로 수행한 것만 체크
 5. **Changes 섹션**에 실제 변경된 파일 경로를 정확히 기재
-6. AI가 생성한 PR은 타이틀에 `[AI]`를 포함하면 자동으로 `ai-generated` 라벨이 붙음
+6. **`--assignee @me`로 본인을 assignee로 설정** (필수)
+7. AI가 생성한 PR은 타이틀에 `[AI]`를 포함하면 자동으로 `ai-generated` 라벨이 붙음
