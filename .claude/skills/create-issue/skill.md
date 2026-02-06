@@ -16,7 +16,7 @@ gh issue create \
   --title "기능 설명" \
   --label "feat" \
   --body "$(cat <<'EOF'
-# Title
+# Summary
 
 - 자세한 개요 작성
 
@@ -38,7 +38,7 @@ gh issue create \
   --title "버그 설명" \
   --label "bug,fix" \
   --body "$(cat <<'EOF'
-# Title
+# Summary
 
 - 자세한 개요 작성
 
@@ -60,7 +60,7 @@ gh issue create \
   --title "리팩토링 설명" \
   --label "refactor" \
   --body "$(cat <<'EOF'
-# Title
+# Summary
 
 - 자세한 개요 작성
 
@@ -82,7 +82,7 @@ gh issue create \
   --title "테스트 설명" \
   --label "test" \
   --body "$(cat <<'EOF'
-# Title
+# Summary
 
 - 자세한 개요 작성
 
@@ -104,7 +104,7 @@ gh issue create \
   --title "CI/CD 설명" \
   --label "ci/cd" \
   --body "$(cat <<'EOF'
-# Title
+# Summary
 
 - 자세한 개요 작성
 
@@ -126,7 +126,7 @@ gh issue create \
   --title "문서 설명" \
   --label "documentation" \
   --body "$(cat <<'EOF'
-# Title
+# Summary
 
 - 자세한 개요 작성
 

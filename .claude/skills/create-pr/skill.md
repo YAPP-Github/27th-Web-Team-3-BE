@@ -123,9 +123,9 @@ EOF
 ## 규칙
 
 1. **PR 타이틀은 반드시 `type: 설명` 형식** (CI 실패 방지)
-2. **base 브랜치는 `dev`** 가 기본
-3. **관련 이슈 번호**를 Issue Number와 Related Issues에 모두 기재
-4. **Checklist 항목**은 실제로 수행한 것만 체크
-5. **Changes 섹션**에 실제 변경된 파일 경로를 정확히 기재
-6. **`--assignee @me`로 본인을 assignee로 설정** (필수)
+2. **`--assignee @me`로 본인을 assignee로 설정** (필수)
+3. **base 브랜치는 `dev`** 가 기본
+4. **관련 이슈 번호**를 Issue Number와 Related Issues에 모두 기재
+5. **Checklist 항목**은 실제로 수행한 것만 체크
+6. **Changes 섹션**에 실제 변경된 파일 경로를 정확히 기재
 7. AI가 생성한 PR은 타이틀에 `[AI]`를 포함하면 자동으로 `ai-generated` 라벨이 붙음

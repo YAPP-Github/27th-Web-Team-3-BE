@@ -30,6 +30,7 @@ GitHub 이슈를 해결하고 PR을 생성합니다.
 6. 변경사항을 커밋합니다 (커밋 메시지에 `Closes #이슈번호` 포함)
 7. 브랜치를 push하고 PR을 생성합니다 (create-pr skill 참조)
 8. 1단계에서 stash한 내용이 있다면, 원래 브랜치로 돌아가서 `git stash pop`으로 복원합니다
+   - 충돌 발생 시: `git stash list`로 stash 확인 후 수동으로 해결하도록 안내합니다
 
 ## PR 생성 시 주의사항
 
