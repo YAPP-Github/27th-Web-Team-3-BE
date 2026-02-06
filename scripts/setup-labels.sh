@@ -5,34 +5,65 @@ set -euo pipefail
 # GitHub 라벨 초기 설정 스크립트
 # Phase 4: Issue Automation
 #
-# 사용법: ./scripts/setup-labels.sh
+# 사용법: ./scripts/setup-labels.sh [--dry-run]
 #######################################
+
+# 옵션 파싱
+DRY_RUN=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [--dry-run]"
+            echo ""
+            echo "Options:"
+            echo "  --dry-run  실제 라벨 생성 없이 미리보기만 출력"
+            echo "  -h, --help 이 도움말 출력"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 echo "=== GitHub 라벨 설정 스크립트 ==="
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY-RUN 모드] 실제 라벨 생성 없이 미리보기만 출력합니다."
+fi
 echo ""
 
 #######################################
-# 사전 조건 확인
+# 사전 조건 확인 (DRY_RUN 시 스킵)
 #######################################
 
-# gh CLI 설치 확인
-if ! command -v gh &> /dev/null; then
-    echo "ERROR: gh CLI가 설치되지 않았습니다."
-    echo "설치 방법:"
-    echo "  - macOS: brew install gh"
-    echo "  - Ubuntu: sudo apt install gh"
-    exit 1
-fi
-echo "[OK] gh CLI 설치 확인"
+if [ "$DRY_RUN" = false ]; then
+    # gh CLI 설치 확인
+    if ! command -v gh &> /dev/null; then
+        echo "ERROR: gh CLI가 설치되지 않았습니다."
+        echo "설치 방법:"
+        echo "  - macOS: brew install gh"
+        echo "  - Ubuntu: sudo apt install gh"
+        exit 1
+    fi
+    echo "[OK] gh CLI 설치 확인"
 
-# GitHub 인증 상태 확인
-if ! gh auth status &> /dev/null; then
-    echo "ERROR: GitHub 인증이 필요합니다."
-    echo "실행: gh auth login"
-    exit 1
+    # GitHub 인증 상태 확인
+    if ! gh auth status &> /dev/null; then
+        echo "ERROR: GitHub 인증이 필요합니다."
+        echo "실행: gh auth login"
+        exit 1
+    fi
+    echo "[OK] GitHub 인증 확인"
+    echo ""
+else
+    echo "[DRY-RUN] GitHub 인증 체크를 건너뜁니다."
+    echo ""
 fi
-echo "[OK] GitHub 인증 확인"
-echo ""
 
 #######################################
 # 라벨 생성 함수
@@ -41,6 +72,12 @@ create_label() {
     local name="$1"
     local color="$2"
     local description="$3"
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "  [DRY-RUN] 라벨 생성 예정: $name (색상: #$color)"
+        echo "            설명: $description"
+        return 0
+    fi
 
     echo -n "  라벨 생성: $name ... "
     if gh label create "$name" \
