@@ -5,23 +5,32 @@ set -euo pipefail
 # GitHub 라벨 초기 설정 스크립트
 # Phase 4: Issue Automation
 #
-# 사용법: ./scripts/setup-labels.sh [--dry-run]
+# 사용법: ./scripts/setup-labels.sh [--dry-run] [--repo owner/repo]
 #######################################
 
 # 옵션 파싱
 DRY_RUN=false
+GITHUB_REPO=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dry-run)
             DRY_RUN=true
             shift
             ;;
+        --repo)
+            GITHUB_REPO="$2"
+            shift 2
+            ;;
         -h|--help)
-            echo "Usage: $0 [--dry-run]"
+            echo "Usage: $0 [--dry-run] [--repo owner/repo]"
             echo ""
             echo "Options:"
-            echo "  --dry-run  실제 라벨 생성 없이 미리보기만 출력"
-            echo "  -h, --help 이 도움말 출력"
+            echo "  --dry-run       실제 라벨 생성 없이 미리보기만 출력"
+            echo "  --repo          GitHub 저장소 지정 (예: owner/repo)"
+            echo "  -h, --help      이 도움말 출력"
+            echo ""
+            echo "Environment:"
+            echo "  GITHUB_REPO     --repo 미지정 시 환경변수에서 읽음"
             exit 0
             ;;
         *)
@@ -59,9 +68,24 @@ if [ "$DRY_RUN" = false ]; then
         exit 1
     fi
     echo "[OK] GitHub 인증 확인"
+
+    # 저장소 결정
+    if [ -z "$GITHUB_REPO" ]; then
+        GITHUB_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || echo "")
+        if [ -z "$GITHUB_REPO" ]; then
+            echo "ERROR: GitHub 저장소를 결정할 수 없습니다."
+            echo "  --repo owner/repo 옵션을 사용하거나 git 저장소 내에서 실행해주세요."
+            exit 1
+        fi
+    fi
+    echo "[OK] 대상 저장소: $GITHUB_REPO"
     echo ""
 else
     echo "[DRY-RUN] GitHub 인증 체크를 건너뜁니다."
+    if [ -z "$GITHUB_REPO" ]; then
+        GITHUB_REPO="(dry-run: 저장소 미지정)"
+    fi
+    echo "[DRY-RUN] 대상 저장소: $GITHUB_REPO"
     echo ""
 fi
 
@@ -81,6 +105,7 @@ create_label() {
 
     echo -n "  라벨 생성: $name ... "
     if gh label create "$name" \
+        --repo "$GITHUB_REPO" \
         --color "$color" \
         --description "$description" \
         --force 2>/dev/null; then
