@@ -11,8 +11,12 @@ mkdir -p "$LOG_DIR"
 # 기존 모니터링 관련 cron 제거
 crontab -l 2>/dev/null | grep -v "log-watcher.sh" | grep -v "daily-report.sh" | grep -v "perf-alert.sh" > /tmp/crontab.tmp || true
 
+# 서버 로그 디렉토리 (logging.rs의 LOG_DIR과 일치시킴)
+SERVER_LOG_DIR="$PROJECT_DIR/codes/server/logs"
+mkdir -p "$SERVER_LOG_DIR"
+
 # 환경변수 로드 + PATH 설정 공통 prefix
-ENV_PREFIX="cd $PROJECT_DIR && export PATH=/usr/local/bin:/usr/bin:\$PATH && [ -f .env ] && set -a && . ./.env && set +a"
+ENV_PREFIX="cd $PROJECT_DIR && export PATH=/usr/local/bin:/usr/bin:\$PATH && export LOG_DIR=$SERVER_LOG_DIR && [ -f .env ] && set -a && . ./.env && set +a"
 
 # 1. 에러 AI 진단 (매일 9시)
 echo "0 9 * * * $ENV_PREFIX && ./scripts/log-watcher.sh >> $LOG_DIR/ai-monitor.log 2>&1" >> /tmp/crontab.tmp
