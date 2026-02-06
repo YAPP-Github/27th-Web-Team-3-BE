@@ -118,13 +118,34 @@ validate_json() {
         exit 1
     fi
 
-    # severity 값 유효성 검증
+    # severity 값 유효성 검증 및 정규화
+    # diagnostic-agent.py는 critical|warning|info 출력, 이를 critical|high|medium|low로 매핑
     case "$severity" in
         critical|high|medium|low)
             ;;
-        *)
-            log_warn "알 수 없는 severity 값: '$severity'. 허용값: critical, high, medium, low"
+        warning)
+            log_info "Mapping severity 'warning' to 'high'"
             ;;
+        info)
+            log_info "Mapping severity 'info' to 'low'"
+            ;;
+        *)
+            log_warn "알 수 없는 severity 값: '$severity'. 허용값: critical, high, medium, low, warning, info"
+            ;;
+    esac
+}
+
+# Severity 정규화 함수 (diagnostic-agent 출력 → GitHub 라벨 형식)
+normalize_severity() {
+    local severity="$1"
+    case "$severity" in
+        critical) echo "critical" ;;
+        high) echo "high" ;;
+        warning) echo "high" ;;  # warning → high 매핑
+        medium) echo "medium" ;;
+        low) echo "low" ;;
+        info) echo "low" ;;      # info → low 매핑
+        *) echo "medium" ;;      # 기본값
     esac
 }
 
@@ -416,9 +437,16 @@ main() {
 
     log_info "Target repository: $repo"
 
+    # Severity 정규화 (diagnostic-agent 출력 형식 → GitHub 라벨 형식)
+    local normalized_severity
+    normalized_severity=$(normalize_severity "$severity")
+    if [ "$severity" != "$normalized_severity" ]; then
+        log_info "Severity normalized: $severity → $normalized_severity"
+    fi
+
     # 라벨 준비 (bug 라벨 필수 포함, auto-fix로 통일)
     local priority_label
-    priority_label=$(get_priority_label "$severity")
+    priority_label=$(get_priority_label "$normalized_severity")
 
     local labels=("bug" "ai-generated" "$priority_label")
     if [ "$auto_fixable" = "true" ]; then

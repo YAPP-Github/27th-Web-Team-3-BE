@@ -215,20 +215,32 @@ while read -r line; do
         # Critical 레벨: AI 진단 + 상세 알림 + GitHub Issue
         echo "[$(date)] Critical error, running full diagnostic: $ERROR_CODE"
 
-        # 비용 제한 체크
+        # 비용 제한 체크 (시간 창 기반: 1시간 내 10회 제한)
         RATE_LIMIT_FILE="/tmp/diagnostic-rate-limit"
+        HOUR_AGO=$((NOW - 3600))
+
+        # 오래된 항목 제거 및 최근 호출 수 계산
+        RECENT_CALLS=0
         if [ -f "$RATE_LIMIT_FILE" ]; then
-            RECENT_CALLS=$(wc -l < "$RATE_LIMIT_FILE" 2>/dev/null || echo 0)
-            if [ "$RECENT_CALLS" -ge 10 ]; then
-                echo "[$(date)] Rate limit exceeded, sending basic critical alert"
-                if "$SCRIPT_DIR/discord-alert.sh" "critical" \
-                    "🚨 [$ERROR_CODE] Critical Error (진단 제한 초과)" \
-                    "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
-                    "$ERROR_CODE"; then
-                    ALERT_COUNT=$((ALERT_COUNT + 1))
+            # 1시간 내 호출만 유지하여 임시 파일에 저장
+            while read -r timestamp; do
+                if [ -n "$timestamp" ] && [ "$timestamp" -gt "$HOUR_AGO" ] 2>/dev/null; then
+                    echo "$timestamp"
+                    RECENT_CALLS=$((RECENT_CALLS + 1))
                 fi
-                continue
+            done < "$RATE_LIMIT_FILE" > "${RATE_LIMIT_FILE}.tmp" 2>/dev/null || true
+            mv "${RATE_LIMIT_FILE}.tmp" "$RATE_LIMIT_FILE" 2>/dev/null || true
+        fi
+
+        if [ "$RECENT_CALLS" -ge 10 ]; then
+            echo "[$(date)] Rate limit exceeded ($RECENT_CALLS/10 calls in last hour), sending basic critical alert"
+            if "$SCRIPT_DIR/discord-alert.sh" "critical" \
+                "🚨 [$ERROR_CODE] Critical Error (진단 제한 초과)" \
+                "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$ERROR_CODE"; then
+                ALERT_COUNT=$((ALERT_COUNT + 1))
             fi
+            continue
         fi
 
         # Diagnostic Agent 호출
