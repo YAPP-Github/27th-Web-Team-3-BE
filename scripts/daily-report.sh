@@ -97,7 +97,7 @@ P99  ${P99}ms
 에러율  ${ERROR_RATE}% (${ERROR_COUNT}건)
 CRITICAL  ${CRITICAL_COUNT}건
 
-**시스템**
+**현재 시스템 상태**
 CPU  ${CPU_USAGE}%
 Memory  ${MEM_USAGE}%"
 

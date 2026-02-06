@@ -71,7 +71,8 @@ else
     CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{printf "%.0f", $2 + $4}')
 fi
 
-if [ "$(echo "$CPU_USAGE >= $CPU_THRESHOLD" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+CPU_INT=${CPU_USAGE%.*}  # 소수점 제거하여 정수 비교
+if [ "${CPU_INT:-0}" -ge "$CPU_THRESHOLD" ]; then
     CPU_COUNT=$(increment_count "$CPU_COUNT_FILE")
     if [ "$CPU_COUNT" -ge "$CONSECUTIVE_REQUIRED" ]; then
         if check_dedup "cpu"; then
@@ -92,7 +93,8 @@ else
     MEM_USAGE=$(free | awk '/Mem:/ {printf "%.0f", ($3/$2) * 100}')
 fi
 
-if [ "$(echo "$MEM_USAGE >= $MEM_THRESHOLD" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+MEM_INT=${MEM_USAGE%.*}  # 소수점 제거하여 정수 비교
+if [ "${MEM_INT:-0}" -ge "$MEM_THRESHOLD" ]; then
     MEM_COUNT=$(increment_count "$MEM_COUNT_FILE")
     if [ "$MEM_COUNT" -ge "$CONSECUTIVE_REQUIRED" ]; then
         if check_dedup "mem"; then

@@ -13,10 +13,13 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 ///
 /// 로그는 stdout과 `logs/` 디렉토리의 일별 파일에 동시 출력됩니다.
 /// 파일명 형식: `server.log.YYYY-MM-DD`
-pub fn init_logging() {
+///
+/// 반환되는 `WorkerGuard`를 main에서 유지해야 프로세스 종료 시 버퍼링된 로그가 손실되지 않습니다.
+pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     let log_dir = std::env::var("LOG_DIR").unwrap_or_else(|_| "logs".to_string());
 
     let file_appender = rolling::daily(&log_dir, "server.log");
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let stdout_layer = fmt::layer()
         .json()
@@ -30,7 +33,7 @@ pub fn init_logging() {
         .with_current_span(true)
         .flatten_event(false)
         .with_ansi(false)
-        .with_writer(file_appender);
+        .with_writer(non_blocking);
 
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,server=debug"));
@@ -56,4 +59,6 @@ pub fn init_logging() {
             Err(err)
         })
         .ok(); // Convert to unit, letting the server start even if logging fails
+
+    guard
 }
