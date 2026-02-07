@@ -1,0 +1,82 @@
+# AI Automation Configuration
+# 자동화 시스템 설정 파일
+
+# ===== 전체 활성화 설정 =====
+automation:
+  enabled: false  # 전체 자동화 온/오프 (현재: 비활성화)
+
+# ===== Phase별 활성화 설정 =====
+phases:
+  log_watcher:      # Phase 2: 로그 모니터링
+    enabled: false
+    interval_minutes: 5
+
+  ai_diagnostic:    # Phase 3: AI 진단
+    enabled: false
+
+  issue_creation:   # Phase 4: Issue 자동 생성
+    enabled: false
+
+  auto_fix:         # Phase 5: 자동 수정 & PR
+    enabled: false
+
+# ===== AI 모델 설정 =====
+models:
+  diagnostic:
+    provider: openai        # openai | anthropic
+    model: gpt-4o-mini      # gpt-4o-mini | gpt-4o | claude-sonnet-4-20250514
+    max_tokens: 1024
+
+  auto_fix:
+    provider: anthropic
+    model: claude-sonnet-4-20250514  # Claude Code에서 사용
+
+# ===== Rate Limiting =====
+rate_limits:
+  diagnostic:
+    max_calls_per_hour: 10
+
+  auto_fix:
+    max_daily_prs: 5
+
+# ===== 알림 설정 =====
+notifications:
+  discord:
+    enabled: true
+    # webhook_url은 .env.monitoring에서 관리 (보안)
+
+  severity_filter:
+    - critical
+    - warning
+    # - info  # 주석 해제하면 info도 알림
+
+# ===== Git 설정 =====
+git:
+  base_branch: dev
+  auto_push: true
+
+# ===== 수정 허용 범위 =====
+fix_scope:
+  allowed_patterns:
+    - timeout
+    - retry
+    - logging
+    - typo
+    - null check
+    - config
+    - version
+
+  forbidden_patterns:
+    - architecture
+    - business logic
+    - security
+    - authentication
+    - database schema
+    - migration
+
+  forbidden_files:
+    - main.rs
+    - config/
+    - migrations/
+    - "*.sql"
+    - Cargo.toml
