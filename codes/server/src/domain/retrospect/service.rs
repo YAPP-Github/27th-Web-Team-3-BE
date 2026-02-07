@@ -43,7 +43,6 @@ use super::dto::{
     UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
-
 pub struct RetrospectService;
 
 impl RetrospectService {
@@ -896,25 +895,8 @@ impl RetrospectService {
 
         let retrospect_id = retrospect_result.retrospect_id;
 
-        // 9. 회고 방식에 따른 기본 질문 생성
-        let questions = req.retrospect_method.default_questions();
-        for question in questions {
-            let response_model = response::ActiveModel {
-                question: Set(question.to_string()),
-                content: Set(String::new()),
-                created_at: Set(now),
-                updated_at: Set(now),
-                retrospect_id: Set(retrospect_id),
-                ..Default::default()
-            };
-
-            response_model
-                .insert(&txn)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-        }
-
-        // 10. 참고 URL 저장
+        // 9. 참고 URL 저장
+        // 질문(response)은 참석자 등록(create_participant) 시 멤버별로 생성됩니다.
         for url in &req.reference_urls {
             let reference_model = retro_reference::ActiveModel {
                 title: Set(url.clone()),
@@ -2362,7 +2344,10 @@ impl RetrospectService {
     }
 
     /// 답변 비즈니스 검증
-    fn validate_answers(answers: &[SubmitAnswerItem], question_count: usize) -> Result<(), AppError> {
+    fn validate_answers(
+        answers: &[SubmitAnswerItem],
+        question_count: usize,
+    ) -> Result<(), AppError> {
         // 1. 정확히 질문 수만큼 답변 확인
         if answers.len() != question_count {
             return Err(AppError::RetroAnswersMissing(
@@ -3276,9 +3261,10 @@ impl RetrospectService {
 
         let max_question = retrospect_model.retrospect_method.question_count() as i32;
         if !(1..=max_question).contains(&question_id) {
-            return Err(AppError::QuestionNotFound(
-                format!("질문 ID는 1부터 {} 사이여야 합니다.", max_question),
-            ));
+            return Err(AppError::QuestionNotFound(format!(
+                "질문 ID는 1부터 {} 사이여야 합니다.",
+                max_question
+            )));
         }
 
         // 3. 회고방 멤버십 확인 (참여자만 어시스턴트 사용 가능)
