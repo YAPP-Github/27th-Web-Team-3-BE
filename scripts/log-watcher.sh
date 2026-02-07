@@ -6,6 +6,31 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# ============== 설정 파일 체크 ==============
+# 자동화가 비활성화되어 있으면 종료
+check_automation_enabled() {
+    local config_file="$PROJECT_ROOT/automation.config.yaml"
+
+    if [ ! -f "$config_file" ]; then
+        echo "[$(date)] WARN: Config file not found, automation disabled by default"
+        return 1
+    fi
+
+    # Python config-loader 사용
+    if ! python3 "$SCRIPT_DIR/config-loader.py" --check log_watcher 2>/dev/null; then
+        echo "[$(date)] INFO: Automation is disabled in config"
+        return 1
+    fi
+
+    return 0
+}
+
+# 자동화 활성화 체크
+if ! check_automation_enabled; then
+    echo "[$(date)] Exiting: automation disabled"
+    exit 0
+fi
+
 # 설정 (절대 경로 사용)
 LOG_DIR="${LOG_DIR:-$PROJECT_ROOT/logs}"
 STATE_DIR="${STATE_DIR:-$PROJECT_ROOT/logs/.state}"

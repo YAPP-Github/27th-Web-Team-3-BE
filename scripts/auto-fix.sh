@@ -9,6 +9,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SERVER_DIR="$PROJECT_ROOT/codes/server"
 
+# ============== 설정 파일 체크 ==============
+check_automation_enabled() {
+    local config_file="$PROJECT_ROOT/automation.config.yaml"
+
+    if [ ! -f "$config_file" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: Config file not found, automation disabled by default"
+        return 1
+    fi
+
+    if ! python3 "$SCRIPT_DIR/config-loader.py" --check auto_fix 2>/dev/null; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: Auto-fix is disabled in config"
+        return 1
+    fi
+
+    return 0
+}
+
+# 자동화 활성화 체크 (인자가 있을 때만 - usage 출력은 항상 허용)
+if [ $# -ge 1 ] && [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
+    if ! check_automation_enabled; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Exiting: auto-fix disabled"
+        exit 0
+    fi
+fi
+
 # 설정
 BASE_BRANCH="${BASE_BRANCH:-dev}"
 MAX_DAILY_PRS=5

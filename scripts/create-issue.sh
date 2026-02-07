@@ -9,6 +9,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# ============== 설정 파일 체크 ==============
+check_automation_enabled() {
+    local config_file="$PROJECT_ROOT/automation.config.yaml"
+
+    if [ ! -f "$config_file" ]; then
+        return 1
+    fi
+
+    if ! python3 "$SCRIPT_DIR/config-loader.py" --check issue_creation 2>/dev/null; then
+        return 1
+    fi
+
+    return 0
+}
+
 # 전역 옵션
 DRY_RUN=false
 
@@ -397,6 +412,12 @@ main() {
     if [ "$DRY_RUN" = true ]; then
         log_info "[DRY-RUN 모드] 실제 이슈 생성 없이 미리보기만 출력합니다."
         log_info "[DRY-RUN 모드] GitHub 인증 없이 로컬에서만 검증합니다."
+    else
+        # 실제 실행 시에만 설정 체크
+        if ! check_automation_enabled; then
+            log_info "Issue creation is disabled in config"
+            exit 0
+        fi
     fi
 
     # 의존성 확인 (DRY_RUN 시 gh CLI 스킵)
