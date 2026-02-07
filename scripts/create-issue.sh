@@ -9,6 +9,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# ============== 설정 파일 체크 ==============
+check_automation_enabled() {
+    local config_file="$PROJECT_ROOT/automation.config.yaml"
+
+    if [ ! -f "$config_file" ]; then
+        return 1
+    fi
+
+    if ! python3 "$SCRIPT_DIR/config-loader.py" --check issue_creation 2>/dev/null; then
+        return 1
+    fi
+
+    return 0
+}
+
+# 전역 옵션
+DRY_RUN=false
+
 # 로깅 함수
 log_info() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $*"
@@ -24,13 +42,18 @@ log_warn() {
 
 # 사용법 출력
 usage() {
+    local exit_code="${1:-0}"
     cat << EOF
-Usage: $0 <diagnostic_json>
+Usage: $0 [OPTIONS] <diagnostic_json>
 
 진단 결과 JSON을 받아 GitHub Issue를 생성합니다.
 
 Arguments:
   diagnostic_json  진단 결과 JSON 문자열 또는 JSON 파일 경로
+
+Options:
+  --dry-run        실제 이슈 생성 없이 미리보기만 출력 (GitHub 인증 불필요)
+  -h, --help       이 도움말 출력
 
 Environment:
   GITHUB_REPO      GitHub 저장소 (예: owner/repo). 미설정 시 현재 저장소 사용
@@ -38,18 +61,19 @@ Environment:
 Example:
   $0 '{"error_code": "API_001", "severity": "critical", ...}'
   $0 /path/to/diagnostic.json
+  $0 --dry-run '{"error_code": "API_001", "severity": "high", ...}'
 
 JSON 형식:
   {
     "error_code": "API_001",
-    "severity": "critical|warning|info",
+    "severity": "critical|high|medium|low",
     "root_cause": "에러 원인 설명",
     "impact": "영향 범위",
     "recommendations": [{"effort": "low|medium|high", "action": "조치 내용"}],
     "auto_fixable": true|false
   }
 EOF
-    exit 1
+    exit "$exit_code"
 }
 
 # gh CLI 확인
@@ -108,6 +132,36 @@ validate_json() {
         log_error "severity 필드가 필요합니다."
         exit 1
     fi
+
+    # severity 값 유효성 검증 및 정규화
+    # diagnostic-agent.py는 critical|warning|info 출력, 이를 critical|high|medium|low로 매핑
+    case "$severity" in
+        critical|high|medium|low)
+            ;;
+        warning)
+            log_info "Mapping severity 'warning' to 'high'"
+            ;;
+        info)
+            log_info "Mapping severity 'info' to 'low'"
+            ;;
+        *)
+            log_warn "알 수 없는 severity 값: '$severity'. 허용값: critical, high, medium, low, warning, info"
+            ;;
+    esac
+}
+
+# Severity 정규화 함수 (diagnostic-agent 출력 → GitHub 라벨 형식)
+normalize_severity() {
+    local severity="$1"
+    case "$severity" in
+        critical) echo "critical" ;;
+        high) echo "high" ;;
+        warning) echo "high" ;;  # warning → high 매핑
+        medium) echo "medium" ;;
+        low) echo "low" ;;
+        info) echo "low" ;;      # info → low 매핑
+        *) echo "medium" ;;      # 기본값
+    esac
 }
 
 # 심각도에 따른 우선순위 라벨 매핑
@@ -118,10 +172,13 @@ get_priority_label() {
         critical)
             echo "priority:critical"
             ;;
-        warning)
+        high)
             echo "priority:high"
             ;;
-        info)
+        medium)
+            echo "priority:medium"
+            ;;
+        low)
             echo "priority:low"
             ;;
         *)
@@ -138,10 +195,13 @@ get_severity_emoji() {
         critical)
             echo "🚨"
             ;;
-        warning)
+        high)
             echo "⚠️"
             ;;
-        info)
+        medium)
+            echo "📋"
+            ;;
+        low)
             echo "ℹ️"
             ;;
         *)
@@ -167,6 +227,37 @@ find_existing_issue() {
     echo "$issue_number"
 }
 
+# 라벨 색상 조회
+get_label_color() {
+    local label="$1"
+    case "$label" in
+        "priority:critical")
+            echo "B60205"  # 빨간색
+            ;;
+        "priority:high")
+            echo "D93F0B"  # 주황색
+            ;;
+        "priority:medium")
+            echo "FBCA04"  # 노란색
+            ;;
+        "priority:low")
+            echo "0E8A16"  # 초록색
+            ;;
+        "ai-generated")
+            echo "7057FF"  # 보라색
+            ;;
+        "auto-fix")
+            echo "0E8A16"  # 초록색 (setup-labels.sh와 통일)
+            ;;
+        "bug")
+            echo "D73A4A"  # GitHub 기본 bug 색상
+            ;;
+        *)
+            echo "C5DEF5"  # 연한 파란색
+            ;;
+    esac
+}
+
 # 라벨 확인 및 생성
 ensure_labels_exist() {
     local repo="$1"
@@ -174,38 +265,14 @@ ensure_labels_exist() {
     local labels=("$@")
 
     for label in "${labels[@]}"; do
-        if ! gh label list --repo "$repo" --search "$label" --json name --jq '.[].name' 2>/dev/null | grep -q "^${label}$"; then
+        local color
+        color=$(get_label_color "$label")
+
+        if [ "$DRY_RUN" = true ]; then
+            # DRY_RUN에서는 GitHub API 호출 없이 미리보기만
+            log_info "[DRY-RUN] 라벨 사용 예정: $label (색상: #$color)"
+        elif ! gh label list --repo "$repo" --search "$label" --json name --jq '.[].name' 2>/dev/null | grep -Fxq "$label"; then
             log_info "라벨 생성 중: $label"
-
-            # 라벨 색상 설정
-            local color
-            case "$label" in
-                "priority:critical")
-                    color="B60205"  # 빨간색
-                    ;;
-                "priority:high")
-                    color="D93F0B"  # 주황색
-                    ;;
-                "priority:medium")
-                    color="FBCA04"  # 노란색
-                    ;;
-                "priority:low")
-                    color="0E8A16"  # 초록색
-                    ;;
-                "ai-generated")
-                    color="7057FF"  # 보라색
-                    ;;
-                "auto-fix")
-                    color="1D76DB"  # 파란색
-                    ;;
-                "bug")
-                    color="D73A4A"  # GitHub 기본 bug 색상
-                    ;;
-                *)
-                    color="C5DEF5"  # 연한 파란색
-                    ;;
-            esac
-
             gh label create "$label" --repo "$repo" --color "$color" --force 2>/dev/null || true
         fi
     done
@@ -253,12 +320,6 @@ generate_issue_body() {
         done
     fi
 
-    # 자동 수정 가능 여부
-    local auto_fix_section=""
-    if [ "$auto_fixable" = "true" ]; then
-        auto_fix_section="\n## Auto-fix Available\n\nThis issue can be automatically fixed. Run the appropriate fix script or apply the suggested changes.\n"
-    fi
-
     cat << EOF
 ## Root Cause
 
@@ -269,7 +330,20 @@ $root_cause
 $impact
 
 $(echo -e "$recommendations_md")
-$auto_fix_section
+EOF
+
+    # 자동 수정 가능 여부 - heredoc으로 실제 줄바꿈 출력
+    if [ "$auto_fixable" = "true" ]; then
+        cat << 'AUTOFIX'
+
+## Auto-fix Available
+
+This issue can be automatically fixed. Run the appropriate fix script or apply the suggested changes.
+
+AUTOFIX
+    fi
+
+    cat << EOF
 ---
 > This issue was automatically generated by AI diagnostic system.
 > Error Code: \`$error_code\`
@@ -308,15 +382,48 @@ EOF
 
 # 메인 실행
 main() {
+    # 옵션 파싱
+    local input=""
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            -h|--help)
+                usage 0
+                ;;
+            *)
+                if [ -n "$input" ]; then
+                    log_error "인자가 여러 개 전달되었습니다. 하나의 JSON만 허용됩니다."
+                    usage 1
+                fi
+                input="$1"
+                shift
+                ;;
+        esac
+    done
+
     # 인자 확인
-    if [ $# -lt 1 ]; then
-        usage
+    if [ -z "$input" ]; then
+        usage 1
     fi
 
-    local input="$1"
+    if [ "$DRY_RUN" = true ]; then
+        log_info "[DRY-RUN 모드] 실제 이슈 생성 없이 미리보기만 출력합니다."
+        log_info "[DRY-RUN 모드] GitHub 인증 없이 로컬에서만 검증합니다."
+    else
+        # 실제 실행 시에만 설정 체크
+        if ! check_automation_enabled; then
+            log_info "Issue creation is disabled in config"
+            exit 0
+        fi
+    fi
 
-    # 의존성 확인
-    check_gh_cli
+    # 의존성 확인 (DRY_RUN 시 gh CLI 스킵)
+    if [ "$DRY_RUN" = false ]; then
+        check_gh_cli
+    fi
     check_jq
 
     # JSON 파싱 및 검증
@@ -336,6 +443,10 @@ main() {
     local repo
     if [ -n "${GITHUB_REPO:-}" ]; then
         repo="$GITHUB_REPO"
+    elif [ "$DRY_RUN" = true ]; then
+        # DRY_RUN에서는 GitHub API 호출 없이 기본값 사용
+        repo="(dry-run: GITHUB_REPO 미설정)"
+        log_warn "[DRY-RUN] GITHUB_REPO가 설정되지 않았습니다. 실제 실행 시 저장소가 필요합니다."
     else
         # 현재 디렉토리의 git remote에서 추출
         repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || echo "")
@@ -347,9 +458,16 @@ main() {
 
     log_info "Target repository: $repo"
 
+    # Severity 정규화 (diagnostic-agent 출력 형식 → GitHub 라벨 형식)
+    local normalized_severity
+    normalized_severity=$(normalize_severity "$severity")
+    if [ "$severity" != "$normalized_severity" ]; then
+        log_info "Severity normalized: $severity → $normalized_severity"
+    fi
+
     # 라벨 준비 (bug 라벨 필수 포함, auto-fix로 통일)
     local priority_label
-    priority_label=$(get_priority_label "$severity")
+    priority_label=$(get_priority_label "$normalized_severity")
 
     local labels=("bug" "ai-generated" "$priority_label")
     if [ "$auto_fixable" = "true" ]; then
@@ -369,6 +487,17 @@ main() {
 
         local comment_body
         comment_body=$(generate_comment_body "$json")
+
+        if [ "$DRY_RUN" = true ]; then
+            log_info "[DRY-RUN] 코멘트 추가 예정 - Issue #$existing_issue"
+            echo ""
+            echo "=== 코멘트 내용 미리보기 ==="
+            echo "$comment_body"
+            echo "=== 미리보기 끝 ==="
+            echo ""
+            echo "DRY_RUN:COMMENT_ADDED:$existing_issue"
+            return 0
+        fi
 
         if gh issue comment "$existing_issue" --repo "$repo" --body "$comment_body"; then
             log_info "Comment added to issue #$existing_issue"
@@ -394,6 +523,23 @@ main() {
         # 라벨을 쉼표로 연결
         local labels_str
         labels_str=$(IFS=','; echo "${labels[*]}")
+
+        if [ "$DRY_RUN" = true ]; then
+            log_info "[DRY-RUN] 이슈 생성 예정"
+            echo ""
+            echo "=== 이슈 미리보기 ==="
+            echo "저장소: $repo"
+            echo "제목: $title"
+            echo "라벨: $labels_str"
+            echo ""
+            echo "--- 본문 ---"
+            echo "$body"
+            echo "--- 본문 끝 ---"
+            echo "=== 미리보기 끝 ==="
+            echo ""
+            echo "DRY_RUN:ISSUE_CREATED:preview"
+            return 0
+        fi
 
         local new_issue
         new_issue=$(gh issue create \

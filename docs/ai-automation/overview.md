@@ -1,8 +1,8 @@
 # AI 자동화 파이프라인 개요
 
-> **버전**: 1.0
-> **최종 수정**: 2026-02-01
-> **상태**: 설계 완료, 구현 대기
+> **버전**: 1.1
+> **최종 수정**: 2026-02-06
+> **상태**: Phase 1-5 구현 완료, **현재 비활성화**
 
 ---
 
@@ -173,30 +173,113 @@ Production (Phase 3-4): ~$30/월  (Claude API 호출 비용)
 
 ---
 
-## 6. 다음 단계
+## 6. 설정 및 활성화
+
+### 6.1 설정 파일
+
+자동화 시스템은 `automation.config.yaml` 파일로 제어됩니다.
+
+```yaml
+# automation.config.yaml (프로젝트 루트)
+
+automation:
+  enabled: false      # 마스터 스위치 (전체 자동화 온/오프)
+
+phases:
+  log_watcher:        # Phase 2: 로그 모니터링
+    enabled: false
+    interval_minutes: 5
+  ai_diagnostic:      # Phase 3: AI 진단
+    enabled: false
+  issue_creation:     # Phase 4: Issue 자동 생성
+    enabled: false
+  auto_fix:           # Phase 5: 자동 수정 & PR
+    enabled: false
+
+models:
+  diagnostic:
+    provider: openai
+    model: gpt-4o-mini      # 진단용 모델
+    max_tokens: 1024
+  auto_fix:
+    provider: anthropic
+    model: claude-sonnet-4-20250514  # 코드 수정용 모델
+
+rate_limits:
+  diagnostic:
+    max_calls_per_hour: 10  # AI 진단 호출 제한
+  auto_fix:
+    max_daily_prs: 5        # 일일 PR 생성 제한
+```
+
+### 6.2 활성화 방법
+
+1. **Python 환경 설정** (최초 1회):
+   ```bash
+   cd scripts
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. **API 키 설정** (`.env.monitoring` 파일):
+   ```bash
+   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+   OPENAI_API_KEY=sk-...
+   ```
+
+3. **자동화 활성화** (`automation.config.yaml` 수정):
+   ```yaml
+   automation:
+     enabled: true    # 마스터 스위치 ON
+
+   phases:
+     log_watcher:
+       enabled: true  # 원하는 Phase만 활성화
+   ```
+
+4. **Cron 설정** (선택사항):
+   ```bash
+   ./scripts/setup-cron.sh
+   ```
+
+### 6.3 현재 상태
+
+| 항목 | 상태 |
+|------|------|
+| 마스터 스위치 | **OFF** |
+| Phase 1-5 코드 | 구현 완료 |
+| Cron 스케줄러 | 미설정 |
+
+> **참고**: 설정이 `enabled: false`인 상태에서는 cron이 실행되어도 아무 작업도 수행하지 않습니다.
+
+---
+
+## 7. 다음 단계
 
 ### Phase별 구현 로드맵
 
 ```
-Phase 1: Foundation    Phase 2: MVP          Phase 3: AI           Phase 4: Production
-(Week 1-2)             (Week 3-4)            (Week 5-6)            (Week 7-8)
-━━━━━━━━━━━━━━━━━     ━━━━━━━━━━━━━━━━━     ━━━━━━━━━━━━━━━━━     ━━━━━━━━━━━━━━━━━
-    로그 기반     ───▶    모니터링 MVP   ───▶     AI 진단      ───▶    자동화 확장
-        │                    │                     │                     │
-        ▼                    ▼                     ▼                     ▼
-• JSON 로깅 ✓          • Log Watcher ✓        • Claude 연동         • GitHub Issue
-• ErrorCode enum ✓     • Discord 알림 ✓       • 컨텍스트 수집       • Auto-Fix PR
-• Request ID           • Cron 설정 ✓          • 진단 보고서         • 안전장치
+Phase 1         Phase 2         Phase 3         Phase 4         Phase 5
+(Week 1-2)      (Week 3-4)      (Week 5-6)      (Week 7)        (Week 8-9)
+━━━━━━━━━━━    ━━━━━━━━━━━    ━━━━━━━━━━━    ━━━━━━━━━━━    ━━━━━━━━━━━
+Event Trigger  Issue Analysis  AI Diagnostic   Issue Auto     Auto-Fix PR
+     │              │               │               │               │
+     ▼              ▼               ▼               ▼               ▼
+• Webhook 수신  • 에러 파싱     • Claude 연동   • Issue 생성   • 코드 수정
+• 이벤트 큐     • 브랜치 생성   • 컨텍스트 수집 • 중복 감지    • Draft PR
+• 트리거 엔진   • 우선순위      • 진단 보고서   • 라벨 관리    • 테스트 검증
 ```
 
 ### 상세 구현 문서 참조
 
-| Phase | 문서 | 상태 |
-|-------|------|------|
-| Phase 1 | [로그 기반 구축](../ai-monitoring/phases/phase-1-log-foundation.md) | 완료 |
-| Phase 2 | [모니터링 MVP](../ai-monitoring/phases/phase-2-monitoring-mvp.md) | 완료 |
-| Phase 3 | [AI 진단](../ai-monitoring/phases/phase-3-ai-diagnostic.md) | 대기 |
-| Phase 4 | [자동화 확장](../ai-monitoring/phases/phase-4-automation.md) | 대기 |
+| Phase | 문서 | 상태 | 설명 |
+|-------|------|------|------|
+| Phase 1 | [Event Trigger](./phase-1-event-trigger.md) | 구현 완료 | 이벤트 수신 및 트리거 |
+| Phase 2 | [Issue Analysis](./phase-2-issue-analysis.md) | 구현 완료 | 이슈 분석 및 브랜치 생성 |
+| Phase 3 | [AI Diagnostic](./phase-3-ai-diagnostic.md) | 구현 완료 | Claude API 기반 진단 |
+| Phase 4 | [Issue Automation](./phase-4-issue-automation.md) | 구현 완료 | GitHub Issue 자동 생성 |
+| Phase 5 | [Auto-Fix & PR](./phase-5-auto-fix-pr.md) | 구현 완료 | 자동 수정 및 PR 생성 |
 
 ### 설계 문서 참조
 
@@ -209,7 +292,7 @@ Phase 1: Foundation    Phase 2: MVP          Phase 3: AI           Phase 4: Prod
 
 ---
 
-## 7. 안전장치
+## 8. 안전장치
 
 AI 자동화의 리스크를 최소화하기 위한 안전장치:
 
@@ -235,7 +318,7 @@ AI 자동화의 리스크를 최소화하기 위한 안전장치:
 
 ---
 
-## 8. 에러 코드 표준
+## 9. 에러 코드 표준
 
 ### 8.1 에러 코드 형식
 
