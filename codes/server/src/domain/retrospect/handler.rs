@@ -16,13 +16,13 @@ use super::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
     CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest, DraftSaveResponse,
-    JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse, ListCommentsQuery,
-    ListCommentsResponse, ReferenceItem, ResponseCategory, ResponsesListResponse,
-    ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem,
-    RetroRoomMemberItem, RetrospectDetailResponse, RetrospectListItem, SearchQueryParams,
-    SearchRetrospectItem, StorageQueryParams, StorageResponse, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
-    UpdateRetroRoomOrderRequest,
+    InviteCodeResponse, JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse,
+    ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
+    ResponsesListResponse, ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse,
+    RetroRoomListItem, RetroRoomMemberItem, RetrospectDetailResponse, RetrospectListItem,
+    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, UpdateRetroRoomNameRequest,
+    UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest,
 };
 use super::service::RetrospectService;
 
@@ -158,6 +158,45 @@ pub async fn list_retro_room_members(
     Ok(Json(BaseResponse::success_with_message(
         result,
         "회고방 멤버 목록 조회를 성공했습니다.",
+    )))
+}
+
+/// 초대 코드 조회 API (API-031)
+///
+/// 특정 회고방의 초대 코드를 조회합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retro-rooms/{retro_room_id}/invite-code",
+    params(
+        ("retro_room_id" = i64, Path, description = "회고방 ID")
+    ),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "초대 코드 조회 성공", body = SuccessInviteCodeResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 404, description = "회고방 없음", body = ErrorResponse)
+    ),
+    tag = "RetroRoom"
+)]
+pub async fn get_invite_code(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(retro_room_id): Path<i64>,
+) -> Result<Json<BaseResponse<InviteCodeResponse>>, AppError> {
+    if retro_room_id < 1 {
+        return Err(AppError::BadRequest(
+            "retroRoomId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    let member_id = user.user_id()?;
+
+    let result = RetrospectService::get_invite_code(state, member_id, retro_room_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "초대 코드 조회를 성공했습니다.",
     )))
 }
 

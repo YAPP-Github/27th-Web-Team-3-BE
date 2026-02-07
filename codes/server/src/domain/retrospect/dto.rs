@@ -108,6 +108,32 @@ pub struct SuccessRetroRoomMembersResponse {
     pub result: Vec<RetroRoomMemberItem>,
 }
 
+// ============== API-031: 초대 코드 조회 ==============
+
+/// 초대 코드 조회 응답 DTO
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteCodeResponse {
+    /// 회고방 고유 ID
+    pub retro_room_id: i64,
+    /// 초대 코드 (INV-XXXX-XXXX 형식)
+    pub invite_code: String,
+    /// 초대 코드 만료 일시 (ISO 8601 형식)
+    pub expires_at: String,
+    /// 초대 코드 만료 여부
+    pub is_expired: bool,
+}
+
+/// Swagger용 초대 코드 조회 성공 응답 타입
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessInviteCodeResponse {
+    pub is_success: bool,
+    pub code: String,
+    pub message: String,
+    pub result: InviteCodeResponse,
+}
+
 // ============== API-007: 회고방 순서 변경 ==============
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
