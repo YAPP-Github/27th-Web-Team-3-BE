@@ -33,14 +33,14 @@ use super::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
     CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
-    DraftSaveResponse, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
-    ListCommentsResponse, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
-    RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetroRoomMemberItem,
-    RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
-    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
-    UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
+    DraftSaveResponse, EmotionRankItem, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
+    ListCommentsResponse, MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory,
+    ResponseListItem, ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse,
+    RetroRoomListItem, RetroRoomMemberItem, RetrospectDetailResponse, RetrospectListItem,
+    RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem,
+    StorageQueryParams, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, UpdateRetroRoomNameRequest,
+    UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -2635,9 +2635,12 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 9-1. retrospects.insight 업데이트
+        // 9-1. retrospects.insight + emotion_rank 업데이트
+        let emotion_rank_json = serde_json::to_string(&analysis.emotion_rank)
+            .map_err(|e| AppError::InternalError(format!("emotion_rank 직렬화 실패: {}", e)))?;
         let mut retrospect_active: retrospect::ActiveModel = retrospect_model.clone().into();
         retrospect_active.insight = Set(Some(insight.clone()));
+        retrospect_active.emotion_rank = Set(Some(emotion_rank_json));
         retrospect_active.updated_at = Set(Utc::now().naive_utc());
         retrospect_active
             .update(&txn)
@@ -2674,6 +2677,139 @@ impl RetrospectService {
         info!(retrospect_id = retrospect_id, "회고 분석 완료");
 
         Ok(analysis)
+    }
+
+    /// API-032: 분석 결과 조회
+    pub async fn get_analysis_result(
+        state: AppState,
+        user_id: i64,
+        retrospect_id: i64,
+    ) -> Result<AnalysisResponse, AppError> {
+        info!(
+            user_id = user_id,
+            retrospect_id = retrospect_id,
+            "분석 결과 조회 요청"
+        );
+
+        // 1. 회고 존재 확인
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+
+        // 2. 접근 권한 확인 (회고방 멤버인지)
+        let is_room_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
+            )
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 3. 분석 완료 여부 확인
+        let insight = retrospect_model.insight.ok_or_else(|| {
+            AppError::RetrospectNotFound("분석이 아직 완료되지 않은 회고입니다.".to_string())
+        })?;
+
+        // 4. emotion_rank 복원
+        let emotion_rank: Vec<EmotionRankItem> = retrospect_model
+            .emotion_rank
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(|e| AppError::InternalError(format!("emotion_rank 역직렬화 실패: {}", e)))?
+            .unwrap_or_default();
+
+        // 5. personal_missions 복원 (member_retro + member 조회)
+        let member_retros = member_retro::Entity::find()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .filter(member_retro::Column::Status.eq(RetrospectStatus::Analyzed))
+            .order_by_asc(member_retro::Column::MemberRetroId)
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let member_ids: Vec<i64> = member_retros.iter().filter_map(|mr| mr.member_id).collect();
+
+        let members = if member_ids.is_empty() {
+            vec![]
+        } else {
+            member::Entity::find()
+                .filter(member::Column::MemberId.is_in(member_ids))
+                .all(&state.db)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?
+        };
+
+        let member_map: HashMap<i64, String> = members
+            .iter()
+            .map(|m| {
+                let nickname = m
+                    .nickname
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "Unknown".to_string());
+                (m.member_id, nickname)
+            })
+            .collect();
+
+        // personal_insight를 파싱하여 missions 복원
+        let mut personal_missions: Vec<PersonalMissionItem> = Vec::new();
+        for mr in &member_retros {
+            let Some(member_id) = mr.member_id else {
+                continue;
+            };
+            let username = member_map
+                .get(&member_id)
+                .cloned()
+                .unwrap_or_else(|| "Unknown".to_string());
+
+            let missions = mr
+                .personal_insight
+                .as_deref()
+                .map(|insight_text| {
+                    insight_text
+                        .lines()
+                        .filter_map(|line| {
+                            let parts: Vec<&str> = line.splitn(2, ": ").collect();
+                            if parts.len() == 2 {
+                                Some(MissionItem {
+                                    mission_title: parts[0].to_string(),
+                                    mission_desc: parts[1].to_string(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            personal_missions.push(PersonalMissionItem {
+                user_id: member_id,
+                user_name: username,
+                missions,
+            });
+        }
+
+        // userId 오름차순 정렬
+        personal_missions.sort_by_key(|pm| pm.user_id);
+
+        info!(retrospect_id = retrospect_id, "분석 결과 조회 완료");
+
+        Ok(AnalysisResponse {
+            insight,
+            emotion_rank,
+            personal_missions,
+        })
     }
 
     /// 회고 답변 카테고리별 조회 (API-020)
