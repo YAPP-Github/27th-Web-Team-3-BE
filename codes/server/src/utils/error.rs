@@ -164,6 +164,9 @@ pub enum AppError {
 
     /// MEMBER4042: 존재하지 않는 사용자 (404)
     MemberNotFound(String),
+
+    /// RETRO4044: 분석 미완료 (404)
+    AnalysisNotReady(String),
 }
 
 impl AppError {
@@ -220,6 +223,7 @@ impl AppError {
             AppError::PdfGenerationFailed(_) => "PDF 생성 중 서버 에러가 발생했습니다.".to_string(),
             AppError::RetroDeleteAccessDenied(msg) => msg.clone(),
             AppError::MemberNotFound(msg) => msg.clone(),
+            AppError::AnalysisNotReady(msg) => msg.clone(),
         }
     }
 
@@ -276,6 +280,7 @@ impl AppError {
             AppError::PdfGenerationFailed(_) => "COMMON500",
             AppError::RetroDeleteAccessDenied(_) => "RETRO4031",
             AppError::MemberNotFound(_) => "MEMBER4042",
+            AppError::AnalysisNotReady(_) => "RETRO4044",
         }
     }
 
@@ -332,6 +337,7 @@ impl AppError {
             AppError::PdfGenerationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::RetroDeleteAccessDenied(_) => StatusCode::FORBIDDEN,
             AppError::MemberNotFound(_) => StatusCode::NOT_FOUND,
+            AppError::AnalysisNotReady(_) => StatusCode::NOT_FOUND,
         }
     }
 }

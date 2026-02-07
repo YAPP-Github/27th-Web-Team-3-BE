@@ -666,6 +666,46 @@ pub async fn analyze_retrospective_handler(
     )))
 }
 
+/// 분석 결과 조회 API (API-032)
+///
+/// 분석이 완료된 회고의 분석 결과(인사이트, 감정 랭킹, 개인 미션)를 조회합니다.
+#[utoipa::path(
+    get,
+    path = "/api/v1/retrospects/{retrospectId}/analysis",
+    params(
+        ("retrospectId" = i64, Path, description = "분석 결과를 조회할 회고 ID")
+    ),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "분석 결과 조회 성공", body = SuccessAnalysisResponse),
+        (status = 400, description = "잘못된 Path Parameter", body = ErrorResponse),
+        (status = 401, description = "인증 실패", body = ErrorResponse),
+        (status = 403, description = "접근 권한 없음", body = ErrorResponse),
+        (status = 404, description = "회고 없음 또는 분석 미완료", body = ErrorResponse)
+    ),
+    tag = "Retrospect"
+)]
+pub async fn get_analysis_result(
+    user: AuthUser,
+    State(state): State<AppState>,
+    Path(retrospect_id): Path<i64>,
+) -> Result<Json<BaseResponse<AnalysisResponse>>, AppError> {
+    if retrospect_id < 1 {
+        return Err(AppError::BadRequest(
+            "retrospectId는 1 이상의 양수여야 합니다.".to_string(),
+        ));
+    }
+
+    let user_id = user.user_id()?;
+
+    let result = RetrospectService::get_analysis_result(state, user_id, retrospect_id).await?;
+
+    Ok(Json(BaseResponse::success_with_message(
+        result,
+        "분석 결과 조회를 성공했습니다.",
+    )))
+}
+
 /// 회고 검색 API (API-023)
 ///
 /// 사용자가 참여하는 모든 회고방의 회고를 프로젝트명/회고명 기준으로 검색합니다.

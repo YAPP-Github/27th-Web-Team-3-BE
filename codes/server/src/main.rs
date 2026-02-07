@@ -84,6 +84,7 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::submit_retrospect,
         domain::retrospect::handler::get_storage,
         domain::retrospect::handler::analyze_retrospective_handler,
+        domain::retrospect::handler::get_analysis_result,
         domain::retrospect::handler::search_retrospects,
         domain::retrospect::handler::list_responses,
         domain::retrospect::handler::export_retrospect,
@@ -390,7 +391,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/analysis",
-            axum::routing::post(domain::retrospect::handler::analyze_retrospective_handler),
+            axum::routing::post(domain::retrospect::handler::analyze_retrospective_handler)
+                .get(domain::retrospect::handler::get_analysis_result),
         )
         .route(
             "/api/v1/retrospects/:retrospect_id/responses",

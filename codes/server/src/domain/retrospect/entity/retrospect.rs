@@ -90,6 +90,8 @@ pub struct Model {
     pub retrospect_id: i64,
     pub title: String,
     pub insight: Option<String>,
+    /// 감정 랭킹 JSON (EmotionRankItem 배열)
+    pub emotion_rank: Option<String>,
     pub retrospect_method: RetrospectMethod,
     pub created_at: DateTime,
     pub updated_at: DateTime,
