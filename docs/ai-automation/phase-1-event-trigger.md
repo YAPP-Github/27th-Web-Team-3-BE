@@ -72,15 +72,17 @@ Phase 1 완료 상태
 #### Out of Scope
 
 - AI 기반 이슈 분석 (Phase 2: Issue Analysis)
-- AI 코드 수정 및 테스트 (Phase 3: Code Fix)
-- PR 생성 및 리뷰 요청 (Phase 4: PR Creation)
+- AI 진단 (Phase 3: AI Diagnostic)
+- GitHub Issue 자동화 (Phase 4: Issue Automation)
+- 자동 수정 및 PR 생성 (Phase 5: Auto-Fix & PR)
 - 대시보드 UI (추후 검토)
 
 > **Phase 역할 분담**
 > - Phase 1: 이벤트 수신 및 트리거 (현재 문서)
 > - Phase 2: 이슈 분석 및 브랜치 생성
-> - Phase 3: AI 코드 수정 및 테스트 검증
-> - Phase 4: PR 생성 및 리뷰 요청
+> - Phase 3: AI 진단 (Claude API)
+> - Phase 4: GitHub Issue 자동 생성
+> - Phase 5: 자동 수정 및 PR 생성
 
 ---
 
@@ -1405,32 +1407,30 @@ TRIGGER_RATE_LIMIT=10  # 시간당 최대 처리 수
 
 ---
 
-## 9. 다음 단계 (Phase 2)
+## 9. 다음 단계
 
-Phase 1 완료 후, 다음 단계에서는 수신된 이벤트를 처리하는 AI Agent를 구현합니다:
-
-- **Diagnostic Agent**: 에러 분석 및 근본 원인 진단
-- **Auto-Fix Agent**: 자동 수정 PR 생성
-- **Code Review Agent**: PR 코드 리뷰
+Phase 1 완료 후 진행되는 단계:
 
 ```
-Phase 1 (현재)          Phase 2               Phase 3
-━━━━━━━━━━━━━━━         ━━━━━━━━━━━━━━━       ━━━━━━━━━━━━━━━
-이벤트 수신/트리거  ───▶  AI Agent 구현   ───▶  통합 및 최적화
-        │                      │                     │
-        ▼                      ▼                     ▼
-• 웹훅 수신             • Diagnostic Agent    • 성능 최적화
-• 모니터링 연동         • Auto-Fix Agent      • 비용 최적화
-• 이벤트 큐             • Code Review Agent   • 대시보드
+Phase 1 (현재)     Phase 2           Phase 3           Phase 4           Phase 5
+━━━━━━━━━━━━━━    ━━━━━━━━━━━━━    ━━━━━━━━━━━━━    ━━━━━━━━━━━━━    ━━━━━━━━━━━━━
+Event Trigger ───▶ Issue Analysis ───▶ AI Diagnostic ───▶ Issue Auto ───▶ Auto-Fix PR
+      │                 │                 │                 │                 │
+      ▼                 ▼                 ▼                 ▼                 ▼
+• Webhook 수신     • 에러 파싱       • Claude 연동     • Issue 생성     • 코드 수정
+• 이벤트 큐        • 브랜치 생성     • 컨텍스트 분석   • 중복 감지      • Draft PR
+• 트리거 엔진      • 우선순위        • 진단 보고서     • 라벨 관리      • 테스트 검증
 ```
 
 ---
 
-## 관련 문서
+## 참고 문서
 
-- [AI 모니터링 개요](../ai-monitoring/README.md)
-- [AI 모니터링 Phase 4 (자동화)](../ai-monitoring/phases/phase-4-automation.md)
-- [알림 시스템 설계](../ai-monitoring/design/04-alerting.md)
+- [Phase 2: Issue Analysis](./phase-2-issue-analysis.md)
+- [Phase 3: AI Diagnostic](./phase-3-ai-diagnostic.md)
+- [Phase 4: Issue Automation](./phase-4-issue-automation.md)
+- [Phase 5: Auto-Fix & PR](./phase-5-auto-fix-pr.md)
+- [Overview](./overview.md)
 
 ---
 
