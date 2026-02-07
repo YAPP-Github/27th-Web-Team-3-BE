@@ -178,25 +178,26 @@ Production (Phase 3-4): ~$30/월  (Claude API 호출 비용)
 ### Phase별 구현 로드맵
 
 ```
-Phase 1: Foundation    Phase 2: MVP          Phase 3: AI           Phase 4: Production
-(Week 1-2)             (Week 3-4)            (Week 5-6)            (Week 7-8)
-━━━━━━━━━━━━━━━━━     ━━━━━━━━━━━━━━━━━     ━━━━━━━━━━━━━━━━━     ━━━━━━━━━━━━━━━━━
-    로그 기반     ───▶    모니터링 MVP   ───▶     AI 진단      ───▶    자동화 확장
-        │                    │                     │                     │
-        ▼                    ▼                     ▼                     ▼
-• JSON 로깅 ✓          • Log Watcher ✓        • Claude 연동         • GitHub Issue
-• ErrorCode enum ✓     • Discord 알림 ✓       • 컨텍스트 수집       • Auto-Fix PR
-• Request ID           • Cron 설정 ✓          • 진단 보고서         • 안전장치
+Phase 1         Phase 2         Phase 3         Phase 4         Phase 5
+(Week 1-2)      (Week 3-4)      (Week 5-6)      (Week 7)        (Week 8-9)
+━━━━━━━━━━━    ━━━━━━━━━━━    ━━━━━━━━━━━    ━━━━━━━━━━━    ━━━━━━━━━━━
+Event Trigger  Issue Analysis  AI Diagnostic   Issue Auto     Auto-Fix PR
+     │              │               │               │               │
+     ▼              ▼               ▼               ▼               ▼
+• Webhook 수신  • 에러 파싱     • Claude 연동   • Issue 생성   • 코드 수정
+• 이벤트 큐     • 브랜치 생성   • 컨텍스트 수집 • 중복 감지    • Draft PR
+• 트리거 엔진   • 우선순위      • 진단 보고서   • 라벨 관리    • 테스트 검증
 ```
 
 ### 상세 구현 문서 참조
 
-| Phase | 문서 | 상태 |
-|-------|------|------|
-| Phase 1 | [로그 기반 구축](../ai-monitoring/phases/phase-1-log-foundation.md) | 완료 |
-| Phase 2 | [모니터링 MVP](../ai-monitoring/phases/phase-2-monitoring-mvp.md) | 완료 |
-| Phase 3 | [AI 진단](../ai-monitoring/phases/phase-3-ai-diagnostic.md) | 대기 |
-| Phase 4 | [자동화 확장](../ai-monitoring/phases/phase-4-automation.md) | 대기 |
+| Phase | 문서 | 상태 | 설명 |
+|-------|------|------|------|
+| Phase 1 | [Event Trigger](./phase-1-event-trigger.md) | 대기 | 이벤트 수신 및 트리거 |
+| Phase 2 | [Issue Analysis](./phase-2-issue-analysis.md) | 대기 | 이슈 분석 및 브랜치 생성 |
+| Phase 3 | [AI Diagnostic](./phase-3-ai-diagnostic.md) | 대기 | Claude API 기반 진단 |
+| Phase 4 | [Issue Automation](./phase-4-issue-automation.md) | 대기 | GitHub Issue 자동 생성 |
+| Phase 5 | [Auto-Fix & PR](./phase-5-auto-fix-pr.md) | 대기 | 자동 수정 및 PR 생성 |
 
 ### 설계 문서 참조
 

@@ -893,12 +893,13 @@ python3 ./scripts/issue-analyzer.py '{"error":{"error_code":"AI5003","target":"s
 
 ---
 
-## 관련 문서
+## 참고 문서
 
-- [Phase 1: 로그 기반](../ai-monitoring/phases/phase-1-log-foundation.md)
-- [Phase 3: AI 진단](../ai-monitoring/phases/phase-3-ai-diagnostic.md)
-- [Phase 4: 자동화 확장](../ai-monitoring/phases/phase-4-automation.md)
-- [로그 스펙](../ai-monitoring/design/02-log-specification.md)
+- [Phase 1: Event Trigger](./phase-1-event-trigger.md)
+- [Phase 3: AI Diagnostic](./phase-3-ai-diagnostic.md)
+- [Phase 4: Issue Automation](./phase-4-issue-automation.md)
+- [Phase 5: Auto-Fix & PR](./phase-5-auto-fix-pr.md)
+- [Overview](./overview.md)
 
 ---
 
