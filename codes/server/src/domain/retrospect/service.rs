@@ -2653,13 +2653,11 @@ impl RetrospectService {
             let personal_insight = mr
                 .member_id
                 .and_then(|member_id| personal_missions.iter().find(|pm| pm.user_id == member_id))
-                .map(|pm| {
-                    pm.missions
-                        .iter()
-                        .map(|m| format!("{}: {}", m.mission_title, m.mission_desc))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                });
+                .map(|pm| serde_json::to_string(&pm.missions))
+                .transpose()
+                .map_err(|e| {
+                    AppError::InternalError(format!("personal_insight 직렬화 실패: {}", e))
+                })?;
 
             let mut mr_active: member_retro::ActiveModel = mr.clone().into();
             mr_active.personal_insight = Set(personal_insight);
@@ -2691,32 +2689,13 @@ impl RetrospectService {
             "분석 결과 조회 요청"
         );
 
-        // 1. 회고 존재 확인
-        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?
-            .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+        // 1. 회고 존재 + 접근 권한 확인 (기존 헬퍼 재사용)
+        let retrospect_model =
+            Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
-        // 2. 접근 권한 확인 (회고방 멤버인지)
-        let is_room_member = member_retro_room::Entity::find()
-            .filter(member_retro_room::Column::MemberId.eq(user_id))
-            .filter(
-                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
-            )
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        if is_room_member.is_none() {
-            return Err(AppError::RetroRoomAccessDenied(
-                "해당 회고에 접근 권한이 없습니다.".to_string(),
-            ));
-        }
-
-        // 3. 분석 완료 여부 확인
+        // 2. 분석 완료 여부 확인
         let insight = retrospect_model.insight.ok_or_else(|| {
-            AppError::RetrospectNotFound("분석이 아직 완료되지 않은 회고입니다.".to_string())
+            AppError::AnalysisNotReady("분석이 아직 완료되지 않은 회고입니다.".to_string())
         })?;
 
         // 4. emotion_rank 복원
@@ -2775,22 +2754,7 @@ impl RetrospectService {
             let missions = mr
                 .personal_insight
                 .as_deref()
-                .map(|insight_text| {
-                    insight_text
-                        .lines()
-                        .filter_map(|line| {
-                            let parts: Vec<&str> = line.splitn(2, ": ").collect();
-                            if parts.len() == 2 {
-                                Some(MissionItem {
-                                    mission_title: parts[0].to_string(),
-                                    mission_desc: parts[1].to_string(),
-                                })
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
+                .map(parse_personal_insight)
                 .unwrap_or_default();
 
             personal_missions.push(PersonalMissionItem {
@@ -3540,6 +3504,30 @@ impl RetrospectService {
             remaining_count,
         })
     }
+}
+
+/// personal_insight 문자열을 MissionItem 목록으로 파싱합니다.
+/// JSON 형식을 우선 시도하고, 실패 시 레거시 텍스트 형식("title: desc\n...")으로 폴백합니다.
+fn parse_personal_insight(text: &str) -> Vec<MissionItem> {
+    // JSON 형식 우선 시도
+    if let Ok(missions) = serde_json::from_str::<Vec<MissionItem>>(text) {
+        return missions;
+    }
+
+    // 레거시 텍스트 형식 폴백 (하위 호환)
+    text.lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.splitn(2, ": ").collect();
+            if parts.len() == 2 {
+                Some(MissionItem {
+                    mission_title: parts[0].to_string(),
+                    mission_desc: parts[1].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -4470,5 +4458,99 @@ mod tests {
 
         // Assert
         assert_eq!(result, "Free");
+    }
+
+    // ===== personal_insight 파싱 테스트 =====
+
+    #[test]
+    fn should_parse_json_format_personal_insight() {
+        // Arrange
+        let json_text = r#"[{"missionTitle":"감정 표현하기","missionDesc":"팀원과 소통을 늘려보세요."},{"missionTitle":"휴식 취하기","missionDesc":"충분한 휴식이 필요합니다."}]"#;
+
+        // Act
+        let missions = parse_personal_insight(json_text);
+
+        // Assert
+        assert_eq!(missions.len(), 2);
+        assert_eq!(missions[0].mission_title, "감정 표현하기");
+        assert_eq!(missions[0].mission_desc, "팀원과 소통을 늘려보세요.");
+        assert_eq!(missions[1].mission_title, "휴식 취하기");
+        assert_eq!(missions[1].mission_desc, "충분한 휴식이 필요합니다.");
+    }
+
+    #[test]
+    fn should_parse_legacy_text_format_personal_insight() {
+        // Arrange
+        let text =
+            "감정 표현하기: 팀원과 소통을 늘려보세요.\n휴식 취하기: 충분한 휴식이 필요합니다.";
+
+        // Act
+        let missions = parse_personal_insight(text);
+
+        // Assert
+        assert_eq!(missions.len(), 2);
+        assert_eq!(missions[0].mission_title, "감정 표현하기");
+        assert_eq!(missions[0].mission_desc, "팀원과 소통을 늘려보세요.");
+    }
+
+    #[test]
+    fn should_handle_legacy_text_with_colon_in_title() {
+        // Arrange - mission_title에 ": "가 포함된 레거시 데이터
+        let text = "Phase 1: 준비 단계: 사전 조사를 철저히 하세요.";
+
+        // Act
+        let missions = parse_personal_insight(text);
+
+        // Assert - splitn(2)로 첫 번째 ": " 기준으로 분할
+        assert_eq!(missions.len(), 1);
+        assert_eq!(missions[0].mission_title, "Phase 1");
+        assert_eq!(
+            missions[0].mission_desc,
+            "준비 단계: 사전 조사를 철저히 하세요."
+        );
+    }
+
+    #[test]
+    fn should_return_empty_vec_for_empty_string() {
+        // Arrange
+        let text = "";
+
+        // Act
+        let missions = parse_personal_insight(text);
+
+        // Assert
+        assert!(missions.is_empty());
+    }
+
+    #[test]
+    fn should_skip_malformed_lines_in_legacy_format() {
+        // Arrange - 파싱 불가능한 라인은 무시
+        let text = "정상 미션: 설명입니다.\n콜론없는라인\n또다른 미션: 설명.";
+
+        // Act
+        let missions = parse_personal_insight(text);
+
+        // Assert
+        assert_eq!(missions.len(), 2);
+        assert_eq!(missions[0].mission_title, "정상 미션");
+        assert_eq!(missions[1].mission_title, "또다른 미션");
+    }
+
+    #[test]
+    fn should_prefer_json_over_legacy_format() {
+        // Arrange - 유효한 JSON이면 JSON으로 파싱
+        let json_text = serde_json::to_string(&vec![MissionItem {
+            mission_title: "제목: 포함".to_string(),
+            mission_desc: "설명입니다.".to_string(),
+        }])
+        .unwrap();
+
+        // Act
+        let missions = parse_personal_insight(&json_text);
+
+        // Assert - JSON 파싱 결과: 콜론이 포함된 제목도 정상 처리
+        assert_eq!(missions.len(), 1);
+        assert_eq!(missions[0].mission_title, "제목: 포함");
+        assert_eq!(missions[0].mission_desc, "설명입니다.");
     }
 }
