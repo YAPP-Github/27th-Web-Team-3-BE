@@ -32,8 +32,8 @@ use crate::domain::retrospect::entity::retrospect::Entity as Retrospect;
 use super::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
-    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
-    DraftSaveResponse, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
+    CreateRetrospectResponse, CurrentUserStatus, DeleteRetroRoomResponse, DraftItem,
+    DraftSaveRequest, DraftSaveResponse, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
     ListCommentsResponse, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
     RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetroRoomMemberItem,
     RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
@@ -1707,6 +1707,17 @@ impl RetrospectService {
         // 8. 시작일 포맷 (start_time은 생성 시 KST로 저장되므로 변환 불필요)
         let start_time = retrospect_model.start_time.format("%Y-%m-%d").to_string();
 
+        // 9. 현재 사용자의 참여 상태 확인
+        let current_user_status = member_retros
+            .iter()
+            .find(|mr| mr.member_id == Some(user_id))
+            .map(|mr| match mr.status {
+                RetrospectStatus::Draft => CurrentUserStatus::Draft,
+                RetrospectStatus::Submitted => CurrentUserStatus::Submitted,
+                RetrospectStatus::Analyzed => CurrentUserStatus::Analyzed,
+            })
+            .unwrap_or(CurrentUserStatus::NotParticipated);
+
         Ok(RetrospectDetailResponse {
             retro_room_id: retrospect_room_id,
             title: retrospect_model.title,
@@ -1716,6 +1727,7 @@ impl RetrospectService {
             total_like_count,
             total_comment_count,
             questions,
+            current_user_status,
         })
     }
 
