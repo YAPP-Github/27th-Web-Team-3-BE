@@ -527,6 +527,20 @@ pub struct SuccessStorageResponse {
 // API-012: 회고 상세 정보 조회 DTO
 // ============================================
 
+/// 현재 사용자의 회고 참여 상태
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CurrentUserStatus {
+    /// 회고에 참석 등록하지 않음
+    NotParticipated,
+    /// 참석 등록 후 임시 저장 상태
+    Draft,
+    /// 회고 답변 최종 제출 완료
+    Submitted,
+    /// AI 분석 완료
+    Analyzed,
+}
+
 /// 회고 상세 정보 응답 DTO
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -547,6 +561,8 @@ pub struct RetrospectDetailResponse {
     pub total_comment_count: i64,
     /// 해당 회고의 질문 리스트 (index 기준 오름차순 정렬, 최대 5개)
     pub questions: Vec<RetrospectQuestionItem>,
+    /// 현재 요청 사용자의 회고 참여 상태
+    pub current_user_status: CurrentUserStatus,
 }
 
 /// 회고 참여 멤버 아이템
@@ -1596,6 +1612,7 @@ mod tests {
                     content: "다음에 시도해보고 싶은 것은 무엇인가요?".to_string(),
                 },
             ],
+            current_user_status: CurrentUserStatus::Submitted,
         };
 
         // Act
@@ -1608,6 +1625,7 @@ mod tests {
         assert_eq!(json["retroCategory"], "KPT");
         assert_eq!(json["totalLikeCount"], 156);
         assert_eq!(json["totalCommentCount"], 42);
+        assert_eq!(json["currentUserStatus"], "SUBMITTED");
 
         // members 검증
         let members = json["members"].as_array().unwrap();
@@ -1638,6 +1656,7 @@ mod tests {
             total_like_count: 0,
             total_comment_count: 0,
             questions: vec![],
+            current_user_status: CurrentUserStatus::NotParticipated,
         };
 
         // Act
@@ -1672,6 +1691,7 @@ mod tests {
                 total_like_count: 0,
                 total_comment_count: 0,
                 questions: vec![],
+                current_user_status: CurrentUserStatus::Draft,
             };
 
             let json = serde_json::to_value(&response).unwrap();
