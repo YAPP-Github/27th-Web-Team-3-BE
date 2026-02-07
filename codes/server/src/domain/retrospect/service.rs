@@ -896,25 +896,8 @@ impl RetrospectService {
 
         let retrospect_id = retrospect_result.retrospect_id;
 
-        // 9. 회고 방식에 따른 기본 질문 생성
-        let questions = req.retrospect_method.default_questions();
-        for question in questions {
-            let response_model = response::ActiveModel {
-                question: Set(question.to_string()),
-                content: Set(String::new()),
-                created_at: Set(now),
-                updated_at: Set(now),
-                retrospect_id: Set(retrospect_id),
-                ..Default::default()
-            };
-
-            response_model
-                .insert(&txn)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-        }
-
-        // 10. 참고 URL 저장
+        // 9. 참고 URL 저장
+        // 질문(response)은 참석자 등록(create_participant) 시 멤버별로 생성됩니다.
         for url in &req.reference_urls {
             let reference_model = retro_reference::ActiveModel {
                 title: Set(url.clone()),
