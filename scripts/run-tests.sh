@@ -13,9 +13,9 @@ cd "$PROJECT_ROOT/codes/server"
 cargo test 2>&1 | tee /tmp/test-results.log
 
 # 결과 파싱
-PASSED=$(grep -c "ok$" /tmp/test-results.log || echo "0")
-FAILED=$(grep -c "FAILED$" /tmp/test-results.log || echo "0")
-IGNORED=$(grep -c "ignored$" /tmp/test-results.log || echo "0")
+PASSED=$(grep -c "ok$" /tmp/test-results.log || true)
+FAILED=$(grep -c "FAILED$" /tmp/test-results.log || true)
+IGNORED=$(grep -c "ignored$" /tmp/test-results.log || true)
 
 echo "================================================"
 echo "테스트 결과 요약"
