@@ -32,15 +32,16 @@ use crate::domain::retrospect::entity::retrospect::Entity as Retrospect;
 use super::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
-    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftItem, DraftSaveRequest,
-    DraftSaveResponse, EmotionRankItem, GuideType, JoinRetroRoomRequest, JoinRetroRoomResponse,
-    ListCommentsResponse, MissionItem, PersonalMissionItem, ReferenceItem, ResponseCategory,
-    ResponseListItem, ResponsesListResponse, RetroRoomCreateRequest, RetroRoomCreateResponse,
-    RetroRoomListItem, RetroRoomMemberItem, RetrospectDetailResponse, RetrospectListItem,
-    RetrospectMemberItem, RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem,
-    StorageQueryParams, StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
-    SubmitRetrospectRequest, SubmitRetrospectResponse, UpdateRetroRoomNameRequest,
-    UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
+    CreateRetrospectResponse, CurrentUserStatus, DeleteRetroRoomResponse, DraftItem,
+    DraftSaveRequest, DraftSaveResponse, EmotionRankItem, GuideType, InviteCodeResponse,
+    JoinRetroRoomRequest, JoinRetroRoomResponse, ListCommentsResponse, MissionItem,
+    PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
+    RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetroRoomMemberItem,
+    RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
+    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
+    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
+    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
+    UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
 /// 회고당 질문 수 (고정)
@@ -352,6 +353,54 @@ impl RetrospectService {
         );
 
         Ok(items)
+    }
+
+    /// API-031: 초대 코드 조회
+    pub async fn get_invite_code(
+        state: AppState,
+        member_id: i64,
+        retro_room_id: i64,
+    ) -> Result<InviteCodeResponse, AppError> {
+        // 1. 회고방 존재 여부 확인
+        let room = RetroRoom::find_by_id(retro_room_id)
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?
+            .ok_or_else(|| {
+                AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".to_string())
+            })?;
+
+        // 2. 요청자가 해당 회고방의 멤버인지 확인
+        let member_room = MemberRetroRoom::find()
+            .filter(member_retro_room::Column::MemberId.eq(member_id))
+            .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        if member_room.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고방에 접근 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 3. 만료 시각 계산 (초대 코드 생성 시점 + 7일)
+        let expires_at = room.invite_code_created_at + chrono::Duration::days(7);
+        let now = Utc::now().naive_utc();
+        let is_expired = now >= expires_at;
+
+        info!(
+            retro_room_id = retro_room_id,
+            is_expired = is_expired,
+            "초대 코드 조회 완료"
+        );
+
+        Ok(InviteCodeResponse {
+            retro_room_id: room.retrospect_room_id,
+            invite_code: room.invition_url,
+            expires_at: expires_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            is_expired,
+        })
     }
 
     /// API-007: 회고방 순서 변경
@@ -1707,6 +1756,17 @@ impl RetrospectService {
         // 8. 시작일 포맷 (start_time은 생성 시 KST로 저장되므로 변환 불필요)
         let start_time = retrospect_model.start_time.format("%Y-%m-%d").to_string();
 
+        // 9. 현재 사용자의 참여 상태 확인
+        let current_user_status = member_retros
+            .iter()
+            .find(|mr| mr.member_id == Some(user_id))
+            .map(|mr| match mr.status {
+                RetrospectStatus::Draft => CurrentUserStatus::Draft,
+                RetrospectStatus::Submitted => CurrentUserStatus::Submitted,
+                RetrospectStatus::Analyzed => CurrentUserStatus::Analyzed,
+            })
+            .unwrap_or(CurrentUserStatus::NotParticipated);
+
         Ok(RetrospectDetailResponse {
             retro_room_id: retrospect_room_id,
             title: retrospect_model.title,
@@ -1716,6 +1776,7 @@ impl RetrospectService {
             total_like_count,
             total_comment_count,
             questions,
+            current_user_status,
         })
     }
 
