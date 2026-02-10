@@ -31,7 +31,7 @@ def get_config_path() -> Path:
     """설정 파일 경로 반환"""
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
-    return project_root / "automation.config.yaml"
+    return project_root / ".claude" / "config" / "automation.config.yaml"
 
 
 def load_config() -> dict:
