@@ -281,6 +281,7 @@ Event Trigger  Issue Analysis  AI Diagnostic   Issue Auto     Auto-Fix PR
 | Phase 4 | [Issue Automation](./phase-4-issue-automation.md) | 구현 완료 | GitHub Issue 자동 생성 |
 | Phase 5 | [Auto-Fix & PR](./phase-5-auto-fix-pr.md) | 구현 완료 | 자동 수정 및 PR 생성 |
 
+
 ### 설계 문서 참조
 
 | 문서 | 내용 |

@@ -230,8 +230,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 환경 변수 로드
     dotenvy::dotenv().ok();
 
-    // 로깅 초기화
-    utils::init_logging();
+    // 로깅 초기화 (guard를 유지해야 종료 시 버퍼링된 로그가 flush됨)
+    let _log_guard = utils::init_logging();
 
     // 설정 로드
     let config = AppConfig::from_env()?;

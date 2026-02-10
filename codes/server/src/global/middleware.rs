@@ -1,8 +1,7 @@
 use axum::{extract::Request, middleware::Next, response::Response};
-use tracing::Instrument;
+use tracing::{error, info, warn, Instrument};
 use uuid::Uuid;
 
-// TODO: Phase 2에서 handler에서 RequestId 추출 시 사용 예정
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct RequestId(pub String);
@@ -19,19 +18,44 @@ pub async fn request_id_middleware(mut request: Request, next: Next) -> Response
         .extensions_mut()
         .insert(RequestId(request_id.clone()));
 
-    // Span에 request_id 포함 - instrument()로 async-safe하게 적용
+    let method = request.method().to_string();
+    let path = request.uri().path().to_string();
+
     let span = tracing::info_span!(
         "request",
         request_id = %request_id,
-        method = %request.method(),
-        uri = %request.uri().path(),
+        method = %method,
+        uri = %path,
     );
 
-    let request_id_for_header = request_id.clone();
+    let request_id_for_header = request_id;
+    let start = std::time::Instant::now();
 
-    // instrument()를 사용하여 멀티스레드 런타임에서도 안전하게 span 유지
     async move {
         let mut response = next.run(request).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let status = response.status().as_u16();
+
+        if status >= 500 {
+            error!(
+                duration_ms = duration_ms,
+                status = status,
+                "request completed"
+            );
+        } else if status >= 400 {
+            warn!(
+                duration_ms = duration_ms,
+                status = status,
+                "request completed"
+            );
+        } else {
+            info!(
+                duration_ms = duration_ms,
+                status = status,
+                "request completed"
+            );
+        }
+
         response.headers_mut().insert(
             "x-request-id",
             request_id_for_header

@@ -3,6 +3,7 @@
 > **버전**: 1.1
 > **최종 수정**: 2026-02-06
 > **상태**: 구현 완료
+
 > **의존성**: Phase 4 완료 필수
 
 ---
@@ -163,6 +164,7 @@ scripts/
 ├── create-pr.sh            # Phase 5 (구현 완료) ✅
 ├── rollback-fix.sh         # Phase 5 (구현 완료) ✅
 └── verify-fix.sh           # Phase 5 (구현 완료) ✅
+
 ```
 
 ---
@@ -328,6 +330,7 @@ fi
 2. `true`인 경우 `auto-fix.sh` 자동 호출
 3. 실패해도 전체 파이프라인은 계속 진행 (`|| true`)
 
+
 ---
 
 ## 4. 수정 허용 범위
@@ -464,6 +467,7 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 ```
 
+
 ---
 
 ## 6. Claude Code CLI 연동
@@ -532,6 +536,7 @@ gh auth login
 # setup-labels.sh가 이미 auto-fix 라벨을 포함하고 있음
 ./scripts/setup-labels.sh
 
+
 # 4. 스크립트 실행 권한
 chmod +x scripts/auto-fix.sh
 chmod +x scripts/create-pr.sh
@@ -544,6 +549,7 @@ chmod +x scripts/verify-fix.sh
 - `priority:critical/high/medium/low` - 우선순위
 - `domain:ai/auth/db` - 도메인
 - `auto-fix` - AI 자동 수정 PR (Phase 5)
+
 
 ---
 
@@ -636,6 +642,7 @@ chmod +x scripts/verify-fix.sh
 - [x] Draft PR 생성 확인
 - [x] Discord 알림 모든 시나리오
 - [x] 롤백 완전성 검증
+
 
 ---
 
