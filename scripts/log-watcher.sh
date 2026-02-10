@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # 설정 (절대 경로 사용)
-LOG_DIR="${LOG_DIR:-$PROJECT_ROOT/logs}"
+LOG_DIR="${LOG_DIR:-$PROJECT_ROOT/codes/server/logs}"
 STATE_DIR="${STATE_DIR:-$PROJECT_ROOT/logs/.state}"
 DEDUP_WINDOW=300  # 5분
 LOCK_TIMEOUT=10   # 락 대기 시간 (초)
@@ -39,7 +39,7 @@ mkdir -p "$STATE_DIR"
 
 # 오늘 로그 파일
 TODAY=$(date +%Y-%m-%d)
-LOG_FILE="$LOG_DIR/server.${TODAY}.log"
+LOG_FILE="$LOG_DIR/server.log.${TODAY}"
 
 # 날짜별 상태 파일 (로그 로테이션 대응)
 STATE_FILE="$STATE_DIR/log-watcher-state-${TODAY}"
@@ -203,9 +203,13 @@ while read -r line; do
         # Warning 레벨: 간단한 알림만 (AI 진단 없음)
         if [ "$ERROR_SEVERITY" = "warning" ]; then
             echo "[$(date)] Warning-level error, sending simple alert: $ERROR_CODE"
+            WARN_MSG="**위치**: $TARGET
+**Request ID**: $REQUEST_ID
+
+$MESSAGE"
             if "$SCRIPT_DIR/discord-alert.sh" "warning" \
                 "⚠️ [$ERROR_CODE] Warning" \
-                "**위치**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$WARN_MSG" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
             fi
@@ -221,9 +225,13 @@ while read -r line; do
             RECENT_CALLS=$(wc -l < "$RATE_LIMIT_FILE" 2>/dev/null || echo 0)
             if [ "$RECENT_CALLS" -ge 10 ]; then
                 echo "[$(date)] Rate limit exceeded, sending basic critical alert"
+                RATE_MSG="**Location**: $TARGET
+**Request ID**: $REQUEST_ID
+
+$MESSAGE"
                 if "$SCRIPT_DIR/discord-alert.sh" "critical" \
                     "🚨 [$ERROR_CODE] Critical Error (진단 제한 초과)" \
-                    "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                    "$RATE_MSG" \
                     "$ERROR_CODE"; then
                     ALERT_COUNT=$((ALERT_COUNT + 1))
                 fi
@@ -237,9 +245,13 @@ while read -r line; do
         # 진단 결과 JSON 유효성 검증
         if [ -z "$DIAGNOSTIC" ] || ! echo "$DIAGNOSTIC" | jq -e '.' > /dev/null 2>&1; then
             echo "[$(date)] Diagnostic returned invalid JSON, sending basic alert"
+            DIAG_FAIL_MSG="**Location**: $TARGET
+**Request ID**: $REQUEST_ID
+
+$MESSAGE"
             if "$SCRIPT_DIR/discord-alert.sh" "critical" \
                 "🚨 [$ERROR_CODE] Critical Error (진단 실패)" \
-                "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$DIAG_FAIL_MSG" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
             fi
@@ -249,9 +261,13 @@ while read -r line; do
         if echo "$DIAGNOSTIC" | jq -e '.error' > /dev/null 2>&1; then
             # 진단 실패 - 기본 알림
             echo "[$(date)] Diagnostic failed, sending basic alert"
+            BASIC_MSG="**Location**: $TARGET
+**Request ID**: $REQUEST_ID
+
+$MESSAGE"
             if "$SCRIPT_DIR/discord-alert.sh" "critical" \
                 "🚨 [$ERROR_CODE] Critical Error" \
-                "**Location**: $TARGET\n**Request ID**: $REQUEST_ID\n\n$MESSAGE" \
+                "$BASIC_MSG" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
             fi
@@ -262,9 +278,14 @@ while read -r line; do
             AUTO_FIXABLE=$(echo "$DIAGNOSTIC" | jq -r '.auto_fixable // false')
 
             echo "[$(date)] Diagnostic success, sending detailed alert"
+            DIAG_MSG="**근본 원인**: $ROOT_CAUSE
+
+**권장 조치**: $RECOMMENDATIONS
+
+**위치**: $TARGET"
             if "$SCRIPT_DIR/discord-alert.sh" "critical" \
                 "🔍 [$ERROR_CODE] AI 진단 완료" \
-                "**근본 원인**: $ROOT_CAUSE\n\n**권장 조치**: $RECOMMENDATIONS\n\n**위치**: $TARGET" \
+                "$DIAG_MSG" \
                 "$ERROR_CODE"; then
                 ALERT_COUNT=$((ALERT_COUNT + 1))
             fi

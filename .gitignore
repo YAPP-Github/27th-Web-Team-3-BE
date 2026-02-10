@@ -23,6 +23,7 @@ codes/server/target/
 ### Monitoring ###
 .env.monitoring
 logs/
+**/logs/
 
 ### Python ###
 scripts/__pycache__/
