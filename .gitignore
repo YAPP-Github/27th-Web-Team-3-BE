@@ -20,5 +20,9 @@ codes/server/target/
 .gemini/
 .claude/settings.local.json
 
+### Monitoring ###
+.env.monitoring
+logs/
+
 ### Python ###
 scripts/__pycache__/
