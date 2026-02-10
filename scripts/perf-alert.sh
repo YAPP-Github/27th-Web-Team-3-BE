@@ -30,6 +30,7 @@ else
     trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
 fi
 
+
 # 임계값 설정
 CPU_THRESHOLD=80
 MEM_THRESHOLD=85

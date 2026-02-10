@@ -30,12 +30,18 @@ if [ "$CURRENT_BRANCH" = "$BRANCH_NAME" ]; then
   git checkout dev
 fi
 
-# 로컬 브랜치 삭제
-if git branch --list | grep -q "$BRANCH_NAME"; then
+# 로컬 브랜치 삭제 (정확한 매칭으로 오탐 방지)
+if git branch --list "$BRANCH_NAME" | grep -qx "  $BRANCH_NAME\|\\* $BRANCH_NAME"; then
   git branch -D "$BRANCH_NAME"
   echo "로컬 브랜치 삭제 완료"
 else
-  echo "로컬 브랜치가 존재하지 않습니다."
+  # --list 옵션의 glob 패턴 매칭도 확인
+  if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+    git branch -D "$BRANCH_NAME"
+    echo "로컬 브랜치 삭제 완료"
+  else
+    echo "로컬 브랜치가 존재하지 않습니다."
+  fi
 fi
 
 # 원격 브랜치 삭제 (존재하는 경우)
