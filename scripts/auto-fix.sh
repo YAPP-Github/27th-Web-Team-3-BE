@@ -9,6 +9,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SERVER_DIR="$PROJECT_ROOT/codes/server"
 
+# ============== 설정 파일 체크 ==============
+check_automation_enabled() {
+    local config_file="$PROJECT_ROOT/automation.config.yaml"
+
+    if [ ! -f "$config_file" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: Config file not found, automation disabled by default"
+        return 1
+    fi
+
+    if ! python3 "$SCRIPT_DIR/config-loader.py" --check auto_fix 2>/dev/null; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: Auto-fix is disabled in config"
+        return 1
+    fi
+
+    return 0
+}
+
+# 자동화 활성화 체크 (인자가 있을 때만 - usage 출력은 항상 허용)
+if [ $# -ge 1 ] && [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
+    if ! check_automation_enabled; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Exiting: auto-fix disabled"
+        exit 0
+    fi
+fi
+
 # 설정
 BASE_BRANCH="${BASE_BRANCH:-dev}"
 MAX_DAILY_PRS=5
@@ -84,6 +109,13 @@ log_error() {
 
 log_warn() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $*"
+}
+
+# 브랜치명 sanitize (특수문자, 슬래시, 공백 제거)
+sanitize_branch_name() {
+    local input="$1"
+    # 알파벳, 숫자, 하이픈, 밑줄만 허용, 나머지는 하이픈으로 대체
+    echo "$input" | tr -cs 'A-Za-z0-9_-' '-' | sed 's/^-//;s/-$//' | head -c 50
 }
 
 # 사용법 출력
@@ -290,11 +322,19 @@ apply_fix() {
     # Claude Code CLI 호출
     # --dangerously-skip-permissions: CI/CD 자동화 환경에서 사용자 입력 없이 실행하기 위해 필요
     # 보안 주의: 이 플래그는 자동화된 파이프라인 내에서만 사용되며, 수정 범위는 validate_fix_scope()에서 제한됨
-    # 참고: --print(-p)는 출력만 하므로 실제 파일 수정에는 적합하지 않음
-    if ! claude --dangerously-skip-permissions -p "$prompt" 2>&1; then
-        log_error "Claude Code CLI failed"
+    # 주의: -p/--print 플래그는 출력만 하므로 사용하지 않음 (실제 파일 수정 필요)
+    local claude_output
+    local claude_exit_code=0
+    claude_output=$(claude --dangerously-skip-permissions "$prompt" 2>&1) || claude_exit_code=$?
+
+    if [ "$claude_exit_code" -ne 0 ]; then
+        log_error "Claude Code CLI failed with exit code $claude_exit_code"
+        log_error "Claude output: $claude_output"
         return 1
     fi
+
+    log_info "Claude Code CLI completed successfully"
+    log_info "Claude output: ${claude_output:0:500}..."  # 처음 500자만 로깅
 
     return 0
 }
@@ -323,11 +363,19 @@ main() {
         exit 0
     fi
 
+    # error_code를 먼저 추출 (알림에 사용)
+    local error_code
+    error_code=$(echo "$diagnostic_json" | jq -r '.error_code // "UNKNOWN"')
+
     local fix_suggestion
     fix_suggestion=$(echo "$diagnostic_json" | jq -r '.fix_suggestion // empty')
 
     if [ -z "$fix_suggestion" ]; then
         log_error "fix_suggestion is required when auto_fixable is true"
+        send_notification "warning" \
+            "Auto-Fix Skipped: Missing fix_suggestion" \
+            "auto_fixable=true이지만 fix_suggestion이 없습니다.\n**에러 코드**: $error_code\n\n진단 결과를 확인해주세요." \
+            "$error_code"
         exit 1
     fi
 
@@ -336,9 +384,6 @@ main() {
 
     local root_cause
     root_cause=$(echo "$diagnostic_json" | jq -r '.root_cause // "Unknown"')
-
-    local error_code
-    error_code=$(echo "$diagnostic_json" | jq -r '.error_code // "UNKNOWN"')
 
     local target
     target=$(echo "$diagnostic_json" | jq -r '.target // "codes/server/src"')
@@ -381,10 +426,12 @@ main() {
     local original_branch
     original_branch=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD)
 
-    # 브랜치명 생성
+    # 브랜치명 생성 (error_code sanitize하여 특수문자 처리)
     local timestamp
     timestamp=$(date +%Y%m%d%H%M%S)
-    local branch_name="fix/auto-${error_code}-${timestamp}"
+    local safe_error_code
+    safe_error_code=$(sanitize_branch_name "$error_code")
+    local branch_name="fix/auto-${safe_error_code}-${timestamp}"
 
     log_info "Creating fix branch: $branch_name"
 
@@ -442,9 +489,23 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
     git -C "$PROJECT_ROOT" commit -m "$commit_message"
 
-    # 원격에 푸시
+    # 원격에 푸시 (실패 시 정리 로직 실행 보장)
     log_info "Pushing branch to origin..."
-    git -C "$PROJECT_ROOT" push -u origin "$branch_name"
+    local push_output
+    local push_exit_code=0
+    push_output=$(git -C "$PROJECT_ROOT" push -u origin "$branch_name" 2>&1) || push_exit_code=$?
+
+    if [ "$push_exit_code" -ne 0 ]; then
+        log_error "Git push failed with exit code $push_exit_code: $push_output"
+        cleanup_branch "$branch_name" "$original_branch"
+        send_notification "critical" \
+            "Auto-Fix Failed: Push Error" \
+            "브랜치 푸시 실패\n**브랜치**: $branch_name\n**에러**: $push_output" \
+            "$error_code"
+        exit 1
+    fi
+
+    log_info "Branch pushed successfully"
 
     # Draft PR 생성
     log_info "Creating Draft PR..."

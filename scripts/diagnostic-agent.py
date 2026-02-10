@@ -12,8 +12,55 @@ import time
 import fcntl
 from pathlib import Path
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
 import openai
 from openai import OpenAI
+
+
+def get_project_root() -> Path:
+    """스크립트 위치 기반 프로젝트 루트 반환"""
+    return Path(__file__).resolve().parent.parent
+
+
+def load_config() -> dict:
+    """설정 파일 로드"""
+    config_path = get_project_root() / "automation.config.yaml"
+
+    if not config_path.exists() or yaml is None:
+        return {}
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
+
+
+def is_enabled() -> bool:
+    """AI 진단 활성화 여부 확인"""
+    config = load_config()
+
+    # 전체 자동화가 꺼져있으면 False
+    if not config.get("automation", {}).get("enabled", False):
+        return False
+
+    # ai_diagnostic Phase가 꺼져있으면 False
+    if not config.get("phases", {}).get("ai_diagnostic", {}).get("enabled", False):
+        return False
+
+    return True
+
+
+# 활성화 체크
+if not is_enabled():
+    print(json.dumps({"error": "AI diagnostic is disabled in config"}))
+    sys.exit(0)
+
+# 설정에서 모델 정보 로드
+config = load_config()
+model_config = config.get("models", {}).get("diagnostic", {})
+rate_config = config.get("rate_limits", {}).get("diagnostic", {})
 
 # API 키 사전 검증
 api_key = os.environ.get("OPENAI_API_KEY")
@@ -23,9 +70,13 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
-# Rate limit 설정
+# Rate limit 설정 (설정 파일 또는 기본값)
 RATE_LIMIT_FILE = Path("/tmp/diagnostic-rate-limit")
-MAX_CALLS_PER_HOUR = 10
+MAX_CALLS_PER_HOUR = rate_config.get("max_calls_per_hour", 10)
+
+# 모델 설정 (설정 파일 > 환경변수 > 기본값)
+DEFAULT_MODEL = model_config.get("model", "gpt-4o-mini")
+MAX_TOKENS = model_config.get("max_tokens", 1024)
 
 def check_rate_limit() -> bool:
     """시간당 호출 제한 확인 및 기록 (단일 소스 of truth, 파일 락 사용)"""
@@ -59,11 +110,6 @@ def check_rate_limit() -> bool:
             return True
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
-
-def get_project_root() -> Path:
-    """스크립트 위치 기반 프로젝트 루트 반환"""
-    return Path(__file__).resolve().parent.parent
-
 
 def collect_source_context(target: str) -> str:
     """target에서 소스 파일 추출하고 읽기"""
@@ -143,10 +189,11 @@ def diagnose(error_log: dict) -> dict:
 JSON만 출력하세요."""
 
     try:
-        model = os.environ.get("DIAGNOSTIC_MODEL", "gpt-4o-mini")
+        # 설정 파일 > 환경변수 > 기본값 순으로 모델 선택
+        model = os.environ.get("DIAGNOSTIC_MODEL", DEFAULT_MODEL)
         response = client.chat.completions.create(
             model=model,
-            max_completion_tokens=1024,
+            max_completion_tokens=MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}]
         )
 

@@ -26,3 +26,4 @@ logs/
 
 ### Python ###
 scripts/__pycache__/
+scripts/.venv/
