@@ -7,6 +7,7 @@
 | 버전 | 날짜 | 설명 |
 |------|------|------|
 | 1.0.0 | 2025-01-25 | API 명세서 최초 작성 |
+| 1.1.0 | 2025-02-07 | API-031 초대코드 조회, API-032 분석결과 조회, API-013 제출상태 추가 |
 
 ---
 
@@ -21,7 +22,7 @@
 | API-003 | POST | `/api/v1/auth/token/refresh` | 토큰 리프레시 | [003-auth-token-refresh.md](./003-auth-token-refresh.md) |
 | API-004 | POST | `/api/v1/auth/logout` | 로그아웃 | [004-auth-logout.md](./004-auth-logout.md) |
 
-### 회고방 (Retro Room) - 005~011
+### 회고방 (Retro Room) - 005~011, 030~031
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
@@ -32,8 +33,10 @@
 | API-009 | PATCH | `/api/v1/retro-rooms/{retroRoomId}/name` | 회고방 이름 변경 | [009-retro-room-name-update.md](./009-retro-room-name-update.md) |
 | API-010 | DELETE | `/api/v1/retro-rooms/{retroRoomId}` | 회고방 삭제 | [010-retro-room-delete.md](./010-retro-room-delete.md) |
 | API-011 | GET | `/api/v1/retro-rooms/{retroRoomId}/retrospects` | 회고방 내 회고 목록 조회 | [011-retro-room-retrospects-list.md](./011-retro-room-retrospects-list.md) |
+| API-030 | GET | `/api/v1/retro-rooms/{retroRoomId}/members` | 회고방 멤버 목록 조회 | [030-retro-room-members-list.md](./030-retro-room-members-list.md) |
+| API-031 | GET | `/api/v1/retro-rooms/{retroRoomId}/invite-code` | 회고방 초대 코드 조회 | [031-retro-room-invite-code.md](./031-retro-room-invite-code.md) |
 
-### 회고 (Retrospect) - 012~024
+### 회고 (Retrospect) - 012~024, 032
 
 | API ID | Method | Endpoint | 설명 | 문서 |
 |--------|--------|----------|------|------|
@@ -48,8 +51,9 @@
 | API-020 | GET | `/api/v1/retrospects/storage` | 보관함 회고 리스트 조회 | [020-retrospect-storage-list.md](./020-retrospect-storage-list.md) |
 | API-021 | GET | `/api/v1/retrospects/{retrospectId}/responses` | 회고 답변 카테고리별 조회 | [021-retrospect-responses-list.md](./021-retrospect-responses-list.md) |
 | API-022 | GET | `/api/v1/retrospects/{retrospectId}/export` | 회고 PDF 내보내기 | [022-retrospect-export.md](./022-retrospect-export.md) |
-| API-023 | POST | `/api/v1/retrospects/{retrospectId}/analysis` | 회고 AI 분석 | [023-retrospect-analysis.md](./023-retrospect-analysis.md) |
+| API-023 | POST | `/api/v1/retrospects/{retrospectId}/analysis` | 회고 AI 분석 생성 | [023-retrospect-analysis.md](./023-retrospect-analysis.md) |
 | API-024 | GET | `/api/v1/retrospects/search` | 보관함 회고 검색 | [024-retrospect-search.md](./024-retrospect-search.md) |
+| API-032 | GET | `/api/v1/retrospects/{retrospectId}/analysis` | 회고 AI 분석 결과 조회 | [032-retrospect-analysis-get.md](./032-retrospect-analysis-get.md) |
 
 ### 회원 (Member) - 025
 

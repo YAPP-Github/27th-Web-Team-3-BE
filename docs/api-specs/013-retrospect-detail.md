@@ -15,6 +15,7 @@
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2025-01-25 | Path Parameter 검증, Enum 설명, 정렬 순서 추가 |
 | 1.2.0 | 2025-01-25 | retroRoomId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일 |
+| 1.3.0 | 2025-02-07 | currentUserStatus 필드 추가 (현재 유저의 제출 상태) |
 
 ## 엔드포인트
 
@@ -55,6 +56,7 @@ GET /api/v1/retrospects/{retrospectId}
     "title": "3차 스프린트 회고",
     "startTime": "2026-01-24",
     "retroCategory": "KPT",
+    "currentUserStatus": "SUBMITTED",
     "members": [
       { "memberId": 1, "userName": "김민철" },
       { "memberId": 2, "userName": "카이" }
@@ -87,6 +89,7 @@ GET /api/v1/retrospects/{retrospectId}
 | title | string | 회고 제목 (프로젝트명) |
 | startTime | string | 회고 시작 날짜 (YYYY-MM-DD) |
 | retroCategory | string (Enum) | 회고 유형 |
+| currentUserStatus | string (Enum) \| null | 현재 로그인 유저의 제출 상태 (하단 Enum 참조). 회고 미참여 시 `null` |
 | members | array[object] | 참여 멤버 리스트 (참석 등록일 기준 오름차순 정렬) |
 | members[].memberId | long | 멤버 고유 식별자 |
 | members[].userName | string | 멤버 이름 (닉네임) |
@@ -105,6 +108,15 @@ GET /api/v1/retrospects/{retrospectId}
 | FIVE_F | 5F | Facts-Feelings-Findings-Future-Feedback 방식 |
 | PMI | Plus-Minus-Interesting | 긍정-부정-흥미로운 점 분류 방식 |
 | FREE | 자유 형식 | 형식 제약 없는 자유 작성 |
+
+### currentUserStatus Enum 설명
+
+| Value | 한글명 | Description |
+|-------|--------|-------------|
+| DRAFT | 임시저장 | 회고 답변을 임시 저장한 상태 |
+| SUBMITTED | 제출완료 | 회고 답변을 최종 제출한 상태 |
+| ANALYZED | 분석완료 | AI 분석이 완료된 상태 |
+| null | 미참여 | 회고에 참여하지 않은 상태 (member_retro 레코드 없음) |
 
 ## 에러 응답
 

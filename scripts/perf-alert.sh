@@ -12,6 +12,25 @@ STATE_DIR="/tmp/perf-alert"
 
 mkdir -p "$STATE_DIR"
 
+# flock 기반 동시 실행 방지 (Cron 중복 실행 방어)
+LOCK_FILE="$STATE_DIR/perf-alert.lock"
+if command -v flock &>/dev/null; then
+    exec 200>"$LOCK_FILE"
+    if ! flock -n 200; then
+        echo "[$(date)] Another instance is already running, exiting"
+        exit 0
+    fi
+else
+    # macOS fallback: mkdir은 atomic operation
+    LOCK_DIR="$LOCK_FILE.d"
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo "[$(date)] Another instance is already running, exiting"
+        exit 0
+    fi
+    trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+fi
+
+
 # 임계값 설정
 CPU_THRESHOLD=80
 MEM_THRESHOLD=85

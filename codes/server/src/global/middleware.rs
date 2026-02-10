@@ -18,8 +18,8 @@ pub async fn request_id_middleware(mut request: Request, next: Next) -> Response
         .extensions_mut()
         .insert(RequestId(request_id.clone()));
 
-    let method = request.method().to_string();
-    let path = request.uri().path().to_string();
+    let method = request.method().as_str();
+    let path = request.uri().path().to_owned();
 
     let span = tracing::info_span!(
         "request",
