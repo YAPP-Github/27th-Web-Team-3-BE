@@ -21,6 +21,7 @@ codes/server/target/
 .claude/settings.local.json
 
 ### Monitoring ###
+.env.monitoring
 logs/
 **/logs/
 

@@ -726,6 +726,10 @@ emergency_contacts:
 - [12 Factor App - Config](https://12factor.net/config)
 
 ### 프로젝트 내부 문서
-- [Phase 2: 이슈 분석 및 브랜치 생성](./phase-2-issue-analysis.md) - AI 기반 이슈 분석 및 자동 브랜치 생성
-- [Phase 3: AI 코드 수정 및 테스트](./phase-3-code-fix.md) - 자동 코드 수정 및 PR 생성
+- [Phase 1: Event Trigger](./phase-1-event-trigger.md) - 이벤트 수신 및 트리거
+- [Phase 2: Issue Analysis](./phase-2-issue-analysis.md) - AI 기반 이슈 분석 및 자동 브랜치 생성
+- [Phase 3: AI Diagnostic](./phase-3-ai-diagnostic.md) - Claude API 기반 에러 진단
+- [Phase 4: Issue Automation](./phase-4-issue-automation.md) - GitHub Issue 자동 생성
+- [Phase 5: Auto-Fix & PR](./phase-5-auto-fix-pr.md) - 자동 코드 수정 및 PR 생성
+- [Overview](./overview.md) - 전체 개요
 - [CLAUDE.md](../../CLAUDE.md) - 프로젝트 코딩 규칙
