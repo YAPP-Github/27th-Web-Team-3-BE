@@ -390,7 +390,6 @@ impl RetrospectService {
 
         info!(
             retro_room_id = retro_room_id,
-            invite_code = %room.invition_url,
             is_expired = is_expired,
             "초대 코드 조회 완료"
         );
