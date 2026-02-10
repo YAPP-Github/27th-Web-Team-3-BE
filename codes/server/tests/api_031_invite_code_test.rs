@@ -7,6 +7,8 @@
 //! - 초대 코드 형식 검증 (INV-XXXX-XXXX)
 //! - 초대 코드 추출 유틸리티
 
+use std::collections::HashSet;
+
 use server::domain::retrospect::dto::{InviteCodeResponse, SuccessInviteCodeResponse};
 use server::domain::retrospect::service::RetrospectService;
 
@@ -74,7 +76,7 @@ fn should_serialize_success_invite_code_response_structure() {
         message: "초대 코드 조회를 성공했습니다.".to_string(),
         result: InviteCodeResponse {
             retro_room_id: 10,
-            invite_code: "INV-ABCD-1234".to_string(),
+            invite_code: "INV-1234-5678".to_string(),
             expires_at: "2026-03-01T09:30:00".to_string(),
             is_expired: false,
         },
@@ -99,7 +101,7 @@ fn should_serialize_success_invite_code_response_structure() {
     // result 내부 검증
     let result = &parsed["result"];
     assert_eq!(result["retroRoomId"], 10);
-    assert_eq!(result["inviteCode"], "INV-ABCD-1234");
+    assert_eq!(result["inviteCode"], "INV-1234-5678");
 }
 
 // ============== 초대 코드 생성 테스트 ==============
@@ -134,6 +136,10 @@ fn should_generate_unique_invite_codes() {
         assert!(code.starts_with("INV-"));
         assert_eq!(code.len(), 13);
     }
+
+    // Assert - 고유성 검증
+    let unique: HashSet<&String> = codes.iter().collect();
+    assert_eq!(unique.len(), codes.len());
 }
 
 // ============== 초대 코드 추출 테스트 ==============

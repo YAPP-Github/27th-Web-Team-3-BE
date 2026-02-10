@@ -44,9 +44,6 @@ use super::dto::{
     UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
-/// 회고당 질문 수 (고정)
-const QUESTIONS_PER_RETROSPECT: usize = 5;
-
 pub struct RetrospectService;
 
 impl RetrospectService {
@@ -947,25 +944,8 @@ impl RetrospectService {
 
         let retrospect_id = retrospect_result.retrospect_id;
 
-        // 9. 회고 방식에 따른 기본 질문 생성
-        let questions = req.retrospect_method.default_questions();
-        for question in questions {
-            let response_model = response::ActiveModel {
-                question: Set(question.to_string()),
-                content: Set(String::new()),
-                created_at: Set(now),
-                updated_at: Set(now),
-                retrospect_id: Set(retrospect_id),
-                ..Default::default()
-            };
-
-            response_model
-                .insert(&txn)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-        }
-
-        // 10. 참고 URL 저장
+        // 9. 참고 URL 저장
+        // 질문(response)은 참석자 등록(create_participant) 시 멤버별로 생성됩니다.
         for url in &req.reference_urls {
             let reference_model = retro_reference::ActiveModel {
                 title: Set(url.clone()),
@@ -1188,7 +1168,7 @@ impl RetrospectService {
             }
         })?;
 
-        // 5-2. 회고 방식에 따른 5개의 질문에 대한 response 레코드 생성
+        // 5-2. 회고 방식에 따른 기본 질문에 대한 response 레코드 생성
         let questions = retrospect_model.retrospect_method.default_questions();
         let now = Utc::now().naive_utc();
 
@@ -1230,7 +1210,7 @@ impl RetrospectService {
             user_id = user_id,
             retrospect_id = retrospect_id,
             participant_id = inserted.member_retro_id,
-            "회고 참석자 등록 완료 (response 5개, member_response 5개 생성)"
+            "회고 참석자 등록 완료 (response, member_response 생성)"
         );
 
         // 6. CreateParticipantResponse 반환
@@ -1279,9 +1259,6 @@ impl RetrospectService {
         retrospect_id: i64,
         req: DraftSaveRequest,
     ) -> Result<DraftSaveResponse, AppError> {
-        // 1. 답변 비즈니스 검증 (트랜잭션 전에 수행)
-        Self::validate_drafts(&req.drafts)?;
-
         info!(
             user_id = user_id,
             retrospect_id = retrospect_id,
@@ -1289,12 +1266,16 @@ impl RetrospectService {
             "회고 답변 임시 저장 요청"
         );
 
-        // 2. 회고 존재 여부 확인
-        let _retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+        // 1. 회고 존재 여부 확인
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+
+        // 2. 답변 비즈니스 검증 (회고 방식별 질문 수에 따라 동적 검증)
+        let question_count = retrospect_model.retrospect_method.question_count();
+        Self::validate_drafts(&req.drafts, question_count)?;
 
         // 3. 참석자(member_retro) 확인 - 해당 회고에 대한 작성 권한 검증
         let _member_retro_model = member_retro::Entity::find()
@@ -1334,10 +1315,10 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         // 5-1. 질문 수 불일치 검증 (response_id 순서 매핑이 안전한지 확인)
-        if responses.len() != QUESTIONS_PER_RETROSPECT {
+        if responses.len() != question_count {
             return Err(AppError::InternalError(format!(
                 "질문-응답 매핑 불일치: 예상 {}개, 실제 {}개",
-                QUESTIONS_PER_RETROSPECT,
+                question_count,
                 responses.len()
             )));
         }
@@ -1352,7 +1333,7 @@ impl RetrospectService {
 
         for draft in &req.drafts {
             let idx = (draft.question_number - 1) as usize;
-            // validate_drafts에서 1~5 범위를 이미 검증했으므로 idx는 0~4 이내
+            // validate_drafts에서 범위를 이미 검증했으므로 idx는 안전
             let response_model = &responses[idx];
 
             let mut active: response::ActiveModel = response_model.clone().into();
@@ -1393,15 +1374,16 @@ impl RetrospectService {
         retrospect_id: i64,
         req: SubmitRetrospectRequest,
     ) -> Result<SubmitRetrospectResponse, AppError> {
-        // 1. 답변 비즈니스 검증 (트랜잭션 전에 수행)
-        Self::validate_answers(&req.answers)?;
-
-        // 2. 회고 존재 여부 확인
-        let _retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
+        // 1. 회고 존재 여부 확인
+        let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+
+        // 2. 답변 비즈니스 검증 (회고 방식별 질문 수에 따라 동적 검증)
+        let question_count = retrospect_model.retrospect_method.question_count();
+        Self::validate_answers(&req.answers, question_count)?;
 
         // 3. 트랜잭션 시작 (동시 제출 경쟁 조건 방지)
         let txn = state
@@ -1452,7 +1434,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        if responses.len() != 5 {
+        if responses.len() != question_count {
             return Err(AppError::InternalError(
                 "회고의 질문 수가 올바르지 않습니다.".to_string(),
             ));
@@ -1718,12 +1700,13 @@ impl RetrospectService {
 
         let response_ids: Vec<i64> = responses.iter().map(|r| r.response_id).collect();
 
-        // 5. 질문 리스트 추출 (중복 제거, 순서 유지, 최대 5개)
+        // 5. 질문 리스트 추출 (중복 제거, 순서 유지, 회고 방식별 질문 수)
+        let max_questions = retrospect_model.retrospect_method.question_count();
         let mut seen_questions = HashSet::new();
         let questions: Vec<RetrospectQuestionItem> = responses
             .iter()
             .filter(|r| seen_questions.insert(r.question.clone()))
-            .take(5)
+            .take(max_questions)
             .enumerate()
             .map(|(i, r)| RetrospectQuestionItem {
                 index: (i + 1) as i32,
@@ -2371,7 +2354,7 @@ impl RetrospectService {
     }
 
     /// 임시 저장 답변 비즈니스 검증
-    fn validate_drafts(drafts: &[DraftItem]) -> Result<(), AppError> {
+    fn validate_drafts(drafts: &[DraftItem], question_count: usize) -> Result<(), AppError> {
         // 1. 빈 배열 확인 (최소 1개)
         if drafts.is_empty() {
             return Err(AppError::BadRequest(
@@ -2379,11 +2362,12 @@ impl RetrospectService {
             ));
         }
 
-        // 2. 최대 5개 제한
-        if drafts.len() > 5 {
-            return Err(AppError::BadRequest(
-                "저장할 답변은 최대 5개까지 가능합니다.".to_string(),
-            ));
+        // 2. 최대 질문 수 제한 (회고 방식별 동적)
+        if drafts.len() > question_count {
+            return Err(AppError::BadRequest(format!(
+                "저장할 답변은 최대 {}개까지 가능합니다.",
+                question_count
+            )));
         }
 
         // 3. 중복 questionNumber 확인
@@ -2396,9 +2380,10 @@ impl RetrospectService {
             }
         }
 
-        // 4. questionNumber 범위 검증 (1~5)
+        // 4. questionNumber 범위 검증 (1~질문 수)
+        let max_question = question_count as i32;
         for draft in drafts {
-            if draft.question_number < 1 || draft.question_number > 5 {
+            if draft.question_number < 1 || draft.question_number > max_question {
                 return Err(AppError::BadRequest(
                     "올바르지 않은 질문 번호입니다.".to_string(),
                 ));
@@ -2420,17 +2405,20 @@ impl RetrospectService {
     }
 
     /// 답변 비즈니스 검증
-    fn validate_answers(answers: &[SubmitAnswerItem]) -> Result<(), AppError> {
-        // 1. 정확히 5개 답변 확인
-        if answers.len() != 5 {
+    fn validate_answers(
+        answers: &[SubmitAnswerItem],
+        question_count: usize,
+    ) -> Result<(), AppError> {
+        // 1. 정확히 질문 수만큼 답변 확인
+        if answers.len() != question_count {
             return Err(AppError::RetroAnswersMissing(
                 "모든 질문에 대한 답변이 필요합니다.".to_string(),
             ));
         }
 
-        // 2. questionNumber 1~5 모두 존재하는지 확인
+        // 2. questionNumber 1~질문 수 모두 존재하는지 확인
         let question_numbers: HashSet<i32> = answers.iter().map(|a| a.question_number).collect();
-        let expected: HashSet<i32> = (1..=5).collect();
+        let expected: HashSet<i32> = (1..=question_count as i32).collect();
         if question_numbers != expected {
             return Err(AppError::RetroAnswersMissing(
                 "모든 질문에 대한 답변이 필요합니다.".to_string(),
@@ -3425,18 +3413,20 @@ impl RetrospectService {
             ));
         }
 
-        if !(1..=5).contains(&question_id) {
-            return Err(AppError::QuestionNotFound(
-                "질문 ID는 1부터 5 사이여야 합니다.".to_string(),
-            ));
-        }
-
         // 2. 회고 존재 확인
         let retrospect_model = retrospect::Entity::find_by_id(retrospect_id)
             .one(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
+
+        let max_question = retrospect_model.retrospect_method.question_count() as i32;
+        if !(1..=max_question).contains(&question_id) {
+            return Err(AppError::QuestionNotFound(format!(
+                "질문 ID는 1부터 {} 사이여야 합니다.",
+                max_question
+            )));
+        }
 
         // 3. 회고방 멤버십 확인 (참여자만 어시스턴트 사용 가능)
         let member_retro_model = member_retro::Entity::find()
@@ -3907,7 +3897,7 @@ mod tests {
     // ===== RetrospectMethod 기본 질문 테스트 =====
 
     #[test]
-    fn should_return_5_questions_for_kpt() {
+    fn should_return_3_questions_for_kpt() {
         // Arrange
         use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
         let method = RetrospectMethod::Kpt;
@@ -3916,14 +3906,15 @@ mod tests {
         let questions = method.default_questions();
 
         // Assert
-        assert_eq!(questions.len(), 5);
+        assert_eq!(questions.len(), 3);
+        assert_eq!(method.question_count(), 3);
         assert!(questions[0].contains("유지"));
-        assert!(questions[1].contains("문제점"));
+        assert!(questions[1].contains("문제"));
         assert!(questions[2].contains("시도"));
     }
 
     #[test]
-    fn should_return_5_questions_for_four_l() {
+    fn should_return_4_questions_for_four_l() {
         // Arrange
         use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
         let method = RetrospectMethod::FourL;
@@ -3932,11 +3923,12 @@ mod tests {
         let questions = method.default_questions();
 
         // Assert
-        assert_eq!(questions.len(), 5);
-        assert!(questions[0].contains("좋았던"));
-        assert!(questions[1].contains("배운"));
-        assert!(questions[2].contains("부족"));
-        assert!(questions[3].contains("바라는"));
+        assert_eq!(questions.len(), 4);
+        assert_eq!(method.question_count(), 4);
+        assert!(questions[0].contains("좋은 순간"));
+        assert!(questions[1].contains("성장"));
+        assert!(questions[2].contains("아쉬"));
+        assert!(questions[3].contains("개선"));
     }
 
     #[test]
@@ -3950,15 +3942,16 @@ mod tests {
 
         // Assert
         assert_eq!(questions.len(), 5);
+        assert_eq!(method.question_count(), 5);
         assert!(questions[0].contains("사실"));
-        assert!(questions[1].contains("감정"));
+        assert!(questions[1].contains("힘들었던"));
         assert!(questions[2].contains("발견"));
-        assert!(questions[3].contains("적용"));
-        assert!(questions[4].contains("피드백"));
+        assert!(questions[3].contains("다르게"));
+        assert!(questions[4].contains("이야기"));
     }
 
     #[test]
-    fn should_return_5_questions_for_pmi() {
+    fn should_return_3_questions_for_pmi() {
         // Arrange
         use crate::domain::retrospect::entity::retrospect::RetrospectMethod;
         let method = RetrospectMethod::Pmi;
@@ -3967,10 +3960,11 @@ mod tests {
         let questions = method.default_questions();
 
         // Assert
-        assert_eq!(questions.len(), 5);
-        assert!(questions[0].contains("긍정"));
-        assert!(questions[1].contains("부정"));
-        assert!(questions[2].contains("흥미"));
+        assert_eq!(questions.len(), 3);
+        assert_eq!(method.question_count(), 3);
+        assert!(questions[0].contains("도움"));
+        assert!(questions[1].contains("안 좋은"));
+        assert!(questions[2].contains("발견"));
     }
 
     #[test]
@@ -3984,6 +3978,7 @@ mod tests {
 
         // Assert
         assert_eq!(questions.len(), 5);
+        assert_eq!(method.question_count(), 5);
         assert!(questions[0].contains("기억"));
     }
 
@@ -4002,7 +3997,7 @@ mod tests {
         let drafts = vec![create_draft(1, Some("첫 번째 답변"))];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4018,7 +4013,7 @@ mod tests {
         ];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4032,7 +4027,7 @@ mod tests {
             .collect();
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4044,7 +4039,7 @@ mod tests {
         let drafts = vec![create_draft(2, None)];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4056,7 +4051,7 @@ mod tests {
         let drafts = vec![create_draft(1, Some(""))];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4069,7 +4064,7 @@ mod tests {
         let drafts = vec![create_draft(1, Some(&content))];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4081,7 +4076,7 @@ mod tests {
         let drafts: Vec<DraftItem> = vec![];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4093,19 +4088,19 @@ mod tests {
     }
 
     #[test]
-    fn should_fail_when_drafts_exceeds_5() {
-        // Arrange
-        let drafts: Vec<DraftItem> = (1..=6)
+    fn should_fail_when_drafts_exceeds_question_count() {
+        // Arrange - 질문 3개인 방식에서 4개 답변 시도
+        let drafts: Vec<DraftItem> = (1..=4)
             .map(|i| create_draft(i, Some(&format!("답변 {}", i))))
             .collect();
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 3);
 
         // Assert
         assert!(result.is_err());
         if let Err(AppError::BadRequest(msg)) = result {
-            assert!(msg.contains("최대 5개"));
+            assert!(msg.contains("최대 3개"));
         } else {
             panic!("Expected BadRequest error");
         }
@@ -4120,7 +4115,7 @@ mod tests {
         ];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4137,7 +4132,7 @@ mod tests {
         let drafts = vec![create_draft(0, Some("답변"))];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4149,12 +4144,12 @@ mod tests {
     }
 
     #[test]
-    fn should_fail_when_question_number_is_6() {
-        // Arrange
-        let drafts = vec![create_draft(6, Some("답변"))];
+    fn should_fail_when_question_number_exceeds_question_count() {
+        // Arrange - 질문 3개인 방식에서 question_number 4 시도
+        let drafts = vec![create_draft(4, Some("답변"))];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 3);
 
         // Assert
         assert!(result.is_err());
@@ -4171,7 +4166,7 @@ mod tests {
         let drafts = vec![create_draft(-1, Some("답변"))];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4185,7 +4180,7 @@ mod tests {
         let drafts = vec![create_draft(1, Some(&content))];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4206,7 +4201,7 @@ mod tests {
         ];
 
         // Act
-        let result = RetrospectService::validate_drafts(&drafts);
+        let result = RetrospectService::validate_drafts(&drafts, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4229,16 +4224,16 @@ mod tests {
         let answers = create_valid_answers();
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_ok());
     }
 
     #[test]
-    fn should_fail_when_answers_count_is_not_5() {
-        // Arrange
-        let answers: Vec<SubmitAnswerItem> = (1..=4)
+    fn should_fail_when_answers_count_does_not_match_question_count() {
+        // Arrange - 질문 3개인 방식에서 2개만 답변
+        let answers: Vec<SubmitAnswerItem> = (1..=2)
             .map(|i| SubmitAnswerItem {
                 question_number: i,
                 content: format!("답변 {}", i),
@@ -4246,7 +4241,7 @@ mod tests {
             .collect();
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 3);
 
         // Assert
         assert!(result.is_err());
@@ -4264,7 +4259,7 @@ mod tests {
         answers[2].question_number = 6;
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4278,7 +4273,7 @@ mod tests {
         answers[4].question_number = 1; // 5번 대신 1번 중복
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4292,7 +4287,7 @@ mod tests {
         answers[0].content = "   \t\n  ".to_string();
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4310,7 +4305,7 @@ mod tests {
         answers[0].content = String::new();
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4327,7 +4322,7 @@ mod tests {
         answers[0].content = "가".repeat(1001);
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_err());
@@ -4345,7 +4340,7 @@ mod tests {
         answers[0].content = "가".repeat(1000);
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4358,7 +4353,7 @@ mod tests {
         answers[0].content = "  유효한 답변  ".to_string();
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_ok());
@@ -4370,7 +4365,7 @@ mod tests {
         let answers: Vec<SubmitAnswerItem> = vec![];
 
         // Act
-        let result = RetrospectService::validate_answers(&answers);
+        let result = RetrospectService::validate_answers(&answers, 5);
 
         // Assert
         assert!(result.is_err());
