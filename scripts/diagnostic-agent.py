@@ -28,7 +28,7 @@ def get_project_root() -> Path:
 
 def load_config() -> dict:
     """설정 파일 로드"""
-    config_path = get_project_root() / "automation.config.yaml"
+    config_path = get_project_root() / ".claude" / "config" / "automation.config.yaml"
 
     if not config_path.exists() or yaml is None:
         return {}

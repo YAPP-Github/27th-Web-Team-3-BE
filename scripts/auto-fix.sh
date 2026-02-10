@@ -11,7 +11,7 @@ SERVER_DIR="$PROJECT_ROOT/codes/server"
 
 # ============== 설정 파일 체크 ==============
 check_automation_enabled() {
-    local config_file="$PROJECT_ROOT/automation.config.yaml"
+    local config_file="$PROJECT_ROOT/.claude/config/automation.config.yaml"
 
     if [ ! -f "$config_file" ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: Config file not found, automation disabled by default"

@@ -9,7 +9,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # ============== 설정 파일 체크 ==============
 # 자동화가 비활성화되어 있으면 종료
 check_automation_enabled() {
-    local config_file="$PROJECT_ROOT/automation.config.yaml"
+    local config_file="$PROJECT_ROOT/.claude/config/automation.config.yaml"
 
     if [ ! -f "$config_file" ]; then
         echo "[$(date)] WARN: Config file not found, automation disabled by default"
