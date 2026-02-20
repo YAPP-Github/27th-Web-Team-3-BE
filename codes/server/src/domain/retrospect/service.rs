@@ -803,8 +803,8 @@ impl RetrospectService {
                 let participant_count =
                     count_map.get(&r.retrospect_id).copied().unwrap_or_default();
                 let retrospect_date = r.start_time.date();
-                let today = Utc::now().naive_utc().date();
-                let is_past = retrospect_date < today;
+                let today_kst = (Utc::now().naive_utc() + chrono::Duration::hours(9)).date();
+                let is_past = retrospect_date < today_kst;
 
                 let status = if is_past {
                     RetrospectListStatus::Completed
