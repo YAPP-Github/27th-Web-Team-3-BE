@@ -215,7 +215,6 @@ pub struct RetrospectListItem {
     pub project_name: String,
     pub retrospect_method: String,
     pub retrospect_date: String,
-    pub retrospect_time: String,
     /// 해당 회고의 참여자 수
     pub participant_count: i64,
 }
@@ -283,14 +282,6 @@ pub struct CreateRetrospectRequest {
         message = "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD 형식 필요)"
     ))]
     pub retrospect_date: String,
-
-    /// 회고 시간 (HH:mm 형식, 한국 시간 기준)
-    #[validate(length(
-        min = 5,
-        max = 5,
-        message = "시간 형식이 올바르지 않습니다. (HH:mm 형식 필요)"
-    ))]
-    pub retrospect_time: String,
 
     /// 회고 방식
     pub retrospect_method: RetrospectMethod,
@@ -744,8 +735,6 @@ pub struct SearchRetrospectItem {
     pub retrospect_method: RetrospectMethod,
     /// 회고 날짜 (YYYY-MM-DD)
     pub retrospect_date: String,
-    /// 회고 시간 (HH:mm)
-    pub retrospect_time: String,
 }
 
 /// Swagger용 회고 검색 성공 응답 타입
@@ -1072,7 +1061,6 @@ mod tests {
             retro_room_id: 1,
             project_name: "테스트 프로젝트".to_string(),
             retrospect_date: "2025-01-25".to_string(),
-            retrospect_time: "14:00".to_string(),
             retrospect_method: RetrospectMethod::Kpt,
             reference_urls: vec![],
             questions: vec!["테스트 질문 1".to_string(), "테스트 질문 2".to_string()],
@@ -1327,61 +1315,6 @@ mod tests {
         let valid_url = format!("https://example.com/{}", "a".repeat(2020));
         let request = CreateRetrospectRequest {
             reference_urls: vec![valid_url],
-            ..create_valid_request()
-        };
-
-        // Act
-        let result = request.validate();
-
-        // Assert
-        assert!(result.is_ok());
-    }
-
-    // ========================================
-    // retrospect_time 검증 테스트
-    // ========================================
-
-    #[test]
-    fn should_fail_validation_when_retrospect_time_is_too_short() {
-        // Arrange
-        let request = CreateRetrospectRequest {
-            retrospect_time: "9:00".to_string(), // 4자 (형식 오류)
-            ..create_valid_request()
-        };
-
-        // Act
-        let result = request.validate();
-
-        // Assert
-        assert!(result.is_err());
-        let errors = result.unwrap_err();
-        let field_errors = errors.field_errors();
-        assert!(field_errors.contains_key("retrospect_time"));
-    }
-
-    #[test]
-    fn should_fail_validation_when_retrospect_time_is_too_long() {
-        // Arrange
-        let request = CreateRetrospectRequest {
-            retrospect_time: "14:00:00".to_string(), // 8자 (형식 오류)
-            ..create_valid_request()
-        };
-
-        // Act
-        let result = request.validate();
-
-        // Assert
-        assert!(result.is_err());
-        let errors = result.unwrap_err();
-        let field_errors = errors.field_errors();
-        assert!(field_errors.contains_key("retrospect_time"));
-    }
-
-    #[test]
-    fn should_pass_validation_when_retrospect_time_has_correct_format() {
-        // Arrange
-        let request = CreateRetrospectRequest {
-            retrospect_time: "14:30".to_string(), // 정확히 5자
             ..create_valid_request()
         };
 
@@ -1793,7 +1726,6 @@ mod tests {
             retro_room_name: "회고방A".to_string(),
             retrospect_method: RetrospectMethod::Kpt,
             retrospect_date: "2026-01-24".to_string(),
-            retrospect_time: "14:30".to_string(),
         };
 
         // Act
@@ -1805,14 +1737,12 @@ mod tests {
         assert_eq!(json["retroRoomName"], "회고방A");
         assert_eq!(json["retrospectMethod"], "KPT");
         assert_eq!(json["retrospectDate"], "2026-01-24");
-        assert_eq!(json["retrospectTime"], "14:30");
         // snake_case 키가 없는지 확인
         assert!(json.get("retrospect_id").is_none());
         assert!(json.get("project_name").is_none());
         assert!(json.get("retro_room_name").is_none());
         assert!(json.get("retrospect_method").is_none());
         assert!(json.get("retrospect_date").is_none());
-        assert!(json.get("retrospect_time").is_none());
     }
 
     #[test]
@@ -1833,7 +1763,6 @@ mod tests {
                 retro_room_name: "회고방".to_string(),
                 retrospect_method: method,
                 retrospect_date: "2026-01-01".to_string(),
-                retrospect_time: "10:00".to_string(),
             };
 
             let json = serde_json::to_value(&item).unwrap();
@@ -1854,7 +1783,6 @@ mod tests {
                 retro_room_name: "회고방A".to_string(),
                 retrospect_method: RetrospectMethod::Kpt,
                 retrospect_date: "2026-01-24".to_string(),
-                retrospect_time: "14:00".to_string(),
             }],
         };
 

@@ -17,7 +17,6 @@ fn should_serialize_retrospect_list_item_in_camel_case() {
         project_name: "프로젝트".to_string(),
         retrospect_method: "KPT".to_string(),
         retrospect_date: "2026-01-26".to_string(),
-        retrospect_time: "10:00".to_string(),
         participant_count: 5,
     };
 
@@ -30,7 +29,6 @@ fn should_serialize_retrospect_list_item_in_camel_case() {
     assert!(parsed.get("projectName").is_some());
     assert!(parsed.get("retrospectMethod").is_some());
     assert!(parsed.get("retrospectDate").is_some());
-    assert!(parsed.get("retrospectTime").is_some());
     assert!(parsed.get("participantCount").is_some());
     assert_eq!(parsed["retrospectId"], 1);
     assert_eq!(parsed["projectName"], "프로젝트");
@@ -71,7 +69,6 @@ fn should_serialize_list_with_multiple_retrospects() {
                 project_name: "프로젝트1".to_string(),
                 retrospect_method: "KPT".to_string(),
                 retrospect_date: "2026-01-26".to_string(),
-                retrospect_time: "10:00".to_string(),
                 participant_count: 3,
             },
             RetrospectListItem {
@@ -79,7 +76,6 @@ fn should_serialize_list_with_multiple_retrospects() {
                 project_name: "프로젝트2".to_string(),
                 retrospect_method: "FOUR_L".to_string(),
                 retrospect_date: "2026-01-27".to_string(),
-                retrospect_time: "14:00".to_string(),
                 participant_count: 5,
             },
         ],
@@ -108,7 +104,6 @@ fn should_preserve_retrospect_method_values() {
             project_name: "테스트".to_string(),
             retrospect_method: method.to_string(),
             retrospect_date: "2026-01-26".to_string(),
-            retrospect_time: "10:00".to_string(),
             participant_count: 2,
         };
 
@@ -128,7 +123,6 @@ fn should_preserve_date_format() {
         project_name: "테스트".to_string(),
         retrospect_method: "KPT".to_string(),
         retrospect_date: "2026-12-31".to_string(),
-        retrospect_time: "23:59".to_string(),
         participant_count: 4,
     };
 
@@ -137,5 +131,4 @@ fn should_preserve_date_format() {
 
     // Assert
     assert!(json.contains("2026-12-31"));
-    assert!(json.contains("23:59"));
 }

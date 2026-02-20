@@ -336,7 +336,6 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
     "retroRoomId": 789,
     "projectName": "나만의 회고 플랫폼",
     "retrospectDate": "2026-02-25",
-    "retrospectTime": "14:00",
     "retrospectMethod": "KPT",
     "referenceUrls": [],
     "questions": [

@@ -794,7 +794,6 @@ impl RetrospectService {
                     project_name: r.title,
                     retrospect_method: r.retrospect_method.to_string(),
                     retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
-                    retrospect_time: r.start_time.format("%H:%M").to_string(),
                     participant_count,
                 }
             })
@@ -881,12 +880,8 @@ impl RetrospectService {
         // 1. 참고 URL 검증
         Self::validate_reference_urls(&req.reference_urls)?;
 
-        // 2. 날짜 및 시간 형식 검증
+        // 2. 날짜 형식 검증
         let retrospect_date = Self::validate_and_parse_date(&req.retrospect_date)?;
-        let retrospect_time = Self::validate_and_parse_time(&req.retrospect_time)?;
-
-        // 3. 미래 날짜/시간 검증
-        Self::validate_future_datetime(retrospect_date, retrospect_time)?;
 
         // 4. 회고방 존재 여부 확인
         let room_exists = RetroRoom::find_by_id(req.retro_room_id)
@@ -924,7 +919,8 @@ impl RetrospectService {
         let now = Utc::now().naive_utc();
 
         // 7. 회고 생성
-        let start_time = NaiveDateTime::new(retrospect_date, retrospect_time);
+        let default_time = NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default();
+        let start_time = NaiveDateTime::new(retrospect_date, default_time);
 
         // 질문 목록을 JSON으로 직렬화
         let questions_json = serde_json::to_string(&req.questions)
@@ -1037,30 +1033,6 @@ impl RetrospectService {
         }
 
         Ok(date)
-    }
-
-    /// 시간 형식 검증
-    fn validate_and_parse_time(time_str: &str) -> Result<NaiveTime, AppError> {
-        // HH:mm 형식 파싱
-        NaiveTime::parse_from_str(time_str, "%H:%M").map_err(|_| {
-            AppError::BadRequest("시간 형식이 올바르지 않습니다. (HH:mm 형식 필요)".to_string())
-        })
-    }
-
-    /// 미래 날짜/시간 검증 (한국 시간 기준, UTC+9)
-    fn validate_future_datetime(date: NaiveDate, time: NaiveTime) -> Result<(), AppError> {
-        let input_datetime = NaiveDateTime::new(date, time);
-
-        // 한국 시간 기준 현재 시각 (UTC + 9시간)
-        let now_kst = Utc::now().naive_utc() + chrono::Duration::hours(9);
-
-        if input_datetime <= now_kst {
-            return Err(AppError::BadRequest(
-                "회고 날짜와 시간은 현재보다 미래여야 합니다.".to_string(),
-            ));
-        }
-
-        Ok(())
     }
 
     /// 회고 모델에서 저장된 질문 목록을 추출합니다.
@@ -1881,7 +1853,6 @@ impl RetrospectService {
                     .unwrap_or_default(),
                 retrospect_method: r.retrospect_method.clone(),
                 retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
-                retrospect_time: r.start_time.format("%H:%M").to_string(),
             })
             .collect();
 
@@ -3827,107 +3798,6 @@ mod tests {
         // Assert
         assert!(result.is_err());
         assert!(matches!(result, Err(AppError::BadRequest(_))));
-    }
-
-    // ===== 시간 형식 검증 테스트 =====
-
-    #[test]
-    fn should_pass_valid_time_format() {
-        // Arrange
-        let valid_time = "14:30";
-
-        // Act
-        let result = RetrospectService::validate_and_parse_time(valid_time);
-
-        // Assert
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn should_pass_midnight_time() {
-        // Arrange
-        let midnight = "00:00";
-
-        // Act
-        let result = RetrospectService::validate_and_parse_time(midnight);
-
-        // Assert
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn should_pass_end_of_day_time() {
-        // Arrange
-        let end_of_day = "23:59";
-
-        // Act
-        let result = RetrospectService::validate_and_parse_time(end_of_day);
-
-        // Assert
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn should_fail_for_invalid_time_format() {
-        // Arrange
-        let invalid_time = "1430"; // 콜론 없는 형식
-
-        // Act
-        let result = RetrospectService::validate_and_parse_time(invalid_time);
-
-        // Assert
-        assert!(result.is_err());
-        if let Err(AppError::BadRequest(msg)) = result {
-            assert!(msg.contains("HH:mm"));
-        } else {
-            panic!("Expected BadRequest error");
-        }
-    }
-
-    #[test]
-    fn should_fail_for_invalid_time_value() {
-        // Arrange
-        let invalid_time = "25:00"; // 유효하지 않은 시간
-
-        // Act
-        let result = RetrospectService::validate_and_parse_time(invalid_time);
-
-        // Assert
-        assert!(result.is_err());
-        assert!(matches!(result, Err(AppError::BadRequest(_))));
-    }
-
-    // ===== 미래 날짜/시간 검증 테스트 =====
-
-    #[test]
-    fn should_pass_future_datetime() {
-        // Arrange
-        let future_date = Utc::now().date_naive() + chrono::Duration::days(7);
-        let time = NaiveTime::from_hms_opt(14, 0, 0).unwrap();
-
-        // Act
-        let result = RetrospectService::validate_future_datetime(future_date, time);
-
-        // Assert
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn should_fail_for_past_datetime() {
-        // Arrange
-        let past_date = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
-        let time = NaiveTime::from_hms_opt(14, 0, 0).unwrap();
-
-        // Act
-        let result = RetrospectService::validate_future_datetime(past_date, time);
-
-        // Assert
-        assert!(result.is_err());
-        if let Err(AppError::BadRequest(msg)) = result {
-            assert!(msg.contains("미래"));
-        } else {
-            panic!("Expected BadRequest error");
-        }
     }
 
     // ===== RetrospectMethod 기본 질문 테스트 =====
