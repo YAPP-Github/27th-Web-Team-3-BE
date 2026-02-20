@@ -15,6 +15,7 @@
 |------|------|----------|
 | 1.0.0 | 2025-01-25 | 최초 작성 |
 | 1.1.0 | 2026-02-05 | participantCount 필드 추가 |
+| 1.2.0 | 2026-02-20 | status 필드 추가 (현재 사용자의 회고 상태: IN_PROGRESS, DRAFT, COMPLETED) |
 
 ## 엔드포인트
 
@@ -55,16 +56,16 @@ GET /api/v1/retro-rooms/{retroRoomId}/retrospects
       "projectName": "지난 주 프로젝트 회고",
       "retrospectMethod": "PMI",
       "retrospectDate": "2026-01-20",
-      "retrospectTime": "10:00",
-      "participantCount": 5
+      "participantCount": 5,
+      "status": "COMPLETED"
     },
     {
       "retrospectId": 101,
       "projectName": "오늘 진행할 정기 회고",
       "retrospectMethod": "KPT",
       "retrospectDate": "2026-01-24",
-      "retrospectTime": "16:00",
-      "participantCount": 3
+      "participantCount": 3,
+      "status": "IN_PROGRESS"
     }
   ]
 }
@@ -78,8 +79,8 @@ GET /api/v1/retro-rooms/{retroRoomId}/retrospects
 | projectName | string | 프로젝트 이름 |
 | retrospectMethod | string (Enum) | 회고 방식 |
 | retrospectDate | string | 회고 날짜 (yyyy-MM-dd) |
-| retrospectTime | string | 회고 시간 (HH:mm) |
 | participantCount | integer | 참여인원 수 (해당 회고에 참여 등록된 총 인원) |
+| status | string (Enum) | 현재 사용자의 회고 상태 |
 
 #### retrospectMethod Enum 값
 
@@ -91,7 +92,17 @@ GET /api/v1/retro-rooms/{retroRoomId}/retrospects
 | PMI | Plus-Minus-Interesting 방식 |
 | FREE | 자유 형식 |
 
-> **정렬 순서**: 응답 배열은 `retrospectDate` + `retrospectTime` 기준 **최신순(내림차순)**으로 정렬됩니다.
+#### status Enum 값
+
+| 값 | 설명 | 판별 기준 |
+|----|------|----------|
+| IN_PROGRESS | 진행중 | 사용자가 아직 참여하지 않았거나 답변이 없는 상태 |
+| DRAFT | 임시저장 | 사용자의 답변이 임시저장(DRAFT) 상태인 경우 |
+| COMPLETED | 종료 | 사용자가 답변을 제출 완료(SUBMITTED) 또는 AI 분석 완료(ANALYZED)된 경우 |
+
+> **참고**: `status`는 회고 자체의 속성이 아니라, **현재 로그인한 사용자의 답변(member_retro) 상태**에 따라 결정됩니다.
+
+> **정렬 순서**: 응답 배열은 `retrospectDate` 기준 **최신순(내림차순)**으로 정렬됩니다.
 
 ### 빈 결과 응답
 

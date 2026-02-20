@@ -208,6 +208,28 @@ pub struct SuccessDeleteRetroRoomResponse {
 
 // ============== API-010: 회고방 내 회고 목록 조회 ==============
 
+/// 회고 목록에서 표시되는 사용자별 회고 상태
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RetrospectListStatus {
+    /// 진행중: 회고가 시작되었고 아직 답변이 없는 상태
+    InProgress,
+    /// 임시저장: 질문 중 하나라도 임시저장된 답변이 있는 상태
+    Draft,
+    /// 종료: 답변을 제출 완료한 상태
+    Completed,
+}
+
+impl fmt::Display for RetrospectListStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RetrospectListStatus::InProgress => write!(f, "IN_PROGRESS"),
+            RetrospectListStatus::Draft => write!(f, "DRAFT"),
+            RetrospectListStatus::Completed => write!(f, "COMPLETED"),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RetrospectListItem {
@@ -217,6 +239,8 @@ pub struct RetrospectListItem {
     pub retrospect_date: String,
     /// 해당 회고의 참여자 수
     pub participant_count: i64,
+    /// 현재 사용자의 회고 상태
+    pub status: RetrospectListStatus,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
