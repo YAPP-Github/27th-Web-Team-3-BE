@@ -926,9 +926,14 @@ impl RetrospectService {
         // 7. 회고 생성
         let start_time = NaiveDateTime::new(retrospect_date, retrospect_time);
 
+        // 질문 목록을 JSON으로 직렬화
+        let questions_json = serde_json::to_string(&req.questions)
+            .map_err(|e| AppError::InternalError(format!("질문 직렬화 실패: {}", e)))?;
+
         let retrospect_model = retrospect::ActiveModel {
             title: Set(req.project_name.clone()),
             insight: Set(None),
+            questions: Set(Some(questions_json)),
             retrospect_method: Set(req.retrospect_method.clone()),
             created_at: Set(now),
             updated_at: Set(now),
@@ -1058,6 +1063,23 @@ impl RetrospectService {
         Ok(())
     }
 
+    /// 회고 모델에서 저장된 질문 목록을 추출합니다.
+    /// questions JSON 필드가 있으면 파싱, 없으면 기본 질문(default_questions) 사용
+    fn get_questions_from_retrospect(
+        retrospect_model: &retrospect::Model,
+    ) -> Result<Vec<String>, AppError> {
+        match &retrospect_model.questions {
+            Some(json_str) => serde_json::from_str(json_str)
+                .map_err(|e| AppError::InternalError(format!("질문 목록 역직렬화 실패: {}", e))),
+            None => Ok(retrospect_model
+                .retrospect_method
+                .default_questions()
+                .into_iter()
+                .map(|q| q.to_string())
+                .collect()),
+        }
+    }
+
     /// 회고 조회 및 회고방 멤버십 확인 헬퍼
     /// 비멤버에게 회고 존재 여부를 노출하지 않도록
     /// "존재하지 않음"과 "접근 권한 없음"을 동일한 404로 처리
@@ -1168,14 +1190,14 @@ impl RetrospectService {
             }
         })?;
 
-        // 5-2. 회고 방식에 따른 기본 질문에 대한 response 레코드 생성
-        let questions = retrospect_model.retrospect_method.default_questions();
+        // 5-2. 회고에 저장된 질문으로 response 레코드 생성
+        let questions = Self::get_questions_from_retrospect(&retrospect_model)?;
         let now = Utc::now().naive_utc();
 
-        for question in questions {
+        for question in &questions {
             // response 레코드 생성 (빈 content로 초기화)
             let response_model = response::ActiveModel {
-                question: Set(question.to_string()),
+                question: Set(question.clone()),
                 content: Set(String::new()),
                 created_at: Set(now),
                 updated_at: Set(now),
@@ -1273,8 +1295,8 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
 
-        // 2. 답변 비즈니스 검증 (회고 방식별 질문 수에 따라 동적 검증)
-        let question_count = retrospect_model.retrospect_method.question_count();
+        // 2. 답변 비즈니스 검증 (저장된 질문 수에 따라 동적 검증)
+        let question_count = Self::get_questions_from_retrospect(&retrospect_model)?.len();
         Self::validate_drafts(&req.drafts, question_count)?;
 
         // 3. 참석자(member_retro) 확인 - 해당 회고에 대한 작성 권한 검증
@@ -1381,8 +1403,8 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
 
-        // 2. 답변 비즈니스 검증 (회고 방식별 질문 수에 따라 동적 검증)
-        let question_count = retrospect_model.retrospect_method.question_count();
+        // 2. 답변 비즈니스 검증 (저장된 질문 수에 따라 동적 검증)
+        let question_count = Self::get_questions_from_retrospect(&retrospect_model)?.len();
         Self::validate_answers(&req.answers, question_count)?;
 
         // 3. 트랜잭션 시작 (동시 제출 경쟁 조건 방지)
@@ -1700,19 +1722,34 @@ impl RetrospectService {
 
         let response_ids: Vec<i64> = responses.iter().map(|r| r.response_id).collect();
 
-        // 5. 질문 리스트 추출 (중복 제거, 순서 유지, 회고 방식별 질문 수)
-        let max_questions = retrospect_model.retrospect_method.question_count();
-        let mut seen_questions = HashSet::new();
-        let questions: Vec<RetrospectQuestionItem> = responses
-            .iter()
-            .filter(|r| seen_questions.insert(r.question.clone()))
-            .take(max_questions)
-            .enumerate()
-            .map(|(i, r)| RetrospectQuestionItem {
-                index: (i + 1) as i32,
-                content: r.question.clone(),
-            })
-            .collect();
+        // 5. 질문 리스트 추출
+        // 참석자가 있으면 response 테이블에서, 없으면 저장된 질문에서 가져옴
+        let stored_questions = Self::get_questions_from_retrospect(&retrospect_model)?;
+        let questions: Vec<RetrospectQuestionItem> = if responses.is_empty() {
+            // 참석자 등록 전: 저장된 질문 목록 사용
+            stored_questions
+                .iter()
+                .enumerate()
+                .map(|(i, q)| RetrospectQuestionItem {
+                    index: (i + 1) as i32,
+                    content: q.clone(),
+                })
+                .collect()
+        } else {
+            // 참석자 존재: response 테이블에서 추출 (중복 제거, 순서 유지)
+            let max_questions = stored_questions.len();
+            let mut seen_questions = HashSet::new();
+            responses
+                .iter()
+                .filter(|r| seen_questions.insert(r.question.clone()))
+                .take(max_questions)
+                .enumerate()
+                .map(|(i, r)| RetrospectQuestionItem {
+                    index: (i + 1) as i32,
+                    content: r.question.clone(),
+                })
+                .collect()
+        };
 
         // 6. 전체 좋아요 수 조회
         let total_like_count = if response_ids.is_empty() {
@@ -3420,7 +3457,8 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .ok_or_else(|| AppError::RetrospectNotFound("존재하지 않는 회고입니다.".to_string()))?;
 
-        let max_question = retrospect_model.retrospect_method.question_count() as i32;
+        let stored_questions = Self::get_questions_from_retrospect(&retrospect_model)?;
+        let max_question = stored_questions.len() as i32;
         if !(1..=max_question).contains(&question_id) {
             return Err(AppError::QuestionNotFound(format!(
                 "질문 ID는 1부터 {} 사이여야 합니다.",
@@ -3472,13 +3510,11 @@ impl RetrospectService {
         }
 
         // 6. 질문 내용 조회
-        // 회고 방식에 따른 기본 질문 목록에서 직접 가져옴 (DB 조회 의존성 제거)
-        let default_questions = retrospect_model.retrospect_method.default_questions();
         let question_index = (question_id - 1) as usize;
-        let question_content = default_questions
+        let question_content = stored_questions
             .get(question_index)
             .ok_or_else(|| AppError::QuestionNotFound("해당 질문을 찾을 수 없습니다.".to_string()))?
-            .to_string();
+            .clone();
 
         // 7. AI 서비스 호출
         let user_content = req.content.as_deref();

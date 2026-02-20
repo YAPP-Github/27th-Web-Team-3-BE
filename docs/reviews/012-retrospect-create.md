@@ -290,6 +290,65 @@ curl -X POST http://localhost:8080/api/v1/retrospects \
 
 ---
 
+## v2.0.0 변경 사항 (2026-02-20, #120)
+
+### 개요
+프론트엔드에서 질문 목록을 직접 전달받아 저장하도록 변경. 서버 기본 질문 자동 생성 로직 제거.
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `dto.rs` | `CreateRetrospectRequest`에 `questions: Vec<String>` 필드 추가 (필수), `validate_question_items()` 검증 함수 추가 |
+| `retrospect.rs` (entity) | `questions: Option<String>` JSON 컬럼 추가 |
+| `service.rs` | `get_questions_from_retrospect()` 헬퍼 추가, `create_retrospect`/`create_participant`/`save_draft`/`submit_retrospect`/`generate_assistant_guide` 5개 메서드 수정 |
+| `database.rs` | `retrospects` 테이블에 `questions TEXT NULL` 마이그레이션 추가 |
+| `012-retrospect-create.md` | API 스펙 v2.0.0 업데이트 |
+
+### 검증 규칙 추가
+
+| 필드 | 규칙 | 에러 시 코드 |
+|------|------|------------|
+| `questions` | 최소 1개, 빈 문자열/공백 불가 | COMMON400 |
+
+### 비즈니스 로직 변경
+
+```
+[변경 전] create_retrospect → 질문 없이 저장, create_participant에서 default_questions()로 생성
+[변경 후] create_retrospect → 전달받은 질문을 JSON으로 저장, create_participant에서 저장된 질문 사용
+```
+
+### 하위 호환성
+- 기존 회고(`questions` NULL)는 `default_questions()` 폴백으로 정상 동작
+
+### 추가 테스트 (4개)
+- `should_fail_validation_when_questions_is_empty`
+- `should_fail_validation_when_question_item_is_empty_string`
+- `should_fail_validation_when_question_item_is_whitespace_only`
+- `should_pass_validation_when_questions_are_valid`
+
+### 요청 예시 (v2.0.0)
+```bash
+curl -X POST http://localhost:8080/api/v1/retrospects \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {accessToken}" \
+  -d '{
+    "retroRoomId": 789,
+    "projectName": "나만의 회고 플랫폼",
+    "retrospectDate": "2026-02-25",
+    "retrospectTime": "14:00",
+    "retrospectMethod": "KPT",
+    "referenceUrls": [],
+    "questions": [
+      "이번 일을 통해 유지했으면 하는 문화나 방식이 있나요?",
+      "이번 일을 하는 중 문제라고 판단되었던 점이 있나요?",
+      "이번 일을 겪으면서 새롭게 시도해보고 싶은 게 있나요?"
+    ]
+  }'
+```
+
+---
+
 ## 참고
-- API 스펙: `docs/api-specs/011-retrospect-create.md`
+- API 스펙: `docs/api-specs/012-retrospect-create.md`
 - 아키텍처 가이드: `docs/ai-conventions/architecture.md`

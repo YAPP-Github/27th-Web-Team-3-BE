@@ -77,7 +77,8 @@ impl RetrospectMethod {
         }
     }
 
-    /// 회고 방식별 질문 개수를 반환합니다.
+    /// 회고 방식별 기본 질문 개수를 반환합니다.
+    #[cfg(test)]
     pub fn question_count(&self) -> usize {
         self.default_questions().len()
     }
@@ -92,6 +93,8 @@ pub struct Model {
     pub insight: Option<String>,
     /// 감정 랭킹 JSON (EmotionRankItem 배열)
     pub emotion_rank: Option<String>,
+    /// 회고 질문 목록 JSON (Vec<String>)
+    pub questions: Option<String>,
     pub retrospect_method: RetrospectMethod,
     pub created_at: DateTime,
     pub updated_at: DateTime,

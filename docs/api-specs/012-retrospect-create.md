@@ -14,6 +14,7 @@
 | 1.1.0 | 2025-01-25 | Enum 상세 설명, 검증 규칙, 에러 조건 추가 |
 | 1.2.0 | 2025-01-25 | teamId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일, 질문 생성 로직 추가 |
 | 1.3.0 | 2026-01-30 | teamId → retroRoomId로 변경, retrospectTime 필드 추가 (실제 구현과 동기화) |
+| 2.0.0 | 2026-02-20 | questions 필드 추가 (필수), 서버 기본 질문 생성 로직 제거, 클라이언트가 질문을 직접 전달 |
 
 ## 엔드포인트
 
@@ -46,6 +47,11 @@ POST /api/v1/retrospects
   "referenceUrls": [
     "https://github.com/jayson/project",
     "https://notion.so/retrospective-guide"
+  ],
+  "questions": [
+    "이번 일을 통해 유지했으면 하는 문화나 방식이 있나요?",
+    "이번 일을 하는 중 문제라고 판단되었던 점이 있나요?",
+    "이번 일을 겪으면서 새롭게 시도해보고 싶은 게 있나요?"
   ]
 }
 ```
@@ -60,6 +66,7 @@ POST /api/v1/retrospects
 | retrospectTime | string | Yes | 회고 시간 (한국 시간 기준) | HH:mm 형식 (예: 14:00) |
 | retrospectMethod | string (Enum) | Yes | 회고 방식 | KPT, FOUR_L, FIVE_F, PMI, FREE 중 하나 |
 | referenceUrls | array[string] | No | 참고 자료 URL 리스트 | 최대 10개, 각 URL은 유효한 형식이어야 함 (http/https) |
+| questions | array[string] | Yes | 회고 질문 목록 | 최소 1개, 각 질문은 빈 문자열 불가 |
 
 ### referenceUrls 검증 규칙
 
@@ -105,56 +112,15 @@ POST /api/v1/retrospects
 | PMI | Plus-Minus-Interesting | 긍정-부정-흥미로운 점을 분류하는 방식 | 빠른 의사결정 후 검토에 적합 |
 | FREE | 자유 형식 | 형식 제약 없이 자유롭게 작성 | 유연한 회고가 필요할 때 |
 
-### 회고 방식별 기본 질문 생성 로직
+### questions 검증 규칙
 
-회고 생성 시 선택한 `retrospectMethod`에 따라 다음과 같은 기본 질문이 자동으로 생성됩니다.
+| 규칙 | 설명 |
+|------|------|
+| 최소 개수 | 1개 이상 |
+| 빈 문자열 | 각 질문은 빈 문자열 불가 (공백만 있는 경우 포함) |
+| 개수 제한 | 없음 (자유) |
 
-> **참고**: 회고 방식별 질문 개수가 다릅니다. KPT(3개), FOUR_L(4개), FIVE_F(5개), PMI(3개), FREE(5개)
-
-#### KPT (Keep-Problem-Try) - 3개 질문
-
-| 질문 순서 | 카테고리 | 질문 내용 |
-|----------|----------|----------|
-| 1 | Keep (유지할 점) | 이번 일을 통해 유지했으면 하는 문화나 방식이 있나요? |
-| 2 | Problem (문제점) | 이번 일을 하는 중 문제라고 판단되었던 점이 있나요? |
-| 3 | Try (시도할 점) | 이번 일을 겪으면서 새롭게 시도해보고 싶은 게 있나요? |
-
-#### FOUR_L (Liked-Learned-Lacked-Longed for) - 4개 질문
-
-| 질문 순서 | 카테고리 | 질문 내용 |
-|----------|----------|----------|
-| 1 | Liked (좋았던 점) | 이번 일을 하면서 기억에 남는 좋은 순간이 있었나요? |
-| 2 | Learned (배운 점) | 이번 일을 통해 새롭게 알게 되거나 성장한 부분이 있나요? |
-| 3 | Lacked (부족했던 점) | 이번 일을 하면서 아쉬웠거나 더 필요했던 게 있나요? |
-| 4 | Longed for (바랐던 점) | 앞으로 일할 때 이런 부분이 개선되면 좋겠다고 생각한 게 있나요? |
-
-#### FIVE_F (Facts-Feelings-Findings-Future-Feedback) - 5개 질문
-
-| 질문 순서 | 카테고리 | 질문 내용 |
-|----------|----------|----------|
-| 1 | Facts (사실) | 이번 업무를 통해 새롭게 알게 된 사실이 있나요? |
-| 2 | Feelings (감정) | 업무 중 가장 힘들었던 순간과 가장 뿌듯했던 순간은 언제였나요? |
-| 3 | Findings (발견) | 업무를 진행하면서 예상하지 못했던 발견이 있었나요? |
-| 4 | Future (미래) | 비슷한 업무를 다시 한다면 어떤 점을 다르게 하고 싶나요? |
-| 5 | Feedback (피드백) | 함께 업무를 진행한 분들에게 하고 싶은 이야기가 있나요? |
-
-#### PMI (Plus-Minus-Interesting) - 3개 질문
-
-| 질문 순서 | 카테고리 | 질문 내용 |
-|----------|----------|----------|
-| 1 | Plus (긍정적인 점) | 이번 일을 통해 도움이 되었던 문화나 방법은 무엇인가요? |
-| 2 | Minus (부정적인 점) | 이번 일을 통해 안 좋은 영향을 끼쳤던 것은 무엇인가요? |
-| 3 | Interesting (흥미로운 점) | 이번 일을 하면서 새롭게 발견한 점은 무엇인가요? |
-
-#### FREE (자유 형식) - 5개 질문
-
-| 질문 순서 | 질문 내용 |
-|----------|----------|
-| 1 | 이번 프로젝트에서 가장 기억에 남는 것은 무엇인가요? |
-| 2 | 프로젝트를 진행하며 어떤 생각이 들었나요? |
-| 3 | 다음 프로젝트에서 개선하고 싶은 점은 무엇인가요? |
-| 4 | 팀원들에게 전하고 싶은 말이 있나요? |
-| 5 | 추가로 공유하고 싶은 의견이 있나요? |
+> **참고 (v2.0.0 변경사항)**: v1.x에서는 서버가 `retrospectMethod`에 따른 기본 질문을 자동 생성했으나, v2.0.0부터는 프론트엔드에서 질문 목록을 직접 전달합니다. 기본 질문 표시는 프론트엔드에서 처리하며, 서버는 전달받은 질문을 그대로 저장합니다.
 
 ## 에러 응답
 
@@ -198,6 +164,17 @@ POST /api/v1/retrospects
   "isSuccess": false,
   "code": "RETRO4031",
   "message": "해당 회고방의 멤버가 아닙니다.",
+  "result": null
+}
+```
+
+### 400 Bad Request - 질문 목록 유효성 검사 실패
+
+```json
+{
+  "isSuccess": false,
+  "code": "COMMON400",
+  "message": "질문은 최소 1개 이상이어야 합니다.",
   "result": null
 }
 ```
@@ -251,6 +228,7 @@ POST /api/v1/retrospects
 | Code | HTTP Status | Description | 발생 조건 |
 |------|-------------|-------------|-----------|
 | RETRO4001 | 400 | 프로젝트 이름 길이 유효성 검사 실패 | projectName이 0자 또는 20자 초과 |
+| COMMON400 | 400 | 질문 목록 유효성 검사 실패 | questions가 비어있거나, 빈 문자열 질문 포함 |
 | RETRO4005 | 400 | 유효하지 않은 회고 방식 | retrospectMethod가 정의된 Enum 외의 값 |
 | RETRO4006 | 400 | 유효하지 않은 URL 형식 | referenceUrls 중 http/https가 아닌 URL 포함 |
 | COMMON400 | 400 | 잘못된 요청 | 날짜/시간 형식 오류(YYYY-MM-DD, HH:mm), 필수 필드 누락 등 |
@@ -276,6 +254,11 @@ curl -X POST https://api.example.com/api/v1/retrospects \
     "referenceUrls": [
       "https://github.com/jayson/project",
       "https://notion.so/retrospective-guide"
+    ],
+    "questions": [
+      "이번 일을 통해 유지했으면 하는 문화나 방식이 있나요?",
+      "이번 일을 하는 중 문제라고 판단되었던 점이 있나요?",
+      "이번 일을 겪으면서 새롭게 시도해보고 싶은 게 있나요?"
     ]
   }'
 ```
