@@ -1722,19 +1722,34 @@ impl RetrospectService {
 
         let response_ids: Vec<i64> = responses.iter().map(|r| r.response_id).collect();
 
-        // 5. 질문 리스트 추출 (중복 제거, 순서 유지, 저장된 질문 수)
-        let max_questions = Self::get_questions_from_retrospect(&retrospect_model)?.len();
-        let mut seen_questions = HashSet::new();
-        let questions: Vec<RetrospectQuestionItem> = responses
-            .iter()
-            .filter(|r| seen_questions.insert(r.question.clone()))
-            .take(max_questions)
-            .enumerate()
-            .map(|(i, r)| RetrospectQuestionItem {
-                index: (i + 1) as i32,
-                content: r.question.clone(),
-            })
-            .collect();
+        // 5. 질문 리스트 추출
+        // 참석자가 있으면 response 테이블에서, 없으면 저장된 질문에서 가져옴
+        let stored_questions = Self::get_questions_from_retrospect(&retrospect_model)?;
+        let questions: Vec<RetrospectQuestionItem> = if responses.is_empty() {
+            // 참석자 등록 전: 저장된 질문 목록 사용
+            stored_questions
+                .iter()
+                .enumerate()
+                .map(|(i, q)| RetrospectQuestionItem {
+                    index: (i + 1) as i32,
+                    content: q.clone(),
+                })
+                .collect()
+        } else {
+            // 참석자 존재: response 테이블에서 추출 (중복 제거, 순서 유지)
+            let max_questions = stored_questions.len();
+            let mut seen_questions = HashSet::new();
+            responses
+                .iter()
+                .filter(|r| seen_questions.insert(r.question.clone()))
+                .take(max_questions)
+                .enumerate()
+                .map(|(i, r)| RetrospectQuestionItem {
+                    index: (i + 1) as i32,
+                    content: r.question.clone(),
+                })
+                .collect()
+        };
 
         // 6. 전체 좋아요 수 조회
         let total_like_count = if response_ids.is_empty() {
