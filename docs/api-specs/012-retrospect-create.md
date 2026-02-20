@@ -15,6 +15,7 @@
 | 1.2.0 | 2025-01-25 | teamId 필드 추가, 날짜 포맷 ISO 8601(YYYY-MM-DD) 통일, 질문 생성 로직 추가 |
 | 1.3.0 | 2026-01-30 | teamId → retroRoomId로 변경, retrospectTime 필드 추가 (실제 구현과 동기화) |
 | 2.0.0 | 2026-02-20 | questions 필드 추가 (필수), 서버 기본 질문 생성 로직 제거, 클라이언트가 질문을 직접 전달 |
+| 2.1.0 | 2026-02-20 | retrospectTime 필드 제거 (더 이상 시간을 입력받지 않음) |
 
 ## 엔드포인트
 
@@ -42,7 +43,6 @@ POST /api/v1/retrospects
   "retroRoomId": 789,
   "projectName": "나만의 회고 플랫폼",
   "retrospectDate": "2026-01-24",
-  "retrospectTime": "14:00",
   "retrospectMethod": "KPT",
   "referenceUrls": [
     "https://github.com/jayson/project",
@@ -63,7 +63,6 @@ POST /api/v1/retrospects
 | retroRoomId | long | Yes | 회고가 속한 회고방의 고유 ID | 1 이상의 양수 |
 | projectName | string | Yes | 프로젝트 이름 | 최소 1자, 최대 20자 |
 | retrospectDate | string | Yes | 회고 날짜 | ISO 8601 형식 (YYYY-MM-DD) |
-| retrospectTime | string | Yes | 회고 시간 (한국 시간 기준) | HH:mm 형식 (예: 14:00) |
 | retrospectMethod | string (Enum) | Yes | 회고 방식 | KPT, FOUR_L, FIVE_F, PMI, FREE 중 하나 |
 | referenceUrls | array[string] | No | 참고 자료 URL 리스트 | 최대 10개, 각 URL은 유효한 형식이어야 함 (http/https) |
 | questions | array[string] | Yes | 회고 질문 목록 | 최소 1개, 각 질문은 빈 문자열 불가 |
@@ -231,7 +230,7 @@ POST /api/v1/retrospects
 | COMMON400 | 400 | 질문 목록 유효성 검사 실패 | questions가 비어있거나, 빈 문자열 질문 포함 |
 | RETRO4005 | 400 | 유효하지 않은 회고 방식 | retrospectMethod가 정의된 Enum 외의 값 |
 | RETRO4006 | 400 | 유효하지 않은 URL 형식 | referenceUrls 중 http/https가 아닌 URL 포함 |
-| COMMON400 | 400 | 잘못된 요청 | 날짜/시간 형식 오류(YYYY-MM-DD, HH:mm), 필수 필드 누락 등 |
+| COMMON400 | 400 | 잘못된 요청 | 날짜 형식 오류(YYYY-MM-DD), 필수 필드 누락 등 |
 | AUTH4001 | 401 | 인증 정보가 유효하지 않음 | 토큰 누락, 만료, 또는 잘못된 형식 |
 | RETRO4031 | 403 | 회고방 접근 권한 없음 | 해당 회고방의 멤버가 아닌 경우 |
 | RETRO4041 | 404 | 존재하지 않는 회고방 | 유효하지 않은 retroRoomId |
@@ -249,7 +248,6 @@ curl -X POST https://api.example.com/api/v1/retrospects \
     "retroRoomId": 789,
     "projectName": "나만의 회고 플랫폼",
     "retrospectDate": "2026-01-24",
-    "retrospectTime": "14:00",
     "retrospectMethod": "KPT",
     "referenceUrls": [
       "https://github.com/jayson/project",
