@@ -248,6 +248,18 @@ fn validate_reference_url_items(urls: &[String]) -> Result<(), validator::Valida
     Ok(())
 }
 
+/// 질문 개별 항목 검증 (빈 문자열 불가)
+fn validate_question_items(questions: &[String]) -> Result<(), validator::ValidationError> {
+    for question in questions {
+        if question.trim().is_empty() {
+            let mut err = validator::ValidationError::new("empty_question");
+            err.message = Some(Cow::Borrowed("질문은 빈 문자열일 수 없습니다"));
+            return Err(err);
+        }
+    }
+    Ok(())
+}
+
 /// 회고 생성 요청 DTO
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -290,6 +302,13 @@ pub struct CreateRetrospectRequest {
     )]
     #[serde(default)]
     pub reference_urls: Vec<String>,
+
+    /// 회고 질문 목록 (필수, 최소 1개, 빈 문자열 불가)
+    #[validate(
+        length(min = 1, message = "질문은 최소 1개 이상이어야 합니다"),
+        custom(function = "validate_question_items")
+    )]
+    pub questions: Vec<String>,
 }
 
 /// 회고 생성 응답 DTO
@@ -1056,6 +1075,7 @@ mod tests {
             retrospect_time: "14:00".to_string(),
             retrospect_method: RetrospectMethod::Kpt,
             reference_urls: vec![],
+            questions: vec!["테스트 질문 1".to_string(), "테스트 질문 2".to_string()],
         }
     }
 
@@ -2504,5 +2524,82 @@ mod tests {
         assert_eq!(json["isSuccess"], true);
         assert_eq!(json["code"], "COMMON200");
         assert!(json["result"]["questionId"].is_number());
+    }
+
+    // ========================================
+    // questions 검증 테스트
+    // ========================================
+
+    #[test]
+    fn should_fail_validation_when_questions_is_empty() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            questions: vec![],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("questions"));
+    }
+
+    #[test]
+    fn should_fail_validation_when_question_item_is_empty_string() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            questions: vec!["유효한 질문".to_string(), "".to_string()],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("questions"));
+    }
+
+    #[test]
+    fn should_fail_validation_when_question_item_is_whitespace_only() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            questions: vec!["   ".to_string()],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        let field_errors = errors.field_errors();
+        assert!(field_errors.contains_key("questions"));
+    }
+
+    #[test]
+    fn should_pass_validation_when_questions_are_valid() {
+        // Arrange
+        let request = CreateRetrospectRequest {
+            questions: vec![
+                "질문 1".to_string(),
+                "질문 2".to_string(),
+                "질문 3".to_string(),
+            ],
+            ..create_valid_request()
+        };
+
+        // Act
+        let result = request.validate();
+
+        // Assert
+        assert!(result.is_ok());
     }
 }

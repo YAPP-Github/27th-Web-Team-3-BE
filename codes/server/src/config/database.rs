@@ -108,6 +108,9 @@ async fn apply_migrations(db: &DatabaseConnection) -> Result<(), DbErr> {
     )
     .await?;
 
+    // Migration: Add questions column to retrospects table (JSON string)
+    add_column_if_not_exists(db, "retrospects", "questions", "TEXT NULL").await?;
+
     Ok(())
 }
 
