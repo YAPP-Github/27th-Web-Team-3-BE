@@ -802,13 +802,21 @@ impl RetrospectService {
             .map(|r| {
                 let participant_count =
                     count_map.get(&r.retrospect_id).copied().unwrap_or_default();
-                let status = match user_status_map.get(&r.retrospect_id) {
-                    Some(member_retro::RetrospectStatus::Submitted)
-                    | Some(member_retro::RetrospectStatus::Analyzed) => {
-                        RetrospectListStatus::Completed
+                let retrospect_date = r.start_time.date();
+                let today = Utc::now().naive_utc().date();
+                let is_past = retrospect_date < today;
+
+                let status = if is_past {
+                    RetrospectListStatus::Completed
+                } else {
+                    match user_status_map.get(&r.retrospect_id) {
+                        Some(member_retro::RetrospectStatus::Submitted)
+                        | Some(member_retro::RetrospectStatus::Analyzed) => {
+                            RetrospectListStatus::Completed
+                        }
+                        Some(member_retro::RetrospectStatus::Draft) => RetrospectListStatus::Draft,
+                        None => RetrospectListStatus::InProgress,
                     }
-                    Some(member_retro::RetrospectStatus::Draft) => RetrospectListStatus::Draft,
-                    None => RetrospectListStatus::InProgress,
                 };
                 RetrospectListItem {
                     retrospect_id: r.retrospect_id,
