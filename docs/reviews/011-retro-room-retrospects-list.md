@@ -180,8 +180,47 @@ API-010은 API-011 (회고 생성) 브랜치를 기반으로 구현되었습니�
 - **결정**: `RetrospectModel` → `TeamRetrospectListItem` 변환에 `From` trait 사용
 - **이유**: 타입 안전성 보장, 코드 재사용성 향상
 
+## v1.2.0 변경사항 (2026-02-20)
+
+### 변경 개요
+
+`RetrospectListItem` 응답에 `status` 필드를 추가하여 프론트엔드에서 회고 상태별 컬럼 분류가 가능하도록 합니다.
+
+### 상태 판별 로직
+
+`status`는 회고 자체의 속성이 아니라, 현재 로그인한 사용자의 답변(`member_retro`) 상태에 따라 결정됩니다:
+
+| status | 조건 |
+|--------|------|
+| `IN_PROGRESS` | 사용자가 해당 회고에 참여하지 않은 상태 (member_retro 레코드 없음) |
+| `DRAFT` | 사용자의 member_retro 상태가 DRAFT인 경우 |
+| `COMPLETED` | 사용자의 member_retro 상태가 SUBMITTED 또는 ANALYZED인 경우 |
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `dto.rs` | `RetrospectListStatus` enum 추가, `RetrospectListItem`에 `status` 필드 추가 |
+| `service.rs` | `list_retrospects`에서 현재 사용자의 member_retro 상태 조회 로직 추가 |
+| `main.rs` | OpenAPI 스키마에 `RetrospectListStatus` 등록 |
+| `api_010_retro_room_retrospects_test.rs` | status 직렬화 테스트 6개 추가, 기존 테스트에 status 필드 반영 |
+| `011-retro-room-retrospects-list.md` (API 스펙) | v1.2.0 버전 추가, status 필드 문서화 |
+
+### 응답 예시
+
+```json
+{
+  "retrospectId": 1,
+  "projectName": "프로젝트",
+  "retrospectMethod": "KPT",
+  "retrospectDate": "2026-01-26",
+  "participantCount": 5,
+  "status": "IN_PROGRESS"
+}
+```
+
 ## 참고 문서
 
-- API 스펙: `docs/api-specs/010-team-retrospects-list.md`
+- API 스펙: `docs/api-specs/011-retro-room-retrospects-list.md`
 - 아키텍처 가이드: `docs/ai-conventions/architecture.md`
 - API-011 리뷰: `docs/reviews/011-retrospect-create.md`

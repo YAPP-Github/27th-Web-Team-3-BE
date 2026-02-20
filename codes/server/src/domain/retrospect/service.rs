@@ -37,11 +37,11 @@ use super::dto::{
     JoinRetroRoomRequest, JoinRetroRoomResponse, ListCommentsResponse, MissionItem,
     PersonalMissionItem, ReferenceItem, ResponseCategory, ResponseListItem, ResponsesListResponse,
     RetroRoomCreateRequest, RetroRoomCreateResponse, RetroRoomListItem, RetroRoomMemberItem,
-    RetrospectDetailResponse, RetrospectListItem, RetrospectMemberItem, RetrospectQuestionItem,
-    SearchQueryParams, SearchRetrospectItem, StorageQueryParams, StorageResponse,
-    StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem, SubmitRetrospectRequest,
-    SubmitRetrospectResponse, UpdateRetroRoomNameRequest, UpdateRetroRoomNameResponse,
-    UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
+    RetrospectDetailResponse, RetrospectListItem, RetrospectListStatus, RetrospectMemberItem,
+    RetrospectQuestionItem, SearchQueryParams, SearchRetrospectItem, StorageQueryParams,
+    StorageResponse, StorageRetrospectItem, StorageYearGroup, SubmitAnswerItem,
+    SubmitRetrospectRequest, SubmitRetrospectResponse, UpdateRetroRoomNameRequest,
+    UpdateRetroRoomNameResponse, UpdateRetroRoomOrderRequest, REFERENCE_URL_MAX_LENGTH,
 };
 
 pub struct RetrospectService;
@@ -772,7 +772,7 @@ impl RetrospectService {
             .select_only()
             .column(member_retro::Column::RetrospectId)
             .column_as(member_retro::Column::MemberRetroId.count(), "count")
-            .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids))
+            .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids.clone()))
             .group_by(member_retro::Column::RetrospectId)
             .into_model::<ParticipantCount>()
             .all(&state.db)
@@ -784,17 +784,39 @@ impl RetrospectService {
             .map(|c| (c.retrospect_id, c.count))
             .collect();
 
+        // 5. 현재 사용자의 회고별 참여 상태 조회 (한 번의 쿼리로)
+        let user_member_retros: Vec<member_retro::Model> = MemberRetro::find()
+            .filter(member_retro::Column::MemberId.eq(member_id))
+            .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
+
+        let user_status_map: HashMap<i64, &member_retro::RetrospectStatus> = user_member_retros
+            .iter()
+            .map(|mr| (mr.retrospect_id, &mr.status))
+            .collect();
+
         let result: Vec<RetrospectListItem> = retrospects
             .into_iter()
             .map(|r| {
                 let participant_count =
                     count_map.get(&r.retrospect_id).copied().unwrap_or_default();
+                let status = match user_status_map.get(&r.retrospect_id) {
+                    Some(member_retro::RetrospectStatus::Submitted)
+                    | Some(member_retro::RetrospectStatus::Analyzed) => {
+                        RetrospectListStatus::Completed
+                    }
+                    Some(member_retro::RetrospectStatus::Draft) => RetrospectListStatus::Draft,
+                    None => RetrospectListStatus::InProgress,
+                };
                 RetrospectListItem {
                     retrospect_id: r.retrospect_id,
                     project_name: r.title,
                     retrospect_method: r.retrospect_method.to_string(),
                     retrospect_date: r.start_time.format("%Y-%m-%d").to_string(),
                     participant_count,
+                    status,
                 }
             })
             .collect();
