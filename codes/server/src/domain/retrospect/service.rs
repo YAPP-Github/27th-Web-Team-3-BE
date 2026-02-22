@@ -1305,18 +1305,7 @@ impl RetrospectService {
         let question_count = Self::get_questions_from_retrospect(&retrospect_model)?.len();
         Self::validate_drafts(&req.drafts, question_count)?;
 
-        // 3. 참석자(member_retro) 확인 - 해당 회고에 대한 작성 권한 검증
-        let member_retro_model = member_retro::Entity::find()
-            .filter(member_retro::Column::MemberId.eq(user_id))
-            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
-            .one(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?
-            .ok_or_else(|| {
-                AppError::RetroRoomAccessDenied("해당 회고에 작성 권한이 없습니다.".to_string())
-            })?;
-
-        // 4. member_response를 통해 해당 멤버의 응답(response) ID 조회
+        // 3. member_response를 통해 해당 멤버의 응답(response) ID 조회
         let member_response_ids: Vec<i64> = member_response::Entity::find()
             .filter(member_response::Column::MemberId.eq(user_id))
             .all(&state.db)
@@ -1326,14 +1315,14 @@ impl RetrospectService {
             .map(|mr| mr.response_id)
             .collect();
 
-        // 4-1. 응답이 없는 경우 사전 방어 (member_response가 없으면 권한 문제)
+        // 3-1. 응답이 없는 경우 사전 방어 (member_response가 없으면 권한 문제)
         if member_response_ids.is_empty() {
             return Err(AppError::RetroRoomAccessDenied(
                 "해당 회고에 대한 응답 데이터가 존재하지 않습니다.".to_string(),
             ));
         }
 
-        // 5. 해당 멤버의 질문(response) 목록 조회 (response_id 오름차순)
+        // 4. 해당 멤버의 질문(response) 목록 조회 (response_id 오름차순)
         let responses = response::Entity::find()
             .filter(response::Column::RetrospectId.eq(retrospect_id))
             .filter(response::Column::ResponseId.is_in(member_response_ids))
@@ -1342,7 +1331,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 5-1. 질문 수 불일치 검증 (response_id 순서 매핑이 안전한지 확인)
+        // 4-1. 질문 수 불일치 검증 (response_id 순서 매핑이 안전한지 확인)
         if responses.len() != question_count {
             return Err(AppError::InternalError(format!(
                 "질문-응답 매핑 불일치: 예상 {}개, 실제 {}개",
@@ -1351,13 +1340,25 @@ impl RetrospectService {
             )));
         }
 
-        // 6. 답변 업데이트 (트랜잭션으로 원자적 처리)
+        // 5. 트랜잭션 시작 (답변 업데이트 + 상태 전환 원자적 처리)
         let now = Utc::now().naive_utc();
         let txn = state
             .db
             .begin()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // 5-1. 참석자(member_retro) 확인 - 행 잠금으로 동시 제출과의 경쟁 조건 방지
+        let member_retro_model = member_retro::Entity::find()
+            .filter(member_retro::Column::MemberId.eq(user_id))
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .lock_exclusive()
+            .one(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::RetroRoomAccessDenied("해당 회고에 작성 권한이 없습니다.".to_string())
+            })?;
 
         for draft in &req.drafts {
             let idx = (draft.question_number - 1) as usize;
@@ -1374,7 +1375,7 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
 
-        // 6-1. InProgress 상태인 경우 Draft로 전환
+        // 5-2. InProgress 상태인 경우 Draft로 전환
         if member_retro_model.status == RetrospectStatus::InProgress {
             let mut active_mr: member_retro::ActiveModel = member_retro_model.into();
             active_mr.status = Set(RetrospectStatus::Draft);
