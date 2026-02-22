@@ -633,6 +633,8 @@ pub struct RetrospectMemberItem {
     pub member_id: i64,
     /// 멤버 이름 (닉네임)
     pub user_name: String,
+    /// 회고 참여 상태 (IN_PROGRESS, DRAFT, SUBMITTED, ANALYZED)
+    pub status: RetrospectStatus,
 }
 
 /// 회고 질문 아이템
@@ -1593,10 +1595,12 @@ mod tests {
                 RetrospectMemberItem {
                     member_id: 1,
                     user_name: "김민철".to_string(),
+                    status: RetrospectStatus::Submitted,
                 },
                 RetrospectMemberItem {
                     member_id: 2,
                     user_name: "카이".to_string(),
+                    status: RetrospectStatus::Draft,
                 },
             ],
             total_like_count: 156,
@@ -1635,8 +1639,10 @@ mod tests {
         assert_eq!(members.len(), 2);
         assert_eq!(members[0]["memberId"], 1);
         assert_eq!(members[0]["userName"], "김민철");
+        assert_eq!(members[0]["status"], "SUBMITTED");
         assert_eq!(members[1]["memberId"], 2);
         assert_eq!(members[1]["userName"], "카이");
+        assert_eq!(members[1]["status"], "DRAFT");
 
         // questions 검증
         let questions = json["questions"].as_array().unwrap();
@@ -1708,6 +1714,7 @@ mod tests {
         let member = RetrospectMemberItem {
             member_id: 42,
             user_name: "테스트유저".to_string(),
+            status: RetrospectStatus::Submitted,
         };
 
         // Act
@@ -1716,6 +1723,7 @@ mod tests {
         // Assert
         assert_eq!(json["memberId"], 42);
         assert_eq!(json["userName"], "테스트유저");
+        assert_eq!(json["status"], "SUBMITTED");
         // snake_case 키가 없는지 확인
         assert!(json.get("member_id").is_none());
         assert!(json.get("user_name").is_none());

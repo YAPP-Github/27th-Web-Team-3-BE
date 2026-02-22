@@ -1710,6 +1710,7 @@ impl RetrospectService {
                 name.map(|n| RetrospectMemberItem {
                     member_id,
                     user_name: n.clone(),
+                    status: mr.status.clone(),
                 })
             })
             .collect();

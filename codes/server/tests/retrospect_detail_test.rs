@@ -99,8 +99,8 @@ mod detail_test_helpers {
                     "startTime": "2026-01-24",
                     "retroCategory": "KPT",
                     "members": [
-                        { "memberId": 1, "userName": "김민철" },
-                        { "memberId": 2, "userName": "카이" }
+                        { "memberId": 1, "userName": "김민철", "status": "SUBMITTED" },
+                        { "memberId": 2, "userName": "카이", "status": "DRAFT" }
                     ],
                     "totalLikeCount": 156,
                     "totalCommentCount": 42,
@@ -405,13 +405,16 @@ async fn api012_should_return_correct_members_fields() {
     let first_member = &members[0];
     assert!(first_member["memberId"].is_number());
     assert!(first_member["userName"].is_string());
+    assert!(first_member["status"].is_string());
     assert_eq!(first_member["memberId"], 1);
     assert_eq!(first_member["userName"], "김민철");
+    assert_eq!(first_member["status"], "SUBMITTED");
 
     // 두 번째 멤버 필드 검증
     let second_member = &members[1];
     assert_eq!(second_member["memberId"], 2);
     assert_eq!(second_member["userName"], "카이");
+    assert_eq!(second_member["status"], "DRAFT");
 }
 
 /// [API-012] 성공 응답의 questions 배열 필드 검증 테스트
