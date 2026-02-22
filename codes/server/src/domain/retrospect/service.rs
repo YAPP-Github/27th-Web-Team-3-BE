@@ -815,6 +815,9 @@ impl RetrospectService {
                             RetrospectListStatus::Completed
                         }
                         Some(member_retro::RetrospectStatus::Draft) => RetrospectListStatus::Draft,
+                        Some(member_retro::RetrospectStatus::InProgress) => {
+                            RetrospectListStatus::InProgress
+                        }
                         None => RetrospectListStatus::InProgress,
                     }
                 };
@@ -1176,6 +1179,7 @@ impl RetrospectService {
             member_id: Set(Some(user_id)),
             retrospect_id: Set(retrospect_id),
             personal_insight: Set(None),
+            status: Set(RetrospectStatus::InProgress),
             ..Default::default()
         };
 
@@ -1302,7 +1306,7 @@ impl RetrospectService {
         Self::validate_drafts(&req.drafts, question_count)?;
 
         // 3. 참석자(member_retro) 확인 - 해당 회고에 대한 작성 권한 검증
-        let _member_retro_model = member_retro::Entity::find()
+        let member_retro_model = member_retro::Entity::find()
             .filter(member_retro::Column::MemberId.eq(user_id))
             .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
             .one(&state.db)
@@ -1365,6 +1369,16 @@ impl RetrospectService {
             active.content = Set(draft.content.clone().unwrap_or_default());
             active.updated_at = Set(now);
             active
+                .update(&txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+
+        // 6-1. InProgress 상태인 경우 Draft로 전환
+        if member_retro_model.status == RetrospectStatus::InProgress {
+            let mut active_mr: member_retro::ActiveModel = member_retro_model.into();
+            active_mr.status = Set(RetrospectStatus::Draft);
+            active_mr
                 .update(&txn)
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -1784,6 +1798,7 @@ impl RetrospectService {
             .iter()
             .find(|mr| mr.member_id == Some(user_id))
             .map(|mr| match mr.status {
+                RetrospectStatus::InProgress => CurrentUserStatus::InProgress,
                 RetrospectStatus::Draft => CurrentUserStatus::Draft,
                 RetrospectStatus::Submitted => CurrentUserStatus::Submitted,
                 RetrospectStatus::Analyzed => CurrentUserStatus::Analyzed,
@@ -3480,7 +3495,9 @@ impl RetrospectService {
             })?;
 
         // 4. 이미 제출된 회고는 어시스턴트 사용 불가
-        if member_retro_model.status != RetrospectStatus::Draft {
+        if member_retro_model.status == RetrospectStatus::Submitted
+            || member_retro_model.status == RetrospectStatus::Analyzed
+        {
             return Err(AppError::RetroAlreadySubmitted(
                 "이미 제출된 회고에서는 어시스턴트를 사용할 수 없습니다.".to_string(),
             ));

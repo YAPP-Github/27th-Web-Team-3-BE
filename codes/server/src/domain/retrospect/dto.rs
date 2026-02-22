@@ -593,6 +593,8 @@ pub struct SuccessStorageResponse {
 pub enum CurrentUserStatus {
     /// 회고에 참석 등록하지 않음
     NotParticipated,
+    /// 참석 등록 직후 초기 상태 (아무것도 작성하지 않음)
+    InProgress,
     /// 참석 등록 후 임시 저장 상태
     Draft,
     /// 회고 답변 최종 제출 완료
