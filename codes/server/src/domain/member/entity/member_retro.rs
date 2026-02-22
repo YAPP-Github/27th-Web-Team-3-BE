@@ -9,6 +9,9 @@ use utoipa::ToSchema;
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "RetrospectStatus")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RetrospectStatus {
+    /// 참석 등록 직후 초기 상태
+    #[sea_orm(string_value = "IN_PROGRESS")]
+    InProgress,
     /// 임시 저장 상태
     #[sea_orm(string_value = "DRAFT")]
     Draft,
