@@ -3488,8 +3488,7 @@ impl RetrospectService {
         let is_room_member = member_retro_room::Entity::find()
             .filter(member_retro_room::Column::MemberId.eq(user_id))
             .filter(
-                member_retro_room::Column::RetrospectRoomId
-                    .eq(retrospect_model.retrospect_room_id),
+                member_retro_room::Column::RetrospectRoomId.eq(retrospect_model.retrospect_room_id),
             )
             .one(&state.db)
             .await
@@ -3510,9 +3509,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         if let Some(mr) = &member_retro_model {
-            if mr.status == RetrospectStatus::Submitted
-                || mr.status == RetrospectStatus::Analyzed
-            {
+            if mr.status == RetrospectStatus::Submitted || mr.status == RetrospectStatus::Analyzed {
                 return Err(AppError::RetroAlreadySubmitted(
                     "이미 제출된 회고에서는 어시스턴트를 사용할 수 없습니다.".to_string(),
                 ));
