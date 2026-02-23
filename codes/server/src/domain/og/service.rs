@@ -1,18 +1,23 @@
 use crate::domain::og::dto::OgMetadataResponse;
 use crate::utils::error::AppError;
+use reqwest::redirect::Policy;
 use reqwest::Client;
 use scraper::{Html, Selector};
+use std::net::Ipv6Addr;
 use std::sync::LazyLock;
 use tracing::{info, warn};
 use url::{Host, Url};
 
 const REQUEST_TIMEOUT_SECS: u64 = 5;
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; MoalogBot/1.0)";
+/// 응답 본문 최대 크기 (1MB)
+const MAX_BODY_BYTES: usize = 1_024 * 1_024;
 
-/// 공유 HTTP 클라이언트 (커넥션 풀링 활용)
+/// 공유 HTTP 클라이언트 (커넥션 풀링 활용, 리다이렉트 비활성화)
 static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
         .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .redirect(Policy::none())
         .build()
         .expect("HTTP 클라이언트 초기화 실패")
 });
@@ -74,15 +79,43 @@ fn is_valid_url(url: &str) -> bool {
                 || ipv4.is_link_local()   // 169.254.0.0/16
                 || ipv4.is_unspecified()) // 0.0.0.0
         }
-        Some(Host::Ipv6(ipv6)) => {
-            !(ipv6.is_loopback()          // ::1
-                || ipv6.is_unspecified()) // ::
-        }
+        Some(Host::Ipv6(ipv6)) => !is_blocked_ipv6(&ipv6),
         None => false,
     }
 }
 
+/// IPv6 주소가 차단 대상인지 확인합니다.
+/// IPv4-mapped IPv6 주소(::ffff:x.x.x.x), 유니크 로컬(fc00::/7), 링크로컬(fe80::/10)도 차단합니다.
+fn is_blocked_ipv6(ipv6: &Ipv6Addr) -> bool {
+    if ipv6.is_loopback() || ipv6.is_unspecified() {
+        return true;
+    }
+
+    // IPv4-mapped IPv6 (::ffff:x.x.x.x) → 내부 IPv4로 매핑된 주소 차단
+    if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+        return ipv4.is_loopback()
+            || ipv4.is_private()
+            || ipv4.is_link_local()
+            || ipv4.is_unspecified();
+    }
+
+    let segments = ipv6.segments();
+
+    // 유니크 로컬 주소 fc00::/7 (첫 7비트가 1111110)
+    if segments[0] & 0xfe00 == 0xfc00 {
+        return true;
+    }
+
+    // 링크로컬 주소 fe80::/10 (첫 10비트가 1111111010)
+    if segments[0] & 0xffc0 == 0xfe80 {
+        return true;
+    }
+
+    false
+}
+
 /// 외부 URL에서 HTML을 가져옵니다.
+/// 리다이렉트는 SSRF 방지를 위해 비활성화되어 있으며, 3xx 응답은 fallback 처리됩니다.
 async fn fetch_html(url: &str) -> Result<String, AppError> {
     let response = HTTP_CLIENT
         .get(url)
@@ -93,12 +126,27 @@ async fn fetch_html(url: &str) -> Result<String, AppError> {
         .error_for_status()
         .map_err(|e| AppError::InternalError(format!("외부 URL 응답 오류: {}", e)))?;
 
-    let text = response
-        .text()
+    let content_length = response.content_length().unwrap_or(0) as usize;
+
+    if content_length > MAX_BODY_BYTES {
+        return Err(AppError::InternalError(
+            "응답 본문이 너무 큽니다.".to_string(),
+        ));
+    }
+
+    let bytes = response
+        .bytes()
         .await
         .map_err(|e| AppError::InternalError(format!("응답 본문 읽기 실패: {}", e)))?;
 
-    Ok(text)
+    if bytes.len() > MAX_BODY_BYTES {
+        return Err(AppError::InternalError(
+            "응답 본문이 너무 큽니다.".to_string(),
+        ));
+    }
+
+    String::from_utf8(bytes.to_vec())
+        .map_err(|e| AppError::InternalError(format!("응답 인코딩 오류: {}", e)))
 }
 
 struct OgTags {
@@ -280,6 +328,54 @@ mod tests {
     }
 
     #[test]
+    fn should_return_false_for_ipv4_mapped_ipv6_loopback() {
+        // Arrange
+        let url = "http://[::ffff:127.0.0.1]/admin";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_ipv4_mapped_ipv6_private() {
+        // Arrange
+        let url = "http://[::ffff:10.0.0.1]/internal";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_ipv6_unique_local() {
+        // Arrange
+        let url = "http://[fc00::1]/internal";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_ipv6_link_local() {
+        // Arrange
+        let url = "http://[fe80::1]/internal";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
     fn should_parse_og_tags_from_html() {
         // Arrange
         let html = r#"
@@ -411,6 +507,20 @@ mod tests {
     async fn should_return_error_for_private_ip_ssrf() {
         // Arrange
         let url = "http://169.254.169.254/latest/meta-data/";
+
+        // Act
+        let result = OgService::fetch_metadata(url).await;
+
+        // Assert
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.error_code(), "COMMON400");
+    }
+
+    #[tokio::test]
+    async fn should_return_error_for_ipv4_mapped_ipv6_ssrf() {
+        // Arrange
+        let url = "http://[::ffff:127.0.0.1]/admin";
 
         // Act
         let result = OgService::fetch_metadata(url).await;
