@@ -1131,11 +1131,11 @@ impl RetrospectService {
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
-        // 2. 진행 예정인 회고인지 확인 (과거 회고에는 참석 불가)
+        // 2. 회고가 시작되었는지 확인 (start_time 이후부터 참여 가능)
         let now_kst = Utc::now().naive_utc() + chrono::Duration::hours(9);
-        if retrospect_model.start_time <= now_kst {
-            return Err(AppError::RetrospectAlreadyStarted(
-                "이미 시작되었거나 종료된 회고에는 참석할 수 없습니다.".to_string(),
+        if now_kst < retrospect_model.start_time {
+            return Err(AppError::RetrospectNotStarted(
+                "아직 시작되지 않은 회고입니다.".to_string(),
             ));
         }
 
