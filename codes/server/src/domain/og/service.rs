@@ -1,10 +1,21 @@
 use crate::domain::og::dto::OgMetadataResponse;
 use crate::utils::error::AppError;
+use reqwest::Client;
 use scraper::{Html, Selector};
+use std::sync::LazyLock;
 use tracing::{info, warn};
+use url::{Host, Url};
 
 const REQUEST_TIMEOUT_SECS: u64 = 5;
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; MoalogBot/1.0)";
+
+/// 공유 HTTP 클라이언트 (커넥션 풀링 활용)
+static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
+    Client::builder()
+        .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .build()
+        .expect("HTTP 클라이언트 초기화 실패")
+});
 
 pub struct OgService;
 
@@ -40,23 +51,47 @@ impl OgService {
 }
 
 /// URL 형식이 유효한지 검증합니다.
+/// SSRF 방지를 위해 내부 네트워크 주소를 차단합니다.
+/// NOTE: DNS rebinding 공격에 대한 완전한 방어를 위해서는 DNS 해석 후 IP 재검증이 필요합니다.
 fn is_valid_url(url: &str) -> bool {
-    url.starts_with("http://") || url.starts_with("https://")
+    let parsed = match Url::parse(url) {
+        Ok(u) => u,
+        Err(_) => return false,
+    };
+
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return false;
+    }
+
+    match parsed.host() {
+        Some(Host::Domain(domain)) => {
+            let domain = domain.to_ascii_lowercase();
+            domain != "localhost"
+        }
+        Some(Host::Ipv4(ipv4)) => {
+            !(ipv4.is_loopback()          // 127.0.0.0/8
+                || ipv4.is_private()      // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+                || ipv4.is_link_local()   // 169.254.0.0/16
+                || ipv4.is_unspecified()) // 0.0.0.0
+        }
+        Some(Host::Ipv6(ipv6)) => {
+            !(ipv6.is_loopback()          // ::1
+                || ipv6.is_unspecified()) // ::
+        }
+        None => false,
+    }
 }
 
 /// 외부 URL에서 HTML을 가져옵니다.
 async fn fetch_html(url: &str) -> Result<String, AppError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .build()
-        .map_err(|e| AppError::InternalError(format!("HTTP 클라이언트 생성 실패: {}", e)))?;
-
-    let response = client
+    let response = HTTP_CLIENT
         .get(url)
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .send()
         .await
-        .map_err(|e| AppError::InternalError(format!("외부 URL 요청 실패: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("외부 URL 요청 실패: {}", e)))?
+        .error_for_status()
+        .map_err(|e| AppError::InternalError(format!("외부 URL 응답 오류: {}", e)))?;
 
     let text = response
         .text()
@@ -152,6 +187,90 @@ mod tests {
     fn should_return_false_for_ftp_url() {
         // Arrange
         let url = "ftp://example.com";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_localhost() {
+        // Arrange
+        let url = "http://localhost:8080/admin";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_loopback_ip() {
+        // Arrange
+        let url = "http://127.0.0.1/admin";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_aws_metadata_endpoint() {
+        // Arrange
+        let url = "http://169.254.169.254/latest/meta-data/";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_private_network_10() {
+        // Arrange
+        let url = "http://10.0.0.1/internal";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_private_network_172() {
+        // Arrange
+        let url = "http://172.16.0.1/internal";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_private_network_192() {
+        // Arrange
+        let url = "http://192.168.1.1/internal";
+
+        // Act
+        let result = is_valid_url(url);
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn should_return_false_for_ipv6_loopback() {
+        // Arrange
+        let url = "http://[::1]/admin";
 
         // Act
         let result = is_valid_url(url);
@@ -264,6 +383,34 @@ mod tests {
     async fn should_return_error_for_invalid_url_format() {
         // Arrange
         let url = "not-a-valid-url";
+
+        // Act
+        let result = OgService::fetch_metadata(url).await;
+
+        // Assert
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.error_code(), "COMMON400");
+    }
+
+    #[tokio::test]
+    async fn should_return_error_for_localhost_ssrf() {
+        // Arrange
+        let url = "http://localhost:8080/internal";
+
+        // Act
+        let result = OgService::fetch_metadata(url).await;
+
+        // Assert
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.error_code(), "COMMON400");
+    }
+
+    #[tokio::test]
+    async fn should_return_error_for_private_ip_ssrf() {
+        // Arrange
+        let url = "http://169.254.169.254/latest/meta-data/";
 
         // Act
         let result = OgService::fetch_metadata(url).await;

@@ -1,10 +1,9 @@
-use axum::extract::{Query, State};
+use axum::extract::Query;
 use axum::Json;
 use validator::Validate;
 
 use crate::domain::og::dto::{OgMetadataQuery, OgMetadataResponse};
 use crate::domain::og::service::OgService;
-use crate::state::AppState;
 use crate::utils::auth::AuthUser;
 use crate::utils::error::AppError;
 use crate::utils::response::BaseResponse;
@@ -27,7 +26,6 @@ use crate::utils::response::BaseResponse;
     tag = "OG"
 )]
 pub async fn get_og_metadata(
-    State(_state): State<AppState>,
     _user: AuthUser,
     Query(query): Query<OgMetadataQuery>,
 ) -> Result<Json<BaseResponse<OgMetadataResponse>>, AppError> {
