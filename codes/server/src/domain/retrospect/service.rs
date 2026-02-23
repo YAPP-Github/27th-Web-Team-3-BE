@@ -3484,24 +3484,39 @@ impl RetrospectService {
             )));
         }
 
-        // 3. 회고방 멤버십 확인 (참여자만 어시스턴트 사용 가능)
+        // 3. 회고방 멤버십 확인 (회고방 멤버만 어시스턴트 사용 가능)
+        let is_room_member = member_retro_room::Entity::find()
+            .filter(member_retro_room::Column::MemberId.eq(user_id))
+            .filter(
+                member_retro_room::Column::RetrospectRoomId
+                    .eq(retrospect_model.retrospect_room_id),
+            )
+            .one(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if is_room_member.is_none() {
+            return Err(AppError::RetroRoomAccessDenied(
+                "해당 회고에 참여 권한이 없습니다.".to_string(),
+            ));
+        }
+
+        // 4. 이미 제출된 회고는 어시스턴트 사용 불가
         let member_retro_model = member_retro::Entity::find()
             .filter(member_retro::Column::MemberId.eq(user_id))
             .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
             .one(&state.db)
             .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?
-            .ok_or_else(|| {
-                AppError::RetroRoomAccessDenied("해당 회고에 참여 권한이 없습니다.".to_string())
-            })?;
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 4. 이미 제출된 회고는 어시스턴트 사용 불가
-        if member_retro_model.status == RetrospectStatus::Submitted
-            || member_retro_model.status == RetrospectStatus::Analyzed
-        {
-            return Err(AppError::RetroAlreadySubmitted(
-                "이미 제출된 회고에서는 어시스턴트를 사용할 수 없습니다.".to_string(),
-            ));
+        if let Some(mr) = &member_retro_model {
+            if mr.status == RetrospectStatus::Submitted
+                || mr.status == RetrospectStatus::Analyzed
+            {
+                return Err(AppError::RetroAlreadySubmitted(
+                    "이미 제출된 회고에서는 어시스턴트를 사용할 수 없습니다.".to_string(),
+                ));
+            }
         }
 
         // 5. 월간 사용량 계산을 위한 시간 범위 설정
