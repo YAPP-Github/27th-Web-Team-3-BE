@@ -66,6 +66,7 @@ sea-orm = { version = "1.1.19", features = ["sqlx-mysql", "runtime-tokio-native-
 genpdf = "0.2"
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 reqwest = { version = "0.13.1", features = ["json", "form"] }
+scraper = "0.22"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -29,6 +29,7 @@ use crate::domain::member::dto::{
     MemberProfileResponse, SuccessProfileResponse, SuccessWithdrawResponse,
 };
 use crate::domain::member::entity::member_retro::RetrospectStatus;
+use crate::domain::og::dto::{OgMetadataQuery, OgMetadataResponse, SuccessOgMetadataResponse};
 use crate::domain::retrospect::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
@@ -97,7 +98,9 @@ use crate::utils::{BaseResponse, ErrorResponse};
         domain::retrospect::handler::assistant_guide,
         // Member APIs
         domain::member::handler::get_profile,
-        domain::member::handler::withdraw
+        domain::member::handler::withdraw,
+        // OG APIs
+        domain::og::handler::get_og_metadata
     ),
     components(
         schemas(
@@ -198,7 +201,11 @@ use crate::utils::{BaseResponse, ErrorResponse};
             // Member DTOs
             MemberProfileResponse,
             SuccessProfileResponse,
-            SuccessWithdrawResponse
+            SuccessWithdrawResponse,
+            // OG DTOs
+            OgMetadataQuery,
+            OgMetadataResponse,
+            SuccessOgMetadataResponse
         )
     ),
     tags(
@@ -207,7 +214,8 @@ use crate::utils::{BaseResponse, ErrorResponse};
         (name = "RetroRoom", description = "회고방 관리 API"),
         (name = "Retrospect", description = "회고 API"),
         (name = "Response", description = "회고 답변 API"),
-        (name = "Member", description = "회원 API")
+        (name = "Member", description = "회원 API"),
+        (name = "OG", description = "Open Graph 메타데이터 API")
     ),
     modifiers(&SecurityAddon),
     info(
@@ -435,6 +443,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/v1/retrospects/:retrospect_id/questions/:question_id/assistant",
             axum::routing::post(domain::retrospect::handler::assistant_guide),
+        )
+        // [API-128] OG 메타데이터 조회
+        .route(
+            "/api/v1/og",
+            axum::routing::get(domain::og::handler::get_og_metadata),
         )
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         // 레이어 순서: 아래에서 위로 적용됨 (request_id → cors → TraceLayer → handler)
