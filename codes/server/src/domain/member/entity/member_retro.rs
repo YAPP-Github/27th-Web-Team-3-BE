@@ -18,9 +18,6 @@ pub enum RetrospectStatus {
     /// 최종 제출 완료
     #[sea_orm(string_value = "SUBMITTED")]
     Submitted,
-    /// AI 분석 완료
-    #[sea_orm(string_value = "ANALYZED")]
-    Analyzed,
 }
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
@@ -29,10 +26,16 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub member_retro_id: i64,
     pub personal_insight: Option<String>,
+    /// 팀 AI 분석 요약 (개인별 분석 시점 기준)
+    pub insight: Option<String>,
+    /// 감정 랭킹 JSON (개인별 분석 시점 기준)
+    pub emotion_rank: Option<String>,
     pub member_id: Option<i64>,
     pub retrospect_id: i64,
     pub status: RetrospectStatus,
     pub submitted_at: Option<DateTime>,
+    /// 분석 완료 시점
+    pub analyzed_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

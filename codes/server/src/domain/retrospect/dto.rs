@@ -599,8 +599,6 @@ pub enum CurrentUserStatus {
     Draft,
     /// 회고 답변 최종 제출 완료
     Submitted,
-    /// AI 분석 완료
-    Analyzed,
 }
 
 /// 회고 상세 정보 응답 DTO
@@ -635,7 +633,7 @@ pub struct RetrospectMemberItem {
     pub member_id: i64,
     /// 멤버 이름 (닉네임)
     pub user_name: String,
-    /// 회고 참여 상태 (IN_PROGRESS, DRAFT, SUBMITTED, ANALYZED)
+    /// 회고 참여 상태 (IN_PROGRESS, DRAFT, SUBMITTED)
     pub status: RetrospectStatus,
 }
 
@@ -713,7 +711,7 @@ pub struct PersonalMissionItem {
     pub missions: Vec<MissionItem>,
 }
 
-/// 회고 분석 응답 데이터
+/// 회고 분석 응답 데이터 (AI 서비스에서 반환하는 원본)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisResponse {
@@ -725,6 +723,22 @@ pub struct AnalysisResponse {
     pub personal_missions: Vec<PersonalMissionItem>,
 }
 
+/// 회고 분석 API 응답 (AnalysisResponse + 인원 수 정보)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisApiResponse {
+    /// 회고방 전체를 위한 AI 분석 메시지
+    pub insight: String,
+    /// 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개)
+    pub emotion_rank: Vec<EmotionRankItem>,
+    /// 사용자별 개인 맞춤 미션 리스트 (userId 오름차순 정렬)
+    pub personal_missions: Vec<PersonalMissionItem>,
+    /// 제출 완료한 멤버 수
+    pub submitted_count: i64,
+    /// 전체 참여자 수
+    pub participant_count: i64,
+}
+
 /// Swagger용 회고 분석 성공 응답 타입
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -732,7 +746,7 @@ pub struct SuccessAnalysisResponse {
     pub is_success: bool,
     pub code: String,
     pub message: String,
-    pub result: AnalysisResponse,
+    pub result: AnalysisApiResponse,
 }
 
 // ============================================
