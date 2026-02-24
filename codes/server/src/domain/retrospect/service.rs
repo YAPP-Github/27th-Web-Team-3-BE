@@ -1990,6 +1990,7 @@ impl RetrospectService {
             &member_map,
             &responses,
             &response_member_map,
+            user_id,
         )?;
 
         info!(
@@ -2178,6 +2179,7 @@ impl RetrospectService {
         member_map: &HashMap<i64, String>,
         responses: &[response::Model],
         response_member_map: &HashMap<i64, i64>,
+        requester_id: i64,
     ) -> Result<Vec<u8>, AppError> {
         // 폰트 로딩
         let font_dir = std::env::var("PDF_FONT_DIR").unwrap_or_else(|_| "./fonts".to_string());
@@ -2297,7 +2299,9 @@ impl RetrospectService {
         doc.push(Break::new(0.5));
 
         // ===== 회고 인사이트 섹션 (member_retro에서 분석 결과 조회) =====
-        let analyzed_member_retro = member_retros.iter().find(|mr| mr.insight.is_some());
+        let analyzed_member_retro = member_retros
+            .iter()
+            .find(|mr| mr.member_id == Some(requester_id) && mr.insight.is_some());
         if let Some(mr) = analyzed_member_retro {
             if let Some(ref insight) = mr.insight {
                 doc.push(
@@ -2763,10 +2767,16 @@ impl RetrospectService {
 
         info!(retrospect_id = retrospect_id, "회고 분석 완료");
 
+        let personal_missions = analysis
+            .personal_missions
+            .into_iter()
+            .filter(|pm| pm.user_id == user_id)
+            .collect();
+
         Ok(AnalysisResponse {
             insight: analysis.insight,
             emotion_rank: analysis.emotion_rank,
-            personal_missions: analysis.personal_missions,
+            personal_missions,
         })
     }
 
