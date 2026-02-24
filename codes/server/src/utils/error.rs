@@ -102,6 +102,9 @@ pub enum AppError {
     /// RETRO4002: 아직 시작되지 않은 회고 (400)
     RetrospectNotStarted(String),
 
+    /// RETRO4008: 참여 가능 시간이 종료됨 (400)
+    RetrospectParticipationClosed(String),
+
     /// RES4041: 존재하지 않는 회고 답변 (404)
     ResponseNotFound(String),
 
@@ -203,6 +206,7 @@ impl AppError {
             AppError::RetrospectNotFound(msg) => msg.clone(),
             AppError::ParticipantDuplicate(msg) => msg.clone(),
             AppError::RetrospectNotStarted(msg) => msg.clone(),
+            AppError::RetrospectParticipationClosed(msg) => msg.clone(),
             AppError::ResponseNotFound(msg) => msg.clone(),
             AppError::CommentTooLong(msg) => msg.clone(),
             AppError::RetroAnswersMissing(msg) => msg.clone(),
@@ -260,6 +264,7 @@ impl AppError {
             AppError::RetrospectNotFound(_) => "RETRO4041",
             AppError::ParticipantDuplicate(_) => "RETRO4091",
             AppError::RetrospectNotStarted(_) => "RETRO4002",
+            AppError::RetrospectParticipationClosed(_) => "RETRO4008",
             AppError::ResponseNotFound(_) => "RES4041",
             AppError::CommentTooLong(_) => "RES4001",
             AppError::RetroAnswersMissing(_) => "RETRO4002",
@@ -317,6 +322,7 @@ impl AppError {
             AppError::RetrospectNotFound(_) => StatusCode::NOT_FOUND,
             AppError::ParticipantDuplicate(_) => StatusCode::CONFLICT,
             AppError::RetrospectNotStarted(_) => StatusCode::BAD_REQUEST,
+            AppError::RetrospectParticipationClosed(_) => StatusCode::BAD_REQUEST,
             AppError::ResponseNotFound(_) => StatusCode::NOT_FOUND,
             AppError::CommentTooLong(_) => StatusCode::BAD_REQUEST,
             AppError::RetroAnswersMissing(_) => StatusCode::BAD_REQUEST,

@@ -599,8 +599,6 @@ pub enum CurrentUserStatus {
     Draft,
     /// 회고 답변 최종 제출 완료
     Submitted,
-    /// AI 분석 완료
-    Analyzed,
 }
 
 /// 회고 상세 정보 응답 DTO
@@ -635,7 +633,7 @@ pub struct RetrospectMemberItem {
     pub member_id: i64,
     /// 멤버 이름 (닉네임)
     pub user_name: String,
-    /// 회고 참여 상태 (IN_PROGRESS, DRAFT, SUBMITTED, ANALYZED)
+    /// 회고 참여 상태 (IN_PROGRESS, DRAFT, SUBMITTED)
     pub status: RetrospectStatus,
 }
 
@@ -713,7 +711,7 @@ pub struct PersonalMissionItem {
     pub missions: Vec<MissionItem>,
 }
 
-/// 회고 분석 응답 데이터
+/// 회고 분석 응답 데이터 (AI 서비스에서 반환하는 원본)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisResponse {
