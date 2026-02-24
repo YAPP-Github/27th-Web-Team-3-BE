@@ -30,7 +30,7 @@ use crate::domain::retrospect::entity::retro_room::Entity as RetroRoom;
 use crate::domain::retrospect::entity::retrospect::Entity as Retrospect;
 
 use super::dto::{
-    AnalysisApiResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
+    AnalysisResponse, AssistantRequest, AssistantResponse, CommentItem, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
     CreateRetrospectResponse, CurrentUserStatus, DeleteRetroRoomResponse, DraftItem,
     DraftSaveRequest, DraftSaveResponse, EmotionRankItem, GuideType, InviteCodeResponse,
@@ -2504,7 +2504,7 @@ impl RetrospectService {
         state: AppState,
         user_id: i64,
         retrospect_id: i64,
-    ) -> Result<AnalysisApiResponse, AppError> {
+    ) -> Result<AnalysisResponse, AppError> {
         info!(
             user_id = user_id,
             retrospect_id = retrospect_id,
@@ -2592,21 +2592,13 @@ impl RetrospectService {
             ));
         }
 
-        // 5. 전체 참여자 및 제출 멤버 수 조회
-        let all_participants = member_retro::Entity::find()
+        // 5. 제출 멤버 확인
+        let submitted_members: Vec<member_retro::Model> = member_retro::Entity::find()
             .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .filter(member_retro::Column::Status.eq(RetrospectStatus::Submitted))
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        let participant_count = all_participants.len() as i64;
-
-        let submitted_members: Vec<&member_retro::Model> = all_participants
-            .iter()
-            .filter(|mr| mr.status == RetrospectStatus::Submitted)
-            .collect();
-
-        let submitted_count = submitted_members.len() as i64;
 
         if submitted_members.is_empty() {
             return Err(AppError::RetroInsufficientData(
@@ -2771,12 +2763,10 @@ impl RetrospectService {
 
         info!(retrospect_id = retrospect_id, "회고 분석 완료");
 
-        Ok(AnalysisApiResponse {
+        Ok(AnalysisResponse {
             insight: analysis.insight,
             emotion_rank: analysis.emotion_rank,
             personal_missions: analysis.personal_missions,
-            submitted_count,
-            participant_count,
         })
     }
 
@@ -2785,7 +2775,7 @@ impl RetrospectService {
         state: AppState,
         user_id: i64,
         retrospect_id: i64,
-    ) -> Result<AnalysisApiResponse, AppError> {
+    ) -> Result<AnalysisResponse, AppError> {
         info!(
             user_id = user_id,
             retrospect_id = retrospect_id,
@@ -2852,26 +2842,12 @@ impl RetrospectService {
         });
 
         // 6. 전체 참여자/제출 수 조회
-        let all_participants = member_retro::Entity::find()
-            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
-            .all(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        let participant_count = all_participants.len() as i64;
-        let submitted_count = all_participants
-            .iter()
-            .filter(|mr| mr.status == RetrospectStatus::Submitted)
-            .count() as i64;
-
         info!(retrospect_id = retrospect_id, "분석 결과 조회 완료");
 
-        Ok(AnalysisApiResponse {
+        Ok(AnalysisResponse {
             insight,
             emotion_rank,
             personal_missions,
-            submitted_count,
-            participant_count,
         })
     }
 

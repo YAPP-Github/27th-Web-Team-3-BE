@@ -13,7 +13,7 @@ use crate::utils::error::AppError;
 use crate::utils::BaseResponse;
 
 use super::dto::{
-    AnalysisApiResponse, AssistantRequest, AssistantResponse, CreateCommentRequest,
+    AnalysisResponse, AssistantRequest, AssistantResponse, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
     CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest, DraftSaveResponse,
     InviteCodeResponse, JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse,
@@ -686,7 +686,7 @@ pub async fn analyze_retrospective_handler(
     user: AuthUser,
     State(state): State<AppState>,
     Path(retrospect_id): Path<i64>,
-) -> Result<Json<BaseResponse<AnalysisApiResponse>>, AppError> {
+) -> Result<Json<BaseResponse<AnalysisResponse>>, AppError> {
     // retrospectId 검증 (1 이상의 양수)
     if retrospect_id < 1 {
         return Err(AppError::BadRequest(
@@ -728,7 +728,7 @@ pub async fn get_analysis_result(
     user: AuthUser,
     State(state): State<AppState>,
     Path(retrospect_id): Path<i64>,
-) -> Result<Json<BaseResponse<AnalysisApiResponse>>, AppError> {
+) -> Result<Json<BaseResponse<AnalysisResponse>>, AppError> {
     if retrospect_id < 1 {
         return Err(AppError::BadRequest(
             "retrospectId는 1 이상의 양수여야 합니다.".to_string(),

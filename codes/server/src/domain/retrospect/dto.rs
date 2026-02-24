@@ -723,22 +723,6 @@ pub struct AnalysisResponse {
     pub personal_missions: Vec<PersonalMissionItem>,
 }
 
-/// 회고 분석 API 응답 (AnalysisResponse + 인원 수 정보)
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AnalysisApiResponse {
-    /// 회고방 전체를 위한 AI 분석 메시지
-    pub insight: String,
-    /// 감정 키워드 순위 리스트 (내림차순 정렬, 정확히 3개)
-    pub emotion_rank: Vec<EmotionRankItem>,
-    /// 사용자별 개인 맞춤 미션 리스트 (userId 오름차순 정렬)
-    pub personal_missions: Vec<PersonalMissionItem>,
-    /// 제출 완료한 멤버 수
-    pub submitted_count: i64,
-    /// 전체 참여자 수
-    pub participant_count: i64,
-}
-
 /// Swagger용 회고 분석 성공 응답 타입
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -746,7 +730,7 @@ pub struct SuccessAnalysisResponse {
     pub is_success: bool,
     pub code: String,
     pub message: String,
-    pub result: AnalysisApiResponse,
+    pub result: AnalysisResponse,
 }
 
 // ============================================
