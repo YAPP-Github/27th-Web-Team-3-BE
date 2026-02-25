@@ -572,9 +572,16 @@ impl RetrospectService {
             "회고방 탈퇴 요청"
         );
 
-        // 1. 룸 존재 여부 확인
+        // 1. 트랜잭션 시작 + 회고방 행 잠금 (동시 탈퇴 경쟁 조건 방지)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
         RetroRoom::find_by_id(retro_room_id)
-            .one(&state.db)
+            .lock_exclusive()
+            .one(&txn)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?
             .ok_or_else(|| AppError::RetroRoomNotFound("존재하지 않는 회고방입니다.".into()))?;
@@ -583,20 +590,29 @@ impl RetrospectService {
         let _member_room = MemberRetroRoom::find()
             .filter(member_retro_room::Column::MemberId.eq(member_id))
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
-            .one(&state.db)
+            .one(&txn)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?
             .ok_or_else(|| {
                 AppError::RetroRoomAccessDenied("해당 회고방의 멤버가 아닙니다.".into())
             })?;
 
-        // 3. 진행 중인 회고 확인 - 해당 멤버의 미제출 member_retro가 있으면 차단
+        // 3. 진행 중인 회고 확인 - 참여 가능 기간 내 미제출 회고만 차단
+        //    참여 마감 기준: 회고 start_time 날짜의 23:59:59 KST
+        //    → 오늘(KST) 시작 시각(UTC) 이후 start_time인 회고만 진행 중으로 간주
+        let today_kst = (Utc::now().naive_utc() + chrono::Duration::hours(9)).date();
+        let today_start_utc = NaiveDateTime::new(
+            today_kst,
+            NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default(),
+        ) - chrono::Duration::hours(9);
+
         let unsubmitted_count = member_retro::Entity::find()
             .filter(member_retro::Column::MemberId.eq(member_id))
             .filter(member_retro::Column::Status.ne(RetrospectStatus::Submitted))
             .inner_join(Retrospect)
             .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
-            .count(&state.db)
+            .filter(retrospect::Column::StartTime.gte(today_start_utc))
+            .count(&txn)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
@@ -609,14 +625,7 @@ impl RetrospectService {
 
         let left_at = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
 
-        // 4. 트랜잭션 시작
-        let txn = state
-            .db
-            .begin()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        // 5. 해당 멤버의 member_retro 레코드 삭제 (모든 회고 대상)
+        // 4. 해당 멤버의 member_retro 레코드 삭제 (모든 회고 대상)
         let all_retrospect_ids: Vec<i64> = Retrospect::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
             .select_only()
