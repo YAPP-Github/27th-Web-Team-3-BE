@@ -4,7 +4,7 @@
 //! - GET /api/v1/retro-rooms/{retro_room_id}/members
 //! - RetroRoomMemberItem 직렬화
 //! - SuccessRetroRoomMembersResponse 직렬화
-//! - OWNER 먼저 정렬되는지 검증
+//! - 본인이 맨 위로 정렬되는지 검증
 
 use server::domain::retrospect::dto::{RetroRoomMemberItem, SuccessRetroRoomMembersResponse};
 
@@ -16,7 +16,6 @@ fn should_serialize_member_item_in_camel_case() {
     let item = RetroRoomMemberItem {
         member_id: 1,
         nickname: "홍길동".to_string(),
-        role: "OWNER".to_string(),
         joined_at: "2026-01-26T10:00:00".to_string(),
     };
 
@@ -27,11 +26,9 @@ fn should_serialize_member_item_in_camel_case() {
     // Assert - JSON 파싱으로 키 존재 여부 확인
     assert!(parsed.get("memberId").is_some());
     assert!(parsed.get("nickname").is_some());
-    assert!(parsed.get("role").is_some());
     assert!(parsed.get("joinedAt").is_some());
     assert_eq!(parsed["memberId"], 1);
     assert_eq!(parsed["nickname"], "홍길동");
-    assert_eq!(parsed["role"], "OWNER");
     assert_eq!(parsed["joinedAt"], "2026-01-26T10:00:00");
     // snake_case 키가 없어야 함
     assert!(parsed.get("member_id").is_none());
@@ -68,20 +65,17 @@ fn should_serialize_list_with_multiple_members() {
         result: vec![
             RetroRoomMemberItem {
                 member_id: 1,
-                nickname: "방장".to_string(),
-                role: "OWNER".to_string(),
+                nickname: "나".to_string(),
                 joined_at: "2026-01-20T09:00:00".to_string(),
             },
             RetroRoomMemberItem {
                 member_id: 2,
                 nickname: "멤버1".to_string(),
-                role: "MEMBER".to_string(),
                 joined_at: "2026-01-21T10:00:00".to_string(),
             },
             RetroRoomMemberItem {
                 member_id: 3,
                 nickname: "멤버2".to_string(),
-                role: "MEMBER".to_string(),
                 joined_at: "2026-01-22T11:00:00".to_string(),
             },
         ],
@@ -92,49 +86,12 @@ fn should_serialize_list_with_multiple_members() {
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
     // Assert
-    assert!(json.contains("방장"));
+    assert!(json.contains("나"));
     assert!(json.contains("멤버1"));
     assert!(json.contains("멤버2"));
 
     let members = parsed["result"].as_array().unwrap();
     assert_eq!(members.len(), 3);
-    assert_eq!(members[0]["role"], "OWNER");
-    assert_eq!(members[1]["role"], "MEMBER");
-    assert_eq!(members[2]["role"], "MEMBER");
-}
-
-#[test]
-fn should_preserve_owner_first_sorting() {
-    // Arrange - OWNER가 첫 번째로 정렬되어야 함
-    let response = SuccessRetroRoomMembersResponse {
-        is_success: true,
-        code: "COMMON200".to_string(),
-        message: "성공입니다.".to_string(),
-        result: vec![
-            RetroRoomMemberItem {
-                member_id: 10,
-                nickname: "오너".to_string(),
-                role: "OWNER".to_string(),
-                joined_at: "2026-01-15T08:00:00".to_string(),
-            },
-            RetroRoomMemberItem {
-                member_id: 20,
-                nickname: "첫번째멤버".to_string(),
-                role: "MEMBER".to_string(),
-                joined_at: "2026-01-16T09:00:00".to_string(),
-            },
-        ],
-    };
-
-    // Act
-    let json = serde_json::to_string(&response).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-    // Assert - OWNER가 첫 번째
-    let members = parsed["result"].as_array().unwrap();
-    assert_eq!(members[0]["role"], "OWNER");
-    assert_eq!(members[0]["nickname"], "오너");
-    assert_eq!(members[1]["role"], "MEMBER");
 }
 
 #[test]
@@ -143,7 +100,6 @@ fn should_preserve_timestamp_format() {
     let item = RetroRoomMemberItem {
         member_id: 1,
         nickname: "테스터".to_string(),
-        role: "MEMBER".to_string(),
         joined_at: "2026-12-31T23:59:59".to_string(),
     };
 
@@ -152,28 +108,6 @@ fn should_preserve_timestamp_format() {
 
     // Assert
     assert!(json.contains("2026-12-31T23:59:59"));
-}
-
-#[test]
-fn should_handle_role_values() {
-    // Arrange - OWNER와 MEMBER 역할 테스트
-    let roles = vec!["OWNER", "MEMBER"];
-
-    for role in roles {
-        let item = RetroRoomMemberItem {
-            member_id: 1,
-            nickname: "테스트".to_string(),
-            role: role.to_string(),
-            joined_at: "2026-01-26T10:00:00".to_string(),
-        };
-
-        // Act
-        let json = serde_json::to_string(&item).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        // Assert
-        assert_eq!(parsed["role"], role);
-    }
 }
 
 #[test]
@@ -186,7 +120,6 @@ fn should_serialize_success_response_structure() {
         result: vec![RetroRoomMemberItem {
             member_id: 42,
             nickname: "사용자".to_string(),
-            role: "OWNER".to_string(),
             joined_at: "2026-02-01T12:00:00".to_string(),
         }],
     };
@@ -225,7 +158,6 @@ fn should_handle_unicode_nicknames() {
         let item = RetroRoomMemberItem {
             member_id: 1,
             nickname: nickname.to_string(),
-            role: "MEMBER".to_string(),
             joined_at: "2026-01-26T10:00:00".to_string(),
         };
 
@@ -244,7 +176,6 @@ fn should_handle_large_member_id() {
     let item = RetroRoomMemberItem {
         member_id: i64::MAX,
         nickname: "대용량ID".to_string(),
-        role: "MEMBER".to_string(),
         joined_at: "2026-01-26T10:00:00".to_string(),
     };
 

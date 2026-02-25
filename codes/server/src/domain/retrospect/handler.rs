@@ -15,8 +15,8 @@ use crate::utils::BaseResponse;
 use super::dto::{
     AnalysisResponse, AssistantRequest, AssistantResponse, CreateCommentRequest,
     CreateCommentResponse, CreateParticipantResponse, CreateRetrospectRequest,
-    CreateRetrospectResponse, DeleteRetroRoomResponse, DraftSaveRequest, DraftSaveResponse,
-    InviteCodeResponse, JoinRetroRoomRequest, JoinRetroRoomResponse, LikeToggleResponse,
+    CreateRetrospectResponse, DraftSaveRequest, DraftSaveResponse, InviteCodeResponse,
+    JoinRetroRoomRequest, JoinRetroRoomResponse, LeaveRetroRoomResponse, LikeToggleResponse,
     ListCommentsQuery, ListCommentsResponse, ReferenceItem, ResponseCategory,
     ResponsesListResponse, ResponsesQueryParams, RetroRoomCreateRequest, RetroRoomCreateResponse,
     RetroRoomListItem, RetroRoomMemberItem, RetrospectDetailResponse, RetrospectListItem,
@@ -235,7 +235,7 @@ pub async fn update_retro_room_order(
 
 /// 회고방 이름 변경 API (API-008)
 ///
-/// 기존 회고방의 이름을 새로운 이름으로 변경합니다. (Owner만 가능)
+/// 기존 회고방의 이름을 새로운 이름으로 변경합니다. (멤버면 변경 가능)
 #[utoipa::path(
     patch,
     path = "/api/v1/retro-rooms/{retro_room_id}/name",
@@ -273,36 +273,37 @@ pub async fn update_retro_room_name(
     )))
 }
 
-/// 회고방 삭제 API (API-009)
+/// 회고방 탈퇴 API
 ///
-/// 회고방을 완전히 삭제합니다. (Owner만 가능)
+/// 회고방에서 탈퇴합니다. 마지막 멤버가 탈퇴하면 회고방이 자동 삭제됩니다.
 #[utoipa::path(
-    delete,
-    path = "/api/v1/retro-rooms/{retro_room_id}",
+    post,
+    path = "/api/v1/retro-rooms/{retro_room_id}/leave",
     params(
         ("retro_room_id" = i64, Path, description = "회고방 ID")
     ),
     security(("bearer_auth" = [])),
     responses(
-        (status = 200, description = "삭제 성공", body = SuccessDeleteRetroRoomResponse),
+        (status = 200, description = "탈퇴 성공", body = SuccessLeaveRetroRoomResponse),
+        (status = 400, description = "진행 중인 회고가 있어 탈퇴 불가", body = ErrorResponse),
         (status = 401, description = "인증 실패", body = ErrorResponse),
-        (status = 403, description = "권한 없음", body = ErrorResponse),
+        (status = 403, description = "해당 회고방의 멤버가 아님", body = ErrorResponse),
         (status = 404, description = "회고방 없음", body = ErrorResponse)
     ),
     tag = "RetroRoom"
 )]
-pub async fn delete_retro_room(
+pub async fn leave_retro_room(
     State(state): State<AppState>,
     user: AuthUser,
     Path(retro_room_id): Path<i64>,
-) -> Result<Json<BaseResponse<DeleteRetroRoomResponse>>, AppError> {
+) -> Result<Json<BaseResponse<LeaveRetroRoomResponse>>, AppError> {
     let member_id = user.user_id()?;
 
-    let result = RetrospectService::delete_retro_room(state, member_id, retro_room_id).await?;
+    let result = RetrospectService::leave_retro_room(state, member_id, retro_room_id).await?;
 
     Ok(Json(BaseResponse::success_with_message(
         result,
-        "회고방 삭제에 성공하였습니다.",
+        "회고방 탈퇴에 성공하였습니다.",
     )))
 }
 
