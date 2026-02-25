@@ -591,30 +591,20 @@ impl RetrospectService {
             })?;
 
         // 3. 진행 중인 회고 확인 - 해당 멤버의 미제출 member_retro가 있으면 차단
-        let retrospect_ids: Vec<i64> = Retrospect::find()
+        let unsubmitted_count = member_retro::Entity::find()
+            .filter(member_retro::Column::MemberId.eq(member_id))
+            .filter(member_retro::Column::Status.ne(RetrospectStatus::Submitted))
+            .inner_join(Retrospect)
             .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
-            .select_only()
-            .column(retrospect::Column::RetrospectId)
-            .into_tuple()
-            .all(&state.db)
+            .count(&state.db)
             .await
             .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
 
-        if !retrospect_ids.is_empty() {
-            let unsubmitted_count = member_retro::Entity::find()
-                .filter(member_retro::Column::MemberId.eq(member_id))
-                .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids.clone()))
-                .filter(member_retro::Column::Status.ne(RetrospectStatus::Submitted))
-                .count(&state.db)
-                .await
-                .map_err(|e| AppError::InternalError(format!("DB Error: {}", e)))?;
-
-            if unsubmitted_count > 0 {
-                return Err(AppError::RetroRoomLeaveBlocked(
-                    "진행 중인 회고가 있어 탈퇴할 수 없습니다. 모든 회고를 제출한 후 다시 시도해주세요."
-                        .into(),
-                ));
-            }
+        if unsubmitted_count > 0 {
+            return Err(AppError::RetroRoomLeaveBlocked(
+                "진행 중인 회고가 있어 탈퇴할 수 없습니다. 모든 회고를 제출한 후 다시 시도해주세요."
+                    .into(),
+            ));
         }
 
         let left_at = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
@@ -626,11 +616,20 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 5. 해당 멤버의 member_retro 레코드 삭제
-        if !retrospect_ids.is_empty() {
+        // 5. 해당 멤버의 member_retro 레코드 삭제 (모든 회고 대상)
+        let all_retrospect_ids: Vec<i64> = Retrospect::find()
+            .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
+            .select_only()
+            .column(retrospect::Column::RetrospectId)
+            .into_tuple()
+            .all(&txn)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if !all_retrospect_ids.is_empty() {
             member_retro::Entity::delete_many()
                 .filter(member_retro::Column::MemberId.eq(member_id))
-                .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids))
+                .filter(member_retro::Column::RetrospectId.is_in(all_retrospect_ids))
                 .exec(&txn)
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -740,14 +739,21 @@ impl RetrospectService {
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-            // 8. 멤버 회고 매핑 삭제 (member_retro)
+            // 8. 어시스턴트 사용 기록 삭제 (assistant_usage)
+            assistant_usage::Entity::delete_many()
+                .filter(assistant_usage::Column::RetrospectId.is_in(retrospect_ids.clone()))
+                .exec(txn)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+            // 9. 멤버 회고 매핑 삭제 (member_retro)
             member_retro::Entity::delete_many()
                 .filter(member_retro::Column::RetrospectId.is_in(retrospect_ids.clone()))
                 .exec(txn)
                 .await
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-            // 9. 회고 삭제 (retrospect)
+            // 10. 회고 삭제 (retrospect)
             Retrospect::delete_many()
                 .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
                 .exec(txn)
@@ -755,14 +761,14 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
 
-        // 10. 멤버 회고방 매핑 삭제 (member_retro_room) - 이미 없을 수 있지만 안전하게
+        // 11. 멤버 회고방 매핑 삭제 (member_retro_room) - 이미 없을 수 있지만 안전하게
         MemberRetroRoom::delete_many()
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
             .exec(txn)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 11. 회고방 삭제 (retro_room)
+        // 12. 회고방 삭제 (retro_room)
         RetroRoom::delete_by_id(retro_room_id)
             .exec(txn)
             .await
