@@ -625,7 +625,7 @@ impl RetrospectService {
 
         let left_at = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
 
-        // 4. 해당 멤버의 member_retro 레코드 삭제 (모든 회고 대상)
+        // 4. 해당 회고방의 모든 회고 ID 조회 및 멤버의 member_retro 삭제
         let all_retrospect_ids: Vec<i64> = Retrospect::find()
             .filter(retrospect::Column::RetrospectRoomId.eq(retro_room_id))
             .select_only()
@@ -644,7 +644,7 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))?;
         }
 
-        // 6. member_retro_room 레코드 삭제
+        // 5. member_retro_room 레코드 삭제
         MemberRetroRoom::delete_many()
             .filter(member_retro_room::Column::MemberId.eq(member_id))
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
@@ -652,7 +652,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 7. 남은 멤버가 0명이면 회고방 전체 삭제
+        // 6. 남은 멤버가 0명이면 회고방 전체 삭제
         let remaining_members = MemberRetroRoom::find()
             .filter(member_retro_room::Column::RetrospectRoomId.eq(retro_room_id))
             .count(&txn)
@@ -663,7 +663,7 @@ impl RetrospectService {
             Self::delete_retro_room_internal(&txn, retro_room_id).await?;
         }
 
-        // 8. 트랜잭션 커밋
+        // 7. 트랜잭션 커밋
         txn.commit()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
