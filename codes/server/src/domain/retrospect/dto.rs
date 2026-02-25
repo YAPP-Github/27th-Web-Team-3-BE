@@ -92,8 +92,6 @@ pub struct RetroRoomMemberItem {
     pub member_id: i64,
     /// 멤버 닉네임
     pub nickname: String,
-    /// 회고방 내 역할 ("OWNER" 또는 "MEMBER")
-    pub role: String,
     /// 회고방 참여 일시 (ISO 8601 형식)
     pub joined_at: String,
 }
@@ -188,22 +186,22 @@ pub struct SuccessUpdateRetroRoomNameResponse {
     pub result: UpdateRetroRoomNameResponse,
 }
 
-// ============== API-009: 회고방 삭제 ==============
+// ============== 회고방 탈퇴 ==============
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct DeleteRetroRoomResponse {
+pub struct LeaveRetroRoomResponse {
     pub retro_room_id: i64,
-    pub deleted_at: String,
+    pub left_at: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SuccessDeleteRetroRoomResponse {
+pub struct SuccessLeaveRetroRoomResponse {
     pub is_success: bool,
     pub code: String,
     pub message: String,
-    pub result: DeleteRetroRoomResponse,
+    pub result: LeaveRetroRoomResponse,
 }
 
 // ============== API-010: 회고방 내 회고 목록 조회 ==============

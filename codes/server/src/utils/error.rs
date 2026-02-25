@@ -159,9 +159,12 @@ pub enum AppError {
     /// RETRO4004: 유효하지 않은 카테고리 값 (400)
     RetroCategoryInvalid(String),
 
+    /// RETRO4009: 진행 중인 회고가 있어 탈퇴 불가 (400)
+    RetroRoomLeaveBlocked(String),
+
     /// RETRO4031: 회고 삭제 권한 없음 (403)
-    /// TODO: 현재 미사용. retrospects.created_by / member_retro_room.role 스키마 추가 후
-    /// 회고방 Owner 또는 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
+    /// TODO: 현재 미사용. retrospects.created_by 스키마 추가 후
+    /// 회고 생성자만 삭제 가능하도록 권한 분기 시 활성화 예정
     #[allow(dead_code)]
     RetroDeleteAccessDenied(String),
 
@@ -224,6 +227,7 @@ impl AppError {
             AppError::AiGeneralError(msg) => msg.clone(),
             AppError::SearchKeywordInvalid(msg) => msg.clone(),
             AppError::RetroCategoryInvalid(msg) => msg.clone(),
+            AppError::RetroRoomLeaveBlocked(msg) => msg.clone(),
             AppError::PdfGenerationFailed(_) => "PDF 생성 중 서버 에러가 발생했습니다.".to_string(),
             AppError::RetroDeleteAccessDenied(msg) => msg.clone(),
             AppError::MemberNotFound(msg) => msg.clone(),
@@ -282,6 +286,7 @@ impl AppError {
             AppError::AiGeneralError(_) => "AI5003",
             AppError::SearchKeywordInvalid(_) => "SEARCH4001",
             AppError::RetroCategoryInvalid(_) => "RETRO4004",
+            AppError::RetroRoomLeaveBlocked(_) => "RETRO4009",
             AppError::PdfGenerationFailed(_) => "COMMON500",
             AppError::RetroDeleteAccessDenied(_) => "RETRO4031",
             AppError::MemberNotFound(_) => "MEMBER4042",
@@ -340,6 +345,7 @@ impl AppError {
             AppError::AiGeneralError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::SearchKeywordInvalid(_) => StatusCode::BAD_REQUEST,
             AppError::RetroCategoryInvalid(_) => StatusCode::BAD_REQUEST,
+            AppError::RetroRoomLeaveBlocked(_) => StatusCode::BAD_REQUEST,
             AppError::PdfGenerationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::RetroDeleteAccessDenied(_) => StatusCode::FORBIDDEN,
             AppError::MemberNotFound(_) => StatusCode::NOT_FOUND,
