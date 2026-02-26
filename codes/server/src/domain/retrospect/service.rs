@@ -2093,8 +2093,6 @@ impl RetrospectService {
         let retrospect_model =
             Self::find_retrospect_for_member(&state, user_id, retrospect_id).await?;
 
-        let retrospect_room_id = retrospect_model.retrospect_room_id;
-
         // 2. 트랜잭션 시작 (연관 데이터 일괄 삭제)
         let txn = state
             .db
@@ -2178,41 +2176,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 12. 회고방 삭제 (같은 room을 참조하는 다른 회고가 없는 경우에만)
-        let other_retro_count = retrospect::Entity::find()
-            .filter(retrospect::Column::RetrospectRoomId.eq(retrospect_room_id))
-            .count(&txn)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        let (member_retro_rooms_deleted, room_deleted) = if other_retro_count == 0 {
-            // 회고방을 참조하는 다른 회고가 없으므로 멤버-회고방 매핑과 회고방 모두 삭제
-            let member_retro_rooms_deleted = member_retro_room::Entity::delete_many()
-                .filter(member_retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
-                .exec(&txn)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-            let room_deleted = retro_room::Entity::delete_many()
-                .filter(retro_room::Column::RetrospectRoomId.eq(retrospect_room_id))
-                .exec(&txn)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-            (
-                member_retro_rooms_deleted.rows_affected,
-                room_deleted.rows_affected,
-            )
-        } else {
-            warn!(
-                retrospect_room_id = retrospect_room_id,
-                other_retro_count = other_retro_count,
-                "회고방을 공유하는 다른 회고가 존재하여 회고방 삭제를 건너뜁니다"
-            );
-            (0, 0)
-        };
-
-        // 13. 트랜잭션 커밋
+        // 12. 트랜잭션 커밋
         txn.commit()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -2223,8 +2187,6 @@ impl RetrospectService {
             references_deleted = references_deleted.rows_affected,
             assistant_usages_deleted = assistant_usages_deleted.rows_affected,
             member_retros_deleted = member_retros_deleted.rows_affected,
-            member_retro_rooms_deleted = member_retro_rooms_deleted,
-            room_deleted = room_deleted,
             "회고 및 연관 데이터 삭제 완료"
         );
 
