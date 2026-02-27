@@ -867,6 +867,8 @@ pub struct ResponseListItem {
     pub like_count: i64,
     /// 해당 답변의 댓글 수
     pub comment_count: i64,
+    /// 회고 제출 시간
+    pub submitted_at: Option<chrono::NaiveDateTime>,
 }
 
 /// 답변 카테고리별 조회 응답 DTO
@@ -1974,6 +1976,10 @@ mod tests {
             content: "이번 스프린트에서 테스트 코드를 꼼꼼히 짠 것이 좋았습니다.".to_string(),
             like_count: 12,
             comment_count: 3,
+            submitted_at: Some(
+                chrono::NaiveDateTime::parse_from_str("2026-02-27T18:00:00", "%Y-%m-%dT%H:%M:%S")
+                    .unwrap(),
+            ),
         };
 
         // Act
@@ -1985,11 +1991,13 @@ mod tests {
         assert!(json["content"].as_str().unwrap().contains("테스트 코드"));
         assert_eq!(json["likeCount"], 12);
         assert_eq!(json["commentCount"], 3);
+        assert!(json["submittedAt"].is_string());
         // snake_case 키가 없는지 확인
         assert!(json.get("response_id").is_none());
         assert!(json.get("user_name").is_none());
         assert!(json.get("like_count").is_none());
         assert!(json.get("comment_count").is_none());
+        assert!(json.get("submitted_at").is_none());
     }
 
     #[test]
@@ -2001,6 +2009,7 @@ mod tests {
             content: "테스트 답변".to_string(),
             like_count: 0,
             comment_count: 0,
+            submitted_at: None,
         };
 
         // Act
@@ -2026,6 +2035,13 @@ mod tests {
                     content: "좋은 점".to_string(),
                     like_count: 12,
                     comment_count: 3,
+                    submitted_at: Some(
+                        chrono::NaiveDateTime::parse_from_str(
+                            "2026-02-27T18:00:00",
+                            "%Y-%m-%dT%H:%M:%S",
+                        )
+                        .unwrap(),
+                    ),
                 },
                 ResponseListItem {
                     response_id: 456,
@@ -2033,6 +2049,13 @@ mod tests {
                     content: "기한 맞춰서".to_string(),
                     like_count: 12,
                     comment_count: 21,
+                    submitted_at: Some(
+                        chrono::NaiveDateTime::parse_from_str(
+                            "2026-02-27T17:30:00",
+                            "%Y-%m-%dT%H:%M:%S",
+                        )
+                        .unwrap(),
+                    ),
                 },
             ],
             has_next: true,
@@ -2081,6 +2104,7 @@ mod tests {
                 content: "마지막 답변".to_string(),
                 like_count: 1,
                 comment_count: 0,
+                submitted_at: None,
             }],
             has_next: false,
             next_cursor: None,
@@ -2109,6 +2133,13 @@ mod tests {
                     content: "테스트 답변".to_string(),
                     like_count: 5,
                     comment_count: 2,
+                    submitted_at: Some(
+                        chrono::NaiveDateTime::parse_from_str(
+                            "2026-02-27T18:00:00",
+                            "%Y-%m-%dT%H:%M:%S",
+                        )
+                        .unwrap(),
+                    ),
                 }],
                 has_next: false,
                 next_cursor: None,

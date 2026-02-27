@@ -201,14 +201,16 @@ mod responses_test_helpers {
                                 "userName": "제이슨",
                                 "content": "이번 스프린트에서 테스트 코드를 꼼꼼히 짠 것이 좋았습니다.",
                                 "likeCount": 12,
-                                "commentCount": 3
+                                "commentCount": 3,
+                                "submittedAt": "2026-02-27T18:00:00"
                             },
                             {
                                 "responseId": 456,
                                 "userName": "김민수",
                                 "content": "기한 맞춰서 작업하는 것을 잘했고요...",
                                 "likeCount": 12,
-                                "commentCount": 21
+                                "commentCount": 21,
+                                "submittedAt": "2026-02-27T17:30:00"
                             }
                         ],
                         "hasNext": true,
@@ -226,7 +228,8 @@ mod responses_test_helpers {
                                 "userName": "제이슨",
                                 "content": "테스트 코드를 꼼꼼히 짠 것이 좋았습니다.",
                                 "likeCount": 12,
-                                "commentCount": 3
+                                "commentCount": 3,
+                                "submittedAt": "2026-02-27T18:00:00"
                             }
                         ],
                         "hasNext": false,
@@ -627,12 +630,14 @@ async fn api020_should_return_correct_response_fields() {
     assert!(first_response["content"].is_string());
     assert!(first_response["likeCount"].is_number());
     assert!(first_response["commentCount"].is_number());
+    assert!(first_response["submittedAt"].is_string());
 
     // 값 검증
     assert_eq!(first_response["responseId"], 501);
     assert_eq!(first_response["userName"], "제이슨");
     assert_eq!(first_response["likeCount"], 12);
     assert_eq!(first_response["commentCount"], 3);
+    assert_eq!(first_response["submittedAt"], "2026-02-27T18:00:00");
 }
 
 /// [API-020] 페이지네이션 hasNext/nextCursor 검증 테스트
@@ -788,6 +793,8 @@ async fn api020_should_use_camel_case_field_names_in_response() {
     assert!(first.get("like_count").is_none());
     assert!(first.get("commentCount").is_some());
     assert!(first.get("comment_count").is_none());
+    assert!(first.get("submittedAt").is_some());
+    assert!(first.get("submitted_at").is_none());
 }
 
 /// [API-020] responseId 내림차순 정렬 검증 테스트
