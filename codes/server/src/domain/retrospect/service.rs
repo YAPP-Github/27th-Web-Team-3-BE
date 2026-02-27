@@ -3089,7 +3089,7 @@ impl RetrospectService {
             .collect();
 
         let members = member::Entity::find()
-            .filter(member::Column::MemberId.is_in(member_ids))
+            .filter(member::Column::MemberId.is_in(member_ids.clone()))
             .all(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -3097,7 +3097,23 @@ impl RetrospectService {
         let member_map: HashMap<i64, &member::Model> =
             members.iter().map(|m| (m.member_id, m)).collect();
 
-        // 8. 좋아요 수 집계
+        // 8. member_retro에서 submitted_at 조회
+        let member_retros = member_retro::Entity::find()
+            .filter(member_retro::Column::RetrospectId.eq(retrospect_id))
+            .filter(member_retro::Column::MemberId.is_in(member_ids.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let member_submitted_at_map: HashMap<i64, chrono::NaiveDateTime> = member_retros
+            .iter()
+            .filter_map(|mr| {
+                mr.member_id
+                    .and_then(|mid| mr.submitted_at.map(|sat| (mid, sat)))
+            })
+            .collect();
+
+        // 9. 좋아요 수 집계
         let like_counts: Vec<(i64, i64)> = response_like::Entity::find()
             .filter(response_like::Column::ResponseId.is_in(page_response_ids.clone()))
             .select_only()
@@ -3111,7 +3127,7 @@ impl RetrospectService {
 
         let like_count_map: HashMap<i64, i64> = like_counts.into_iter().collect();
 
-        // 9. 댓글 수 집계
+        // 10. 댓글 수 집계
         let comment_counts: Vec<(i64, i64)> = response_comment::Entity::find()
             .filter(response_comment::Column::ResponseId.is_in(page_response_ids.clone()))
             .select_only()
@@ -3125,7 +3141,7 @@ impl RetrospectService {
 
         let comment_count_map: HashMap<i64, i64> = comment_counts.into_iter().collect();
 
-        // 10. DTO 변환
+        // 11. DTO 변환
         let response_items: Vec<ResponseListItem> = page_responses
             .iter()
             .map(|r| {
@@ -3134,6 +3150,8 @@ impl RetrospectService {
                     .and_then(|mid| member_map.get(&mid))
                     .and_then(|m| m.nickname.clone())
                     .unwrap_or_default();
+                let submitted_at =
+                    member_id.and_then(|mid| member_submitted_at_map.get(&mid).copied());
 
                 ResponseListItem {
                     response_id: r.response_id,
@@ -3141,11 +3159,12 @@ impl RetrospectService {
                     content: r.content.clone(),
                     like_count: like_count_map.get(&r.response_id).copied().unwrap_or(0),
                     comment_count: comment_count_map.get(&r.response_id).copied().unwrap_or(0),
+                    submitted_at,
                 }
             })
             .collect();
 
-        // 11. 다음 커서 계산
+        // 12. 다음 커서 계산
         let next_cursor = if has_next {
             response_items.last().map(|r| r.response_id)
         } else {
