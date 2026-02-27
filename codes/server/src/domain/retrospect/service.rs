@@ -3105,11 +3105,12 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
+        let kst_offset = chrono::Duration::hours(9);
         let member_submitted_at_map: HashMap<i64, chrono::NaiveDateTime> = member_retros
             .iter()
             .filter_map(|mr| {
                 mr.member_id
-                    .and_then(|mid| mr.submitted_at.map(|sat| (mid, sat)))
+                    .and_then(|mid| mr.submitted_at.map(|sat| (mid, sat + kst_offset)))
             })
             .collect();
 
