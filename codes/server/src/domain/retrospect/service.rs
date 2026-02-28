@@ -3569,7 +3569,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?
             as i32;
 
-        if pre_check_count >= 10 {
+        if pre_check_count >= 1000 {
             return Err(AppError::AiAssistantLimitExceeded(
                 "이번 달 회고 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
             ));
@@ -3617,7 +3617,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))? as i32;
 
-        if final_count > 10 {
+        if final_count > 1000 {
             // 동시 요청으로 인한 초과 - 롤백
             txn.rollback()
                 .await
