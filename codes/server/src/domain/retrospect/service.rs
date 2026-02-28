@@ -2623,7 +2623,7 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))? as i32
         };
 
-        if monthly_analysis_count >= 10 {
+        if monthly_analysis_count >= 1000 {
             return Err(AppError::AiMonthlyLimitExceeded(
                 "월간 분석 가능 횟수를 초과하였습니다.".to_string(),
             ));
