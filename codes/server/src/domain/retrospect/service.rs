@@ -2655,7 +2655,7 @@ impl RetrospectService {
             .filter(|r| !r.content.trim().is_empty())
             .count();
 
-        if answer_count < 3 {
+        if answer_count < 1 {
             return Err(AppError::RetroInsufficientData(
                 "분석할 회고 답변 데이터가 부족합니다.".to_string(),
             ));
