@@ -2623,7 +2623,7 @@ impl RetrospectService {
                 .map_err(|e| AppError::InternalError(e.to_string()))? as i32
         };
 
-        if monthly_analysis_count >= 1000 {
+        if monthly_analysis_count >= 10 {
             return Err(AppError::AiMonthlyLimitExceeded(
                 "월간 분석 가능 횟수를 초과하였습니다.".to_string(),
             ));
@@ -3569,7 +3569,7 @@ impl RetrospectService {
             .map_err(|e| AppError::InternalError(e.to_string()))?
             as i32;
 
-        if pre_check_count >= 1000 {
+        if pre_check_count >= 10 {
             return Err(AppError::AiAssistantLimitExceeded(
                 "이번 달 회고 어시스턴트 사용 횟수를 모두 사용했습니다.".to_string(),
             ));
@@ -3590,7 +3590,7 @@ impl RetrospectService {
             .await?;
 
         // 8. 트랜잭션으로 사용 기록 저장 및 최종 검증 (동시성 안전)
-        // - 삽입 후 카운트하여 10회 초과 시 롤백
+        // - 삽입 후 카운트하여 월 10회 초과 시 롤백
         let txn = state
             .db
             .begin()
@@ -3617,7 +3617,7 @@ impl RetrospectService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))? as i32;
 
-        if final_count > 1000 {
+        if final_count > 10 {
             // 동시 요청으로 인한 초과 - 롤백
             txn.rollback()
                 .await
