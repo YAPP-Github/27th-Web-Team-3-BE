@@ -11,7 +11,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
-use tower::ServiceExt;
+use tower::util::ServiceExt;
 
 mod responses_test_helpers {
     use super::*;
